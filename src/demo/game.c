@@ -31,12 +31,12 @@ void game_update(Game_State *gs, float dt) {
 
 
   v2 midpoint = v2_multf(gs->screen_dim, 0.5);
-  v2 tri_dim = v2m(100,200); 
+  v2 tri_dim = v2m(100,100); 
 #define POINT_COUNT 3
   v2 points[POINT_COUNT] = {
-    v2m(tri_dim.x,-tri_dim.y/2.0),
-    v2m(-tri_dim.x,-tri_dim.y/2.0),
-    v2m(0,tri_dim.y/2.0),
+    v2m(tri_dim.x,-tri_dim.y),
+    v2m(-tri_dim.x,-tri_dim.y),
+    v2m(0,tri_dim.y),
   };
   f32 rot = gs->time_sec;
   for (s32 pidx = 0; pidx < POINT_COUNT; pidx+=1) {
@@ -44,9 +44,14 @@ void game_update(Game_State *gs, float dt) {
     points[pidx] = v2_add(points[pidx], midpoint);
   }
 
+#if 0
   frz_imm_line(points[0], points[1], col(1,0,0,1));
   frz_imm_line(points[1], points[2], col(0,1,0,1));
   frz_imm_line(points[2], points[0], col(0,0,1,1));
+#endif
+
+  //frz_imm_tri_sweep(points[0], points[1], points[2], col(1,1,1,1));
+  frz_imm_tri_bbox(points[0], points[1], points[2], col(1,1,1,1));
 
   frz_end_frame();
 }

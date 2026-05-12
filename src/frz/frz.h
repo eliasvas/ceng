@@ -49,7 +49,7 @@ static void frz_clear() {
     for (s32 x = 0; x < (s32)ctx->dim.x; x+=1) {
       //u8 red = (u8)((x / (f32)ctx->dim.x) * 255.0);
       //ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x00 << 16) | (0x00 << 8) | (red << 0);
-      ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x3f << 16) | (0x3f << 8) | (0x3f<< 0);
+      ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x2f << 16) | (0x2f << 8) | (0x2f<< 0);
     }
   }
 }
@@ -62,42 +62,94 @@ static void frz_imm_px(s32 x, s32 y, color c) {
   }
 }
 
-#define SWAP(T, a, b) do { T temp = a; a = b; b = temp; }while(0);
+#define FRZ_SWAP(T, a, b) do { T temp = a; a = b; b = temp; }while(0);
 
-static void frz_imm_linex(v2 start, v2 end, color c) {
-  if (start.x > end.x) {
-    SWAP(v2, start, end);
+// TODO: This is very very slow, too many branches @OPTIIMIZE
+static void frz_imm_line(v2 a, v2 b, color c) {
+  // if line has bigger slope on the y-axis we invert it.. and write to [y,x] pixels
+  b32 inverted = (abs_f32(b.x - a.x) < abs_f32(b.y - a.y));
+  if (inverted) {
+    FRZ_SWAP(f32, a.x, a.y); 
+    FRZ_SWAP(f32, b.x, b.y); 
   }
-
-  for (s32 x = start.x; x <= end.x; x+=1) {
-    f32 perc = (x - start.x) / (end.x - start.x);
-    f32 y = start.y + (end.y - start.y) * perc;
-    frz_imm_px(x, (s32)y, c);
+  // a.x is always smaller
+  if (a.x > b.x) {
+    FRZ_SWAP(v2, a, b);
+  }
+  for (f32 x = a.x; x <= b.x; x += 1) {
+    f32 t = (x - a.x) / (b.x - a.x); 
+    f32 y = a.y + t * (b.y - a.y); 
+    if (inverted) {
+      frz_imm_px((s32)y, (s32)x, c);
+    } else {
+      frz_imm_px((s32)x, (s32)y, c);
+    }
   }
 }
 
-static void frz_imm_liney(v2 start, v2 end, color c) {
-  if (start.y > end.y) {
-    SWAP(v2, start, end);
+static void frz_imm_tri_sweep(v2 a, v2 b, v2 c, color col) {
+  if (a.y > b.y) { FRZ_SWAP(v2, a, b); }
+  if (b.y > c.y) { FRZ_SWAP(v2, b, c); }
+  if (a.y > b.y) { FRZ_SWAP(v2, a, b); }
+
+#if 0
+  frz_imm_line(a, b, col);
+  frz_imm_line(b, c, col);
+  frz_imm_line(c, a, col);
+#endif
+
+  if (a.y != b.y) {
+    f32 delta_x1 = (b.x - a.x) / (b.y - a.y); 
+    f32 delta_x2 = (c.x - a.x) / (c.y - a.y); 
+    for (s32 y = a.y; y <= b.y; y+=1) {
+      f32 x1 = a.x + delta_x1 * (y-a.y);
+      f32 x2 = a.x + delta_x2 * (y-a.y);
+      for (s32 x = minimum(x1,x2); x < maximum(x1,x2); x+=1) {
+        frz_imm_px(x, y, col);
+      }
+    }
   }
 
-  for (s32 y = start.y; y <= end.y; y+=1) {
-    f32 perc = (y - start.y) / (end.y- start.y);
-    f32 x = start.x + (end.x - start.x) * perc;
-    frz_imm_px(x, (s32)y, c);
+  if (b.y != c.y) {
+    f32 delta_x1 = (b.x - c.x) / (b.y - c.y);
+    f32 delta_x2 = (a.x - c.x) / (a.y - c.y);
+    for (s32 y = c.y; y >= b.y; y-=1) {
+      f32 x1 = c.x - delta_x1 * (c.y-y);
+      f32 x2 = c.x - delta_x2 * (c.y-y);
+      for (s32 x = minimum(x1,x2); x < maximum(x1,x2); x+=1) {
+        frz_imm_px(x, y, col);
+      }
+    }
   }
 }
 
-static void frz_imm_line(v2 start, v2 end, color c) {
-  if (end.x == start.x || end.y == start.y) return;
+static f32 tri_area_sgn(v2 a, v2 b, v2 c) {
+    return 0.5f*((b.y-a.y)*(b.x+a.x) + (c.y-b.y)*(c.x+b.x) + (a.y-c.y)*(a.x+c.x));
+}
 
-  f32 slopex = (end.y - start.y) / (end.x - start.x);
-  f32 slopey = (end.x - start.x) / (end.y - start.y);
-  if (slopex < slopey) {
-    frz_imm_linex(start, end, c);
-  }else {
-    frz_imm_liney(start, end, c);
+static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color col) {
+  rect bbox = {
+    .x = minimum(a.x, minimum(b.x, c.x)),
+    .y = minimum(a.y, minimum(b.y, c.y)),
+  };
+  bbox.w = maximum(a.x, maximum(b.x, c.x)) - bbox.x;
+  bbox.h = maximum(a.y, maximum(b.y, c.y)) - bbox.y;
+  f32 A = tri_area_sgn(a,b,c);
+
+  for (s32 x = 0; x < bbox.w; x+=1) {
+    for (s32 y = 0; y < bbox.h; y+=1) {
+      f32 x_coord = x+bbox.x;
+      f32 y_coord = y+bbox.y;
+
+      f32 alpha = tri_area_sgn(v2m(x_coord, y_coord), b, c) / A;
+      f32 beta  = tri_area_sgn(a, v2m(x_coord, y_coord), c) / A;
+      f32 gamma = tri_area_sgn(a, b, v2m(x_coord, y_coord)) / A;
+
+      if (alpha < 0 || beta < 0 || gamma < 0) continue;
+      frz_imm_px(x_coord, y_coord, col);
+    }
   }
+
 }
 
 
