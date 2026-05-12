@@ -47,9 +47,9 @@ static void frz_clear() {
 
   for (s32 y = 0; y < (s32)ctx->dim.y; y+=1) {
     for (s32 x = 0; x < (s32)ctx->dim.x; x+=1) {
-      u8 red = (u8)((x / (f32)ctx->dim.x) * 255.0);
-      ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x00 << 16) | (0x00 << 8) | (red << 0);
-      //ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x00 << 16) | (0x00 << 8) | (0x00 << 0);
+      //u8 red = (u8)((x / (f32)ctx->dim.x) * 255.0);
+      //ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x00 << 16) | (0x00 << 8) | (red << 0);
+      ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x3f << 16) | (0x3f << 8) | (0x3f<< 0);
     }
   }
 }
@@ -57,7 +57,8 @@ static void frz_clear() {
 static void frz_imm_px(s32 x, s32 y, color c) {
   FRZ_Ctx *ctx = frz_get_gctx();
   if (x>=0 && x < ctx->dim.x && y >= 0 && y < ctx->dim.y) {
-    ctx->backbuffer[x + y * (s32)ctx->dim.x] = 0xffffffff;
+    //ctx->backbuffer[x + y * (s32)ctx->dim.x] = 0xffffffff;
+    ctx->backbuffer[x + y * (s32)ctx->dim.x] = u32_from_color(c);
   }
 }
 
@@ -68,7 +69,6 @@ static void frz_imm_linex(v2 start, v2 end, color c) {
     SWAP(v2, start, end);
   }
 
-  f32 slope = (end.y - start.y) / (end.x - start.x);
   for (s32 x = start.x; x <= end.x; x+=1) {
     f32 perc = (x - start.x) / (end.x - start.x);
     f32 y = start.y + (end.y - start.y) * perc;
@@ -81,7 +81,6 @@ static void frz_imm_liney(v2 start, v2 end, color c) {
     SWAP(v2, start, end);
   }
 
-  f32 slope = (end.x - start.x) / (end.y - start.y);
   for (s32 y = start.y; y <= end.y; y+=1) {
     f32 perc = (y - start.y) / (end.y- start.y);
     f32 x = start.x + (end.x - start.x) * perc;

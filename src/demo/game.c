@@ -5,7 +5,6 @@
 #include "gui/gui.h"
 #include "frz/frz.h"
 
-
 // TODO: Move to a better 2D renderer that can do arbitrary polygons not just AABBS rotated?
 // TODO: lookup a good fzf pipeline to be able to search
 // TODO: Maybe this should be just a test-bed and have repos reference this?? idk, I dont want many assets inside this repo maybe
@@ -29,6 +28,26 @@ void game_update(Game_State *gs, float dt) {
   v2 mp = input_get_mouse_pos(&gs->input);
   mp.y = gs->screen_dim.y - mp.y;
   frz_imm_line(v2m(0,0), mp, col(1,1,1,1));
+
+
+  v2 midpoint = v2_multf(gs->screen_dim, 0.5);
+  v2 tri_dim = v2m(100,200); 
+#define POINT_COUNT 3
+  v2 points[POINT_COUNT] = {
+    v2m(tri_dim.x,-tri_dim.y/2.0),
+    v2m(-tri_dim.x,-tri_dim.y/2.0),
+    v2m(0,tri_dim.y/2.0),
+  };
+  f32 rot = gs->time_sec;
+  for (s32 pidx = 0; pidx < POINT_COUNT; pidx+=1) {
+    points[pidx] = v2_rot(points[pidx], rot);
+    points[pidx] = v2_add(points[pidx], midpoint);
+  }
+
+  frz_imm_line(points[0], points[1], col(1,0,0,1));
+  frz_imm_line(points[1], points[2], col(0,1,0,1));
+  frz_imm_line(points[2], points[0], col(0,0,1,1));
+
   frz_end_frame();
 }
 
@@ -61,7 +80,8 @@ void game_render(Game_State *gs, float dt) {
       .rot_deg = 0,
   };
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  // Uncomment this to see da flame
+  //r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
   // ..
   // ..
