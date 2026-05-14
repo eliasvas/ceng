@@ -50,10 +50,7 @@ void game_update(Game_State *gs, float dt) {
   frz_imm_line(points[2], points[0], col(0,0,1,1));
 #endif
 
-  //frz_imm_tri_bbox(points[0], points[1], points[2], col(1,0,0,1), col(0,1,0,1), col(0,0,1,1));
-
-  //for (u32 cube_idx_triplet= 0; cube_idx_triplet < array_count(frz_cube_indices); cube_idx_triplet+=3) {
-  for (s32 cube_idx_triplet= 0; cube_idx_triplet < 6; cube_idx_triplet+=3) {
+  for (u32 cube_idx_triplet= 0; cube_idx_triplet < array_count(frz_cube_indices); cube_idx_triplet+=3) {
     FRZ_Vertex *vt0 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+0]];
     FRZ_Vertex *vt1 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+1]];
     FRZ_Vertex *vt2 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+2]];
@@ -62,6 +59,7 @@ void game_update(Game_State *gs, float dt) {
     v2 v1_ss = v2_mult(v2_add(v2_divf(v2_rot(v2m(vt1->pos.x, vt1->pos.y), rot), 2), v2m(0.5,0.5)), gs->screen_dim);
     v2 v2_ss = v2_mult(v2_add(v2_divf(v2_rot(v2m(vt2->pos.x, vt2->pos.y), rot), 2), v2m(0.5,0.5)), gs->screen_dim);
 
+    //------
     frz_imm_tri_bbox(v0_ss, v1_ss, v2_ss, vt0->color, vt1->color, vt2->color);
   }
 

@@ -11,6 +11,7 @@
 // https://immersivemath.com/ila/index.html
 // https://foundationsofgameenginedev.com
 // https://haqr.eu/tinyrenderer
+// https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/overview-rasterization-algorithm.html
 ////////////////////////////////////////////////
 
 // TODO: Make this proper single header lib
@@ -115,38 +116,8 @@ static void frz_imm_line(v2 a, v2 b, color c) {
   }
 }
 
-static void frz_imm_tri_sweep(v2 a, v2 b, v2 c, color col) {
-  if (a.y > b.y) { FRZ_SWAP(v2, a, b); }
-  if (b.y > c.y) { FRZ_SWAP(v2, b, c); }
-  if (a.y > b.y) { FRZ_SWAP(v2, a, b); }
-
-  if (a.y != b.y) {
-    f32 delta_x1 = (b.x - a.x) / (b.y - a.y); 
-    f32 delta_x2 = (c.x - a.x) / (c.y - a.y); 
-    for (s32 y = a.y; y <= b.y; y+=1) {
-      f32 x1 = a.x + delta_x1 * (y-a.y);
-      f32 x2 = a.x + delta_x2 * (y-a.y);
-      for (s32 x = minimum(x1,x2); x < maximum(x1,x2); x+=1) {
-        frz_imm_px(x, y, col);
-      }
-    }
-  }
-
-  if (b.y != c.y) {
-    f32 delta_x1 = (b.x - c.x) / (b.y - c.y);
-    f32 delta_x2 = (a.x - c.x) / (a.y - c.y);
-    for (s32 y = c.y; y >= b.y; y-=1) {
-      f32 x1 = c.x - delta_x1 * (c.y-y);
-      f32 x2 = c.x - delta_x2 * (c.y-y);
-      for (s32 x = minimum(x1,x2); x < maximum(x1,x2); x+=1) {
-        frz_imm_px(x, y, col);
-      }
-    }
-  }
-}
-
-static f32 tri_area_sgn(v2 a, v2 b, v2 c) {
-    return 0.5f*((b.y-a.y)*(b.x+a.x) + (c.y-b.y)*(c.x+b.x) + (a.y-c.y)*(a.x+c.x));
+static f64 frz_edge(v2 a, v2 b, v2 c) {
+    return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x);
 }
 
 static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color ca, color cb, color cc) {
@@ -156,26 +127,25 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color ca, color cb, color cc) {
   };
   bbox.w = maximum(a.x, maximum(b.x, c.x)) - bbox.x;
   bbox.h = maximum(a.y, maximum(b.y, c.y)) - bbox.y;
-  f32 A = tri_area_sgn(a,b,c);
+  f64 area = frz_edge(a,b,c);
 
-  v4 colors[3] = { ca,cb,cc };
+  // TOOD: guard agaist this!!
+  if (area < 0) { printf("WRONG WINDING - provide verts in CCW!!\n"); }
 
-  for (s32 x = 0; x < bbox.w; x+=1) {
-    for (s32 y = 0; y < bbox.h; y+=1) {
-      f32 x_coord = x+bbox.x;
-      f32 y_coord = y+bbox.y;
+  for (s32 y = bbox.y; y <= bbox.y+bbox.h; y+=1) {
+    for (s32 x = bbox.x; x <= bbox.x+bbox.w; x+=1) {
+      v2 p = v2m(x, y);
 
-      f32 alpha = tri_area_sgn(v2m(x_coord, y_coord), b, c) / A;
-      f32 beta  = tri_area_sgn(a, v2m(x_coord, y_coord), c) / A;
-      f32 gamma = tri_area_sgn(a, b, v2m(x_coord, y_coord)) / A;
+      f32 alpha = frz_edge(v2m(p.x, p.y), b, c) / area;
+      f32 beta  = frz_edge(a, v2m(p.x, p.y), c) / area;
+      f32 gamma = frz_edge(a, b, v2m(p.x, p.y)) / area;
 
-      v4 interpolated_color = v4_add(v4_multf(colors[0], alpha), v4_add(v4_multf(colors[1], beta), v4_multf(colors[2], gamma)));
+      v4 interpolated_color = v4_add(v4_multf(ca, alpha), v4_add(v4_multf(cb, beta), v4_multf(cc, gamma)));
       if (alpha < 0 || beta < 0 || gamma < 0) continue;
 
-      frz_imm_px(x_coord, y_coord, interpolated_color);
+      frz_imm_px(p.x, p.y, interpolated_color);
     }
   }
-
 }
 
 
