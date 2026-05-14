@@ -277,7 +277,7 @@ int main(void) {
     R2D_Quad quad = (R2D_Quad) {
         .src_rect = rec(0,0,gs.screen_dim.x,gs.screen_dim.y),
         .dst_rect = rec(0,0,gs.screen_dim.x,gs.screen_dim.y),
-        .c = col(1,1,1,0.3),
+        .c = col(1,1,1,1),
         .tex = gs.g_backbuffer,
         .rot_deg = 0,
     };

@@ -63,7 +63,8 @@ typedef union v3
 }v3;
 
 // Generic
-INLINE v3  v3m(f32 x, f32 y, f32 z)   { return (v3){{x, y, z}}; }
+//INLINE v3  v3m(f32 x, f32 y, f32 z)   { return (v3){{x, y, z}}; }
+#define v3m(x, y, z)   ((v3){{x, y, z}})
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
 INLINE v3  v3_mult(v3 a, v3 b)        { return v3m(a.x*b.x,a.y*b.y,a.z*b.z); }

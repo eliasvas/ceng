@@ -18,6 +18,33 @@
 // TODO: Options for face removal / and stuff
 // TODO: Right handed cube (w/ Index buffer too?)
 
+typedef struct {
+  v3 pos;
+  v3 norm;
+  v2 uv;
+  v4 color;
+} FRZ_Vertex;
+
+#define FRZ_WHITE color_from_rgba8(255,255,255,255)
+#define FRZ_RED color_from_rgba8(255, 0, 0, 255)
+#define FRZ_GREEN color_from_rgba8(0, 255, 0, 255)
+#define FRZ_BLUE color_from_rgba8(0, 0, 255, 255)
+#define FRZ_BLACK color_from_rgba8(0, 0, 0, 255)
+
+// Just the first face done for now, should also do the others..
+FRZ_Vertex frz_cube_verts[] = {
+  (FRZ_Vertex) {.pos = v3m(-0.5, -0.5, -0.5), .color = FRZ_RED,},
+  (FRZ_Vertex) {.pos = v3m(+0.5, -0.5, -0.5), .color = FRZ_GREEN,},
+  (FRZ_Vertex) {.pos = v3m(+0.5, +0.5, -0.5), .color = FRZ_WHITE,},
+  (FRZ_Vertex) {.pos = v3m(-0.5, +0.5, -0.5), .color = FRZ_BLUE,},
+};
+
+s32 frz_cube_indices[] = {
+  0,1,2,
+  0,2,3,
+};
+
+
 // You need to provide this !! 
 typedef struct {
   u32 *backbuffer;
@@ -76,6 +103,7 @@ static void frz_imm_line(v2 a, v2 b, color c) {
   if (a.x > b.x) {
     FRZ_SWAP(v2, a, b);
   }
+
   for (f32 x = a.x; x <= b.x; x += 1) {
     f32 t = (x - a.x) / (b.x - a.x); 
     f32 y = a.y + t * (b.y - a.y); 
@@ -91,12 +119,6 @@ static void frz_imm_tri_sweep(v2 a, v2 b, v2 c, color col) {
   if (a.y > b.y) { FRZ_SWAP(v2, a, b); }
   if (b.y > c.y) { FRZ_SWAP(v2, b, c); }
   if (a.y > b.y) { FRZ_SWAP(v2, a, b); }
-
-#if 0
-  frz_imm_line(a, b, col);
-  frz_imm_line(b, c, col);
-  frz_imm_line(c, a, col);
-#endif
 
   if (a.y != b.y) {
     f32 delta_x1 = (b.x - a.x) / (b.y - a.y); 
@@ -127,7 +149,7 @@ static f32 tri_area_sgn(v2 a, v2 b, v2 c) {
     return 0.5f*((b.y-a.y)*(b.x+a.x) + (c.y-b.y)*(c.x+b.x) + (a.y-c.y)*(a.x+c.x));
 }
 
-static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color col) {
+static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color ca, color cb, color cc) {
   rect bbox = {
     .x = minimum(a.x, minimum(b.x, c.x)),
     .y = minimum(a.y, minimum(b.y, c.y)),
@@ -135,6 +157,8 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color col) {
   bbox.w = maximum(a.x, maximum(b.x, c.x)) - bbox.x;
   bbox.h = maximum(a.y, maximum(b.y, c.y)) - bbox.y;
   f32 A = tri_area_sgn(a,b,c);
+
+  v4 colors[3] = { ca,cb,cc };
 
   for (s32 x = 0; x < bbox.w; x+=1) {
     for (s32 y = 0; y < bbox.h; y+=1) {
@@ -145,8 +169,10 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color col) {
       f32 beta  = tri_area_sgn(a, v2m(x_coord, y_coord), c) / A;
       f32 gamma = tri_area_sgn(a, b, v2m(x_coord, y_coord)) / A;
 
+      v4 interpolated_color = v4_add(v4_multf(colors[0], alpha), v4_add(v4_multf(colors[1], beta), v4_multf(colors[2], gamma)));
       if (alpha < 0 || beta < 0 || gamma < 0) continue;
-      frz_imm_px(x_coord, y_coord, col);
+
+      frz_imm_px(x_coord, y_coord, interpolated_color);
     }
   }
 
