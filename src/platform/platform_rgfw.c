@@ -131,7 +131,7 @@ int main(void) {
   /////////////////////////////////////////////////////
   gs.persistent_arena = arena_make(GB(1));
   gs.frame_arena = arena_make(MB(256));
-  gs.screen_dim = v2m(800, 600);
+  gs.wdim = v2m(800, 600);
 
   ogl_init(); // To create the bullshit empty VAO opengl side, nothing else
   gs.red = ogl_tex_make((u8[]){250,90,72,255}, 1,1, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
@@ -207,7 +207,7 @@ int main(void) {
       Input_Event_Node input_event = {};
       switch(event.type) {
         case RGFW_windowResized:
-          gs.screen_dim = v2m(event.update.w, event.update.h);
+          gs.wdim = v2m(event.update.w, event.update.h);
           input_event.evt = (Input_Event){
             .kind = INPUT_EVENT_KIND_RESIZE,
           };
@@ -259,10 +259,10 @@ int main(void) {
     /////////////////////////////////////////////////////
     // 2.3 Perform update + render calling the game lib
     /////////////////////////////////////////////////////
-    gs.pixels = arena_push(gs.frame_arena, sizeof(u32)*gs.screen_dim.x*gs.screen_dim.y);
+    gs.pixels = arena_push(gs.frame_arena, sizeof(u32)*gs.wdim.x*gs.wdim.y);
     game_api.update(&gs, dt);
     game_api.render(&gs, dt);
-    ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.screen_dim.x, gs.screen_dim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
+    ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.wdim.x, gs.wdim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
 
     /////////////////////////////////////////////////////
     // 2.4 Render the software rendered texture
@@ -275,8 +275,8 @@ int main(void) {
     cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
     r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
     R2D_Quad quad = (R2D_Quad) {
-        .src_rect = rec(0,0,gs.screen_dim.x,gs.screen_dim.y),
-        .dst_rect = rec(0,0,gs.screen_dim.x,gs.screen_dim.y),
+        .src_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
+        .dst_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
         .c = col(1,1,1,1),
         .tex = gs.g_backbuffer,
         .rot_deg = 0,

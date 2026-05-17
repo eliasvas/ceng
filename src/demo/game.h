@@ -25,7 +25,7 @@ typedef struct {
   
   // Interface between platform <-> game
   f32 time_sec;
-  v2 screen_dim;
+  v2 wdim;
   Input input;
   R2D_Cmd_Chunk_List cmd_list;
   Game_Audio_Output_Buffer audio_out;

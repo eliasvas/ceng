@@ -40,7 +40,7 @@ typedef union v2
 }v2;
 
 // Generic
-INLINE v2  v2m(f32 x, f32 y)           { return (v2){{x, y}}; }
+#define v2m(x, y)   ((v2){{x, y}})
 INLINE v2  v2_add(v2 a, v2 b)          { return v2m(a.x+b.x,a.y+b.y); }
 INLINE v2  v2_sub(v2 a, v2 b)          { return v2m(a.x-b.x,a.y-b.y); }
 INLINE v2  v2_mult(v2 a, v2 b)         { return v2m(a.x*b.x,a.y*b.y); }
@@ -63,7 +63,6 @@ typedef union v3
 }v3;
 
 // Generic
-//INLINE v3  v3m(f32 x, f32 y, f32 z)   { return (v3){{x, y, z}}; }
 #define v3m(x, y, z)   ((v3){{x, y, z}})
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
@@ -79,7 +78,7 @@ INLINE b32 v3_eq(v3 a, v3 b)          { return (equalf(a.x,b.x,0.001) && equalf(
 // Right-handed only
 INLINE v3  v3_cross(v3 a,v3 b)        { v3 res; res.x=(a.y*b.z)-(a.z*b.y); res.y=(a.z*b.x)-(a.x*b.z); res.z=(a.x*b.y)-(a.y*b.x); return (res); }
 INLINE v3  v3_rot_x(v3 a, f32 arad)   { return v3m(a.x,a.y*cos_f32(arad)-a.z*sin_f32(arad),a.y*sin_f32(arad)+a.z*cos_f32(arad)); }
-INLINE v3  v3_rot_y(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)-a.z*sin_f32(arad),a.y,a.x*sin_f32(arad)+a.z*cos_f32(arad)); }
+INLINE v3  v3_rot_y(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)+a.z*sin_f32(arad),a.y,-a.x*sin_f32(arad)+a.z*cos_f32(arad)); }
 INLINE v3  v3_rot_z(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)-a.y*sin_f32(arad),a.x*sin_f32(arad)+a.y*cos_f32(arad),a.z); }
 
 typedef union v4
@@ -89,7 +88,7 @@ typedef union v4
     f32 raw[4];
 }v4;
 
-INLINE v4 v4m(f32 x, f32 y, f32 z, f32 w) { return (v4){{x, y, z, w}}; }
+#define v4m(x, y, z, w)   ((v4){{x, y, z, w}})
 INLINE v4 v4m_3(v3 a)                     { return v4m(a.x,a.y,a.z,1); }
 INLINE v3  v3m_4(v4 a)                    { return v3m(a.x,a.y,a.z); } // should be up
 INLINE v4 v4_add(v4 a, v4 b)              { return v4m(a.x+b.x,a.y+b.y,a.z+b.z,a.w+b.w); }

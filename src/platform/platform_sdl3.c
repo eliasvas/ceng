@@ -208,7 +208,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   sdl_state->gs.persistent_arena = arena_make(GB(1));
   sdl_state->gs.frame_arena = arena_make(MB(256));
-  sdl_state->gs.screen_dim = v2m(DEFAULT_WIN_DIM_X, DEFAULT_WIN_DIM_Y);
+  sdl_state->gs.wdim = v2m(DEFAULT_WIN_DIM_X, DEFAULT_WIN_DIM_Y);
 
   // @Initialize the Audio output buffer..
   sdl_state->audio_output = (SDL_Audio_Output_Buffer) {
@@ -287,7 +287,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
       return SDL_APP_SUCCESS;
   } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
     // Update Game_State with new window dimensions
-    sdl_state->gs.screen_dim = v2m(event->window.data1, event->window.data2);
+    sdl_state->gs.wdim = v2m(event->window.data1, event->window.data2);
     input_event.evt = (Input_Event){
       .kind = INPUT_EVENT_KIND_RESIZE,
     };
@@ -353,7 +353,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   sdl_state->gs.audio_out.samples = samples_to_write;
 
 
-  sdl_state->gs.pixels = arena_push(sdl_state->gs.frame_arena, sizeof(u32)*sdl_state->gs.screen_dim.x*sdl_state->gs.screen_dim.y);
+  sdl_state->gs.pixels = arena_push(sdl_state->gs.frame_arena, sizeof(u32)*sdl_state->gs.wdim.x*sdl_state->gs.wdim.y);
   // Do actual game's update and render
   game_api.update(&sdl_state->gs, sdl_state->dt);
   game_api.render(&sdl_state->gs, sdl_state->dt);
@@ -361,7 +361,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   //---------------------------------------------------------------------------
   // software renderer WIP
   //if (input_win_resized(&sdl_state->gs.input)) {
-    ogl_tex_update(&g_backbuffer, (u8*)sdl_state->gs.pixels, sdl_state->gs.screen_dim.x, sdl_state->gs.screen_dim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
+    ogl_tex_update(&g_backbuffer, (u8*)sdl_state->gs.pixels, sdl_state->gs.wdim.x, sdl_state->gs.wdim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   //}
   Game_State *gs = &sdl_state->gs; 
   R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
@@ -372,8 +372,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
   R2D_Quad quad = (R2D_Quad) {
-      .src_rect = rec(0,0,gs->screen_dim.x,gs->screen_dim.y),
-      .dst_rect = rec(0,0,gs->screen_dim.x,gs->screen_dim.y),
+      .src_rect = rec(0,0,gs->wdim.x,gs->wdim.y),
+      .dst_rect = rec(0,0,gs->wdim.x,gs->wdim.y),
       .c = col(1,1,1,0.5),
       .tex = g_backbuffer,
       .rot_deg = 0,

@@ -34,15 +34,38 @@ typedef struct {
 
 // Just the first face done for now, should also do the others..
 FRZ_Vertex frz_cube_verts[] = {
-  (FRZ_Vertex) {.pos = v3m(-0.5, -0.5, -0.5), .color = FRZ_RED,},
-  (FRZ_Vertex) {.pos = v3m(+0.5, -0.5, -0.5), .color = FRZ_GREEN,},
-  (FRZ_Vertex) {.pos = v3m(+0.5, +0.5, -0.5), .color = FRZ_WHITE,},
-  (FRZ_Vertex) {.pos = v3m(-0.5, +0.5, -0.5), .color = FRZ_BLUE,},
+  // Camera-Facing Quad
+  (FRZ_Vertex) {.pos = v3m(-0.5, -0.5, +0.5), .uv = v2m(0,0), .color = FRZ_RED,},
+  (FRZ_Vertex) {.pos = v3m(+0.5, -0.5, +0.5), .uv = v2m(1,0), .color = FRZ_GREEN,},
+  (FRZ_Vertex) {.pos = v3m(+0.5, +0.5, +0.5), .uv = v2m(1,1), .color = FRZ_WHITE,},
+  (FRZ_Vertex) {.pos = v3m(-0.5, +0.5, +0.5), .uv = v2m(0,1), .color = FRZ_BLUE,},
+
 };
 
 s32 frz_cube_indices[] = {
+  // Camera-Facing Quad
   0,1,2,
   0,2,3,
+  // Away-Camera-Facing Quad
+};
+
+const uint8_t arrow_tex[16][16] = {
+    {  0,  0,  0,  0,  0,  0,  0,255,255,  0,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,255,255,255,255,255,255,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,255,255,255,255,255,255,255,255,  0,  0,  0,  0},
+    {  0,  0,  0,255,255,255,255,255,255,255,255,255,255,  0,  0,  0},
+    {  0,  0,255,255,255,255,255,255,255,255,255,255,255,255,  0,  0},
+    {  0,255,255,255,255,255,255,255,255,255,255,255,255,255,255,  0},
+    {255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0},
+    {  0,  0,  0,  0,  0,  0,255,255,255,255,  0,  0,  0,  0,  0,  0}
 };
 
 
@@ -51,6 +74,7 @@ typedef struct {
   u32 *backbuffer;
   f32 *zbuf;
   v2 dim;
+  Arena *talloc;
   // List of stuff -- in the future ok?!
 } FRZ_Ctx;
 
@@ -61,9 +85,12 @@ static FRZ_Ctx* frz_get_gctx() {
   return &g_ctx;
 }
 
-static void frz_begin_frame(u32 *backbuffer, v2 dim) {
+static void frz_begin_frame(u32 *backbuffer, v2 dim, Arena *talloc) {
   g_ctx.backbuffer = backbuffer;
   g_ctx.dim = dim;
+  g_ctx.talloc = talloc;
+  g_ctx.zbuf = arena_push_array(g_ctx.talloc, f32, g_ctx.dim.x * g_ctx.dim.y);
+
 }
 
 static void frz_end_frame() {
@@ -116,11 +143,12 @@ static void frz_imm_line(v2 a, v2 b, color c) {
   }
 }
 
+// Barycentric coord calculation
 static f64 frz_edge(v2 a, v2 b, v2 c) {
     return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x);
 }
 
-static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color ca, color cb, color cc) {
+static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc) {
   rect bbox = {
     .x = minimum(a.x, minimum(b.x, c.x)),
     .y = minimum(a.y, minimum(b.y, c.y)),
@@ -129,7 +157,8 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color ca, color cb, color cc) {
   bbox.h = maximum(a.y, maximum(b.y, c.y)) - bbox.y;
   f64 area = frz_edge(a,b,c);
 
-  // TOOD: guard agaist this!!
+  // Non CCW face removal right now! in 2D of course
+  //if (area < 0) return;
   if (area < 0) { printf("WRONG WINDING - provide verts in CCW!!\n"); }
 
   for (s32 y = bbox.y; y <= bbox.y+bbox.h; y+=1) {
@@ -140,13 +169,17 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, color ca, color cb, color cc) {
       f32 beta  = frz_edge(a, v2m(p.x, p.y), c) / area;
       f32 gamma = frz_edge(a, b, v2m(p.x, p.y)) / area;
 
+      v2 interp_uv = v2_add(v2_multf(uva, alpha), v2_add(v2_multf(uvb, beta), v2_multf(uvc, gamma)));
+      f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 16)][(s32)(interp_uv.x * 16)] / 255;
+
       v4 interpolated_color = v4_add(v4_multf(ca, alpha), v4_add(v4_multf(cb, beta), v4_multf(cc, gamma)));
+      interpolated_color = v4_multf(interpolated_color, tex_color);
+
       if (alpha < 0 || beta < 0 || gamma < 0) continue;
 
       frz_imm_px(p.x, p.y, interpolated_color);
     }
   }
 }
-
 
 #endif
