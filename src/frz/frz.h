@@ -6,14 +6,6 @@
 /////////////////////////////////////////////
 #include "base/base_inc.h"
 
-////////////////////////////////////////////////
-// Good References:
-// https://immersivemath.com/ila/index.html
-// https://foundationsofgameenginedev.com
-// https://haqr.eu/tinyrenderer
-// https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/overview-rasterization-algorithm.html
-////////////////////////////////////////////////
-
 // TODO: Make this proper single header lib
 // TODO: Multithreading
 // TODO: Options for face removal / and stuff
@@ -170,7 +162,7 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, v2 uva, v2 uvb, v2 uvc, color ca,
       f32 gamma = frz_edge(a, b, v2m(p.x, p.y)) / area;
 
       v2 interp_uv = v2_add(v2_multf(uva, alpha), v2_add(v2_multf(uvb, beta), v2_multf(uvc, gamma)));
-      f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 16)][(s32)(interp_uv.x * 16)] / 255;
+      f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
 
       v4 interpolated_color = v4_add(v4_multf(ca, alpha), v4_add(v4_multf(cb, beta), v4_multf(cc, gamma)));
       interpolated_color = v4_multf(interpolated_color, tex_color);

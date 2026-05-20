@@ -3,10 +3,22 @@
 #include <math.h>
 #include "helper.h"
 
-// TODO: Actually think about the Coordinate Systems, not sure current mat4's are good yet
+////////////////////////////////////////////////////////////
+// References:
+// This repo is Linear Algebra mixed with graphics algos.
+// I believe the best way to go about this is to get a linalg textbook
+// and use it in combination with CG resources, do a soft. rasterizer! 
+//
+// Immersive Math: https://immersivemath.com/
+// Essence of Linear Algebra: https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab
+// Elementary Linear Algebra, Anton: https://www.studyhalo.com/media/resources/resources/MAT1503/Textbook/MAT1503_-_Prescribed_book.pdf
+// songho: https://www.songho.ca/opengl/index.html
+// Scratchapixel Rasterization: https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/overview-rasterization-algorithm.html
+// Scratchapixel Geometry: https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/geometry/points-vectors-and-normals.html
+////////////////////////////////////////////////////////////
 
-// TODO: add our own trig functions,
-// I HATE the C standard library
+// TODO: Should we add integer vector types here? We would also need direction e.g WESN
+// TODO: Add our own trig functions, cstdlib SUCKS
 #if 1
 #define sqrt_f64(n)   (sqrt(n))
 #define floor_f64(n)  (floor(n))
@@ -39,7 +51,6 @@ typedef union v2
     f32 raw[2];
 }v2;
 
-// Generic
 #define v2m(x, y)   ((v2){{x, y}})
 INLINE v2  v2_add(v2 a, v2 b)          { return v2m(a.x+b.x,a.y+b.y); }
 INLINE v2  v2_sub(v2 a, v2 b)          { return v2m(a.x-b.x,a.y-b.y); }
@@ -52,7 +63,6 @@ INLINE f32 v2_dot(v2 a, v2 b)          { return (a.x*b.x)+(a.y*b.y); }
 INLINE f32 v2_len(v2 a)                { return sqrt_f32(v2_dot(a,a)); }
 INLINE v2  v2_norm(v2 a)               { f32 vl=v2_len(a);return v2_divf(a,vl); }
 INLINE b32 v2_eq(v2 a, v2 b)           { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001)); }
-// Right-handed only
 INLINE v2  v2_rot(v2 a, f32 arad) { return v2m(a.x*cos(arad)-a.y*sin(arad), a.x*sin(arad)+a.y*cos(arad)); }
 
 typedef union v3
@@ -62,7 +72,6 @@ typedef union v3
     f32 raw[3];
 }v3;
 
-// Generic
 #define v3m(x, y, z)   ((v3){{x, y, z}})
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
@@ -75,7 +84,6 @@ INLINE f32 v3_dot(v3 a, v3 b)         { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z); }
 INLINE f32 v3_len(v3 a)               { return sqrt_f32(v3_dot(a,a)); }
 INLINE v3  v3_norm(v3 a)              { f32 vl=v3_len(a);if (equalf(vl,0.0,0.000001))return a; else return v3_divf(a,vl); }
 INLINE b32 v3_eq(v3 a, v3 b)          { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001)); }
-// Right-handed only
 INLINE v3  v3_cross(v3 a,v3 b)        { v3 res; res.x=(a.y*b.z)-(a.z*b.y); res.y=(a.z*b.x)-(a.x*b.z); res.z=(a.x*b.y)-(a.y*b.x); return (res); }
 INLINE v3  v3_rot_x(v3 a, f32 arad)   { return v3m(a.x,a.y*cos_f32(arad)-a.z*sin_f32(arad),a.y*sin_f32(arad)+a.z*cos_f32(arad)); }
 INLINE v3  v3_rot_y(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)+a.z*sin_f32(arad),a.y,-a.x*sin_f32(arad)+a.z*cos_f32(arad)); }
@@ -102,7 +110,6 @@ INLINE f32 v4_dot(v4 a, v4 b)             { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z)
 INLINE f32 v4_len(v4 a)                   { return sqrt_f32(v4_dot(a,a)); }
 INLINE v4  v4_norm(v4 a)                  { f32 vl=v4_len(a);assert(!equalf(vl,0.0,0.01));return v4_divf(a,vl); }
 INLINE b32 v4_eq(v4 a, v4 b)              { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001) && equalf(a.w,b.w,0.001)); }
-//INLINE v4  v4_persp_divide(v4 a)          {if(a.w != 0) { a = v4_divf(a, a.w);}; return a;}
 INLINE v4  v4_persp_divide(v4 a)          {if(a.w != 0) { a.x = a.x/a.w; a.y = a.y/a.w; a.z = a.z/a.w;}; return a;}
 
 typedef union {
@@ -180,14 +187,11 @@ INLINE m4 m4_translate(v3 t) {
 
 INLINE m4 m4_mult(m4 l, m4 r) {
     m4 res = m4d(1.0f);
-    for (u32 col = 0; col < 4; col+=1)
-    {
-        for (u32 row = 0; row < 4; row+=1)
-        {
+    for (u32 col = 0; col < 4; col+=1) {
+        for (u32 row = 0; row < 4; row+=1) {
             f32 sum = 0;
-            for (u32 current_index = 0; current_index < 4; ++current_index)
-            {
-                sum += (f32)l.col[current_index][row] * (f32)r.col[col][current_index];
+            for (u32 midx = 0; midx < 4; ++midx) {
+                sum += (f32)l.col[midx][row] * (f32)r.col[col][midx];
             }
             res.col[col][row] = sum;
         }
@@ -196,12 +200,9 @@ INLINE m4 m4_mult(m4 l, m4 r) {
 }
 INLINE v4 m4_multv(m4 mat, v4 vec) {
     v4 res;
-    s32 cols, rows;
-    for(rows = 0; rows < 4; ++rows)
-    {
+    for(s32 rows = 0; rows < 4; ++rows) {
         f32 s = 0;
-        for(cols = 0; cols < 4; ++cols)
-        {
+        for(s32 cols = 0; cols < 4; ++cols) {
             s += mat.col[cols][rows] * vec.raw[cols];
         }
         res.raw[rows] = s;
@@ -211,8 +212,8 @@ INLINE v4 m4_multv(m4 mat, v4 vec) {
 
 INLINE m4 m4_transpose(m4 m) {
   m4 res = {};
-  for (u32 col_idx = 0; col_idx < 4; ++col_idx) {
-    for (u32 row_idx = 0; row_idx < 4; ++row_idx) {
+  for (s32 col_idx = 0; col_idx < 4; ++col_idx) {
+    for (s32 row_idx = 0; row_idx < 4; ++row_idx) {
       res.col[col_idx][row_idx] = m.col[row_idx][col_idx];
     }
   }
@@ -243,13 +244,12 @@ INLINE m4 m4_inv(m4 m) {
 
     det = m.raw[0] * inv.raw[0] + m.raw[1] * inv.raw[4] + m.raw[2] * inv.raw[8] + m.raw[3] * inv.raw[12];
 
-    if (det == 0) //in case the matrix is non-invertible
-        return m4d(0.f);
+    //in case the matrix is non-invertible
+    if (det == 0) return m4d(0.f);
 
     det = 1.f / det;
 
-    for (i = 0; i < 16; ++i)
-        inv_out.raw[i] = inv.raw[i] * det;
+    for (i = 0; i < 16; ++i) inv_out.raw[i] = inv.raw[i] * det;
 
     return inv_out;
 }
@@ -280,8 +280,7 @@ INLINE m4 mat4_rotate(f32 angle, v3 axis) {
     return res;
 }
 
-typedef union rect
-{
+typedef union rect {
     struct { f32 x,y,w,h; };
     struct { v2 p0,dim; };
     f32 raw[4];
@@ -298,14 +297,6 @@ static b32 rect_isect_point(rect r, v2 p) {
   return ((p.x >= r.x) && (p.x <= r.x+r.w)) && ((p.y >= r.y) && (p.y <= r.y+r.h));
 }
 
-/*
-static b32 rect_isect_rect(rect l, rect r) {
-  return (rect_isect_point(l, v2m(r.x,     r.y)) ||
-          rect_isect_point(l, v2m(r.x+r.w, r.y)) ||
-          rect_isect_point(l, v2m(r.x,     r.y+r.h)) ||
-          rect_isect_point(l, v2m(r.x+r.w, r.y+r.h)));
-}
-*/
 static b32 rect_isect_rect(rect a, rect b) {
     return !(a.x + a.w < b.x ||
              b.x + b.w < a.x ||
