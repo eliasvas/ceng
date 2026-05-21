@@ -29,20 +29,21 @@ void game_update(Game_State *gs, float dt) {
   frz_imm_line(v2m(0,0), mp, col(1,1,1,1));
 
 
-  v2 midpoint = v2_multf(gs->wdim, 0.5);
-  v2 tri_dim = v2m(100,100); 
-#define POINT_COUNT 3
-  v2 points[POINT_COUNT] = {
-    v2m(tri_dim.x,-tri_dim.y),
-    v2m(-tri_dim.x,-tri_dim.y),
-    v2m(0,tri_dim.y),
-  };
-  f32 rot = gs->time_sec;
-  for (s32 pidx = 0; pidx < POINT_COUNT; pidx+=1) {
-    points[pidx] = v2_rot(points[pidx], rot);
-    points[pidx] = v2_add(points[pidx], midpoint);
+  // Movement stuff
+  static v3 cam_pos = v3m(0,0,5);
+  f32 cam_speed = 3.0;
+
+  if (input_mkey_down(&gs->input, INPUT_MOUSE_RMB)) {
+    cam_pos.x += dt*cam_speed;
+    printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
   }
 
+  if (input_mkey_down(&gs->input, INPUT_MOUSE_LMB)) {
+    cam_pos.x -= dt*cam_speed;
+    printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
+  }
+
+  f32 rot = gs->time_sec;
   for (u32 cube_idx_triplet= 0; cube_idx_triplet < array_count(frz_cube_indices); cube_idx_triplet+=3) {
     FRZ_Vertex *vt0 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+0]];
     FRZ_Vertex *vt1 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+1]];
@@ -50,42 +51,28 @@ void game_update(Game_State *gs, float dt) {
 
     f32 near_plane = 0.1;
 
-    v3 cam_pos = v3m(0,0,5);
-    f32 r = 1;
-    f32 l = -1;
-    f32 t = 1;
-    f32 b = -1;
 
-    v3 v0_world  = v3_multf(v3_rot_y(vt0->pos, rot), 5); 
+    // m4 model = ...
+    // m4 view  = ...
+    m4 proj = frustum_from_fovx(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
+
+    v3 v0_world  = v3_multf(v3_rot_y(vt0->pos, rot), 2); 
     v3 v0_cam    = v3_sub(v0_world, cam_pos);
-    v2 v0_ss     = v2_divf(v2_multf(v2m(v0_cam.x, v0_cam.y), near_plane), -v0_cam.z);
-    v2 v0_ndc    = v2m(2 * v0_ss.x / (r-l) - (r+l) / (r-l), 2 * v0_ss.y / (t - b) - (t + b) / (t - b));
-    v2 v0_raster = v2m(((v0_ndc.x+1) / 2) * gs->wdim.x, ((1 - v0_ndc.y)/2)*gs->wdim.y); 
+    v4 v0_clip   = m4_multv(proj, v4m(v0_cam.x, v0_cam.y, v0_cam.z, 1.0));
+    v4 v0_ndc    = v4_divf(v0_clip, v0_clip.w);
+    v2 v0_raster = frz_apply_viewport_transform(v2_from_v4(v0_ndc), gs->wdim);
 
-
-    v3 v1_world  = v3_multf(v3_rot_y(vt1->pos, rot), 5); 
+    v3 v1_world  = v3_multf(v3_rot_y(vt1->pos, rot), 2); 
     v3 v1_cam    = v3_sub(v1_world, cam_pos);
-    v2 v1_ss     = v2_divf(v2_multf(v2m(v1_cam.x, v1_cam.y), near_plane), -v1_cam.z);
-    v2 v1_ndc    = v2m(2 * v1_ss.x / (r-l) - (r+l) / (r-l), 2 * v1_ss.y / (t - b) - (t + b) / (t - b));
-    v2 v1_raster = v2m(((v1_ndc.x+1) / 2) * gs->wdim.x, ((1 - v1_ndc.y)/2)*gs->wdim.y); 
+    v4 v1_clip   = m4_multv(proj, v4m(v1_cam.x, v1_cam.y, v1_cam.z, 1.0));
+    v4 v1_ndc    = v4_divf(v1_clip, v1_clip.w);
+    v2 v1_raster = frz_apply_viewport_transform(v2_from_v4(v1_ndc), gs->wdim);
 
-    v3 v2_world  = v3_multf(v3_rot_y(vt2->pos, rot), 5); 
+    v3 v2_world  = v3_multf(v3_rot_y(vt2->pos, rot), 2); 
     v3 v2_cam    = v3_sub(v2_world, cam_pos);
-    v2 v2_ss     = v2_divf(v2_multf(v2m(v2_cam.x, v2_cam.y), near_plane), -v2_cam.z);
-    v2 v2_ndc    = v2m(2 * v2_ss.x / (r-l) - (r+l) / (r-l), 2 * v2_ss.y / (t - b) - (t + b) / (t - b));
-    v2 v2_raster = v2m(((v2_ndc.x+1) / 2) * gs->wdim.x, ((1 - v2_ndc.y)/2)*gs->wdim.y); 
-
-
-#if 0
-    v3 wv0 = v3_multf(v3_rot_y(vt0->pos, rot), 0.5); // rotate and scale in 'ws'
-    v2 v0_ss = v2_mult(v2_add(v2m(wv0.x,wv0.y), v2m(0.5,0.5)), gs->wdim); // apply a viewport transform, sort of
-
-    v3 wv1 = v3_multf(v3_rot_y(vt1->pos, rot), 0.5); // rotate and scale in 'ws'
-    v2 v1_ss = v2_mult(v2_add(v2m(wv1.x,wv1.y), v2m(0.5,0.5)), gs->wdim); // apply a viewport transform, sort of
-
-    v3 wv2 = v3_multf(v3_rot_y(vt2->pos, rot), 0.5); // rotate and scale in 'ws'
-    v2 v2_ss = v2_mult(v2_add(v2m(wv2.x,wv2.y), v2m(0.5,0.5)), gs->wdim); // apply a viewport transform, sort of
-#endif
+    v4 v2_clip   = m4_multv(proj, v4m(v2_cam.x, v2_cam.y, v2_cam.z, 1.0));
+    v4 v2_ndc    = v4_divf(v2_clip, v2_clip.w);
+    v2 v2_raster = frz_apply_viewport_transform(v2_from_v4(v2_ndc), gs->wdim);
 
     //------
     frz_imm_tri_bbox(v0_raster, v1_raster, v2_raster, vt0->uv, vt1->uv, vt2->uv, vt0->color, vt1->color, vt2->color);

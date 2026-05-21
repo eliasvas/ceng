@@ -2,8 +2,11 @@
 #define FRZ_H__
 
 /////////////////////////////////////////////
-// Fast Rasterizer: A fast 3D rasterizer (!!)
+// frz : A fast 3D rasterizer (!!)
+// Most generic math functions can be found at src/base/bmath.h
+// along with a list of references for more math study.
 /////////////////////////////////////////////
+
 #include "base/base_inc.h"
 
 // TODO: Make this proper single header lib
@@ -35,10 +38,8 @@ FRZ_Vertex frz_cube_verts[] = {
 };
 
 s32 frz_cube_indices[] = {
-  // Camera-Facing Quad
   0,1,2,
   0,2,3,
-  // Away-Camera-Facing Quad
 };
 
 const uint8_t arrow_tex[16][16] = {
@@ -140,6 +141,10 @@ static f64 frz_edge(v2 a, v2 b, v2 c) {
     return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x);
 }
 
+static v2 frz_apply_viewport_transform(v2 p_ndc, v2 wdim) {
+    return v2m(((p_ndc.x+1) / 2) * wdim.x, ((1 - p_ndc.y)/2)*wdim.y); 
+}
+
 static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc) {
   rect bbox = {
     .x = minimum(a.x, minimum(b.x, c.x)),
@@ -151,7 +156,7 @@ static void frz_imm_tri_bbox(v2 a, v2 b, v2 c, v2 uva, v2 uvb, v2 uvc, color ca,
 
   // Non CCW face removal right now! in 2D of course
   //if (area < 0) return;
-  if (area < 0) { printf("WRONG WINDING - provide verts in CCW!!\n"); }
+  //if (area < 0) { printf("WRONG WINDING - provide verts in CCW!!\n"); }
 
   for (s32 y = bbox.y; y <= bbox.y+bbox.h; y+=1) {
     for (s32 x = bbox.x; x <= bbox.x+bbox.w; x+=1) {
