@@ -2,6 +2,7 @@
 #define MATH_3D_H__
 #include <math.h>
 #include "helper.h"
+#include "base/base_inc.h"
 
 ////////////////////////////////////////////////////////////
 // References:
@@ -17,7 +18,9 @@
 ////////////////////////////////////////////////////////////
 
 // TODO: Should we add integer vector types here? We would also need direction e.g WESN
-// TODO: Add our own trig functions, cstdlib SUCKS
+// TODO: Quaternions :|
+// TODO: SIMD
+
 #ifndef BMATH_BAKED_MATH_FUNCTIONS
 #define sqrt_f64(n)   (sqrt(n))
 #define floor_f64(n)  (floor(n))
@@ -188,10 +191,6 @@ INLINE m4 frustum_from_fovx(f32 fovx, f32 aspect, f32 near, f32 far) {
   m.raw[14] = -(2 * far * near) / (far - near);
   m.raw[15] =  0;
   return m;
-}
-
-INLINE v3 m4_extract_pos(m4 m) {
-  return v3m(m.col[3][0],m.col[3][1],m.col[3][2]);
 }
 
 INLINE m4 m4_scale(v3 s) {

@@ -260,29 +260,35 @@ int main(void) {
     // 2.3 Perform update + render calling the game lib
     /////////////////////////////////////////////////////
     gs.pixels = arena_push(gs.frame_arena, sizeof(u32)*gs.wdim.x*gs.wdim.y);
-    game_api.update(&gs, dt);
-    game_api.render(&gs, dt);
-    ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.wdim.x, gs.wdim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
+    {
+      TIME_BLOCK("GAME_UPDATERENDER");
+      game_api.update(&gs, dt);
+      game_api.render(&gs, dt);
+      ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.wdim.x, gs.wdim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
+    }
 
     /////////////////////////////////////////////////////
     // 2.4 Render the software rendered texture
     /////////////////////////////////////////////////////
-    R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
-    r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-    cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs.game_viewport };
-    r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-    //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs.game_viewport.w/2.0, gs.game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs.zoom, .rot_deg = 0} };
-    cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
-    r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-    R2D_Quad quad = (R2D_Quad) {
-        .src_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
-        .dst_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
-        .c = col(1,1,1,1),
-        .tex = gs.g_backbuffer,
-        .rot_deg = 0,
-    };
-    cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-    r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+    {
+      TIME_BLOCK("GL_Render");
+      R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
+      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs.game_viewport };
+      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs.game_viewport.w/2.0, gs.game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs.zoom, .rot_deg = 0} };
+      cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
+      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      R2D_Quad quad = (R2D_Quad) {
+          .src_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
+          .dst_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
+          .c = col(1,1,1,1),
+          .tex = gs.g_backbuffer,
+          .rot_deg = 0,
+      };
+      cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
+      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+    }
 
     /////////////////////////////////////////////////////
     // 2.5 Render all the quads (captured in game_render(..))
@@ -315,7 +321,7 @@ int main(void) {
 #else 
     dt = (frame_end - frame_start) / (f64)get_nano_freq();
     gs.time_sec += platform_get_time() - frame_start / (f64) get_nano_freq();
-    //printf("fps=%f begin=%f end=%f\n", 1.0/dt, (f32)frame_start, (f32)frame_end);
+    printf("fps=%f begin=%f end=%f\n", 1.0/dt, (f32)frame_start, (f32)frame_end);
     //printf("sec: %f\n", gs.time_sec);
 #endif // (ARCH_WASM64 || ARCH_WASM32)
 

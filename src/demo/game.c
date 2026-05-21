@@ -30,52 +30,50 @@ void game_update(Game_State *gs, float dt) {
 
 
   // Movement stuff
-  static v3 cam_pos = v3m(0,0,5);
+  static v3 cam_pos = v3m(0,0,6);
   f32 cam_speed = 3.0;
 
   if (input_mkey_down(&gs->input, INPUT_MOUSE_RMB)) {
     cam_pos.x += dt*cam_speed;
-    printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
+    //printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
   }
 
   if (input_mkey_down(&gs->input, INPUT_MOUSE_LMB)) {
     cam_pos.x -= dt*cam_speed;
-    printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
+    //printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
   }
 
-  f32 rot = gs->time_sec;
+  f32 rot = gs->time_sec*2.0;
   for (u32 cube_idx_triplet= 0; cube_idx_triplet < array_count(frz_cube_indices); cube_idx_triplet+=3) {
     FRZ_Vertex *vt0 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+0]];
     FRZ_Vertex *vt1 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+1]];
     FRZ_Vertex *vt2 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+2]];
 
-    f32 near_plane = 0.1;
-
-
     // m4 model = ...
     // m4 view  = ...
     m4 proj = frustum_from_fovx(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
+    //m4 proj = m4_ortho(-10, 10, -10, 10, 0.1, 100);
 
     v3 v0_world  = v3_multf(v3_rot_y(vt0->pos, rot), 2); 
     v3 v0_cam    = v3_sub(v0_world, cam_pos);
     v4 v0_clip   = m4_multv(proj, v4m(v0_cam.x, v0_cam.y, v0_cam.z, 1.0));
     v4 v0_ndc    = v4_divf(v0_clip, v0_clip.w);
-    v2 v0_raster = frz_apply_viewport_transform(v2_from_v4(v0_ndc), gs->wdim);
+    v4 v0_screen = frz_apply_viewport_transform(v0_ndc, gs->wdim);
 
     v3 v1_world  = v3_multf(v3_rot_y(vt1->pos, rot), 2); 
     v3 v1_cam    = v3_sub(v1_world, cam_pos);
     v4 v1_clip   = m4_multv(proj, v4m(v1_cam.x, v1_cam.y, v1_cam.z, 1.0));
     v4 v1_ndc    = v4_divf(v1_clip, v1_clip.w);
-    v2 v1_raster = frz_apply_viewport_transform(v2_from_v4(v1_ndc), gs->wdim);
+    v4 v1_screen = frz_apply_viewport_transform(v1_ndc, gs->wdim);
 
     v3 v2_world  = v3_multf(v3_rot_y(vt2->pos, rot), 2); 
     v3 v2_cam    = v3_sub(v2_world, cam_pos);
     v4 v2_clip   = m4_multv(proj, v4m(v2_cam.x, v2_cam.y, v2_cam.z, 1.0));
     v4 v2_ndc    = v4_divf(v2_clip, v2_clip.w);
-    v2 v2_raster = frz_apply_viewport_transform(v2_from_v4(v2_ndc), gs->wdim);
+    v4 v2_screen = frz_apply_viewport_transform(v2_ndc, gs->wdim);
 
     //------
-    frz_imm_tri_bbox(v0_raster, v1_raster, v2_raster, vt0->uv, vt1->uv, vt2->uv, vt0->color, vt1->color, vt2->color);
+    frz_imm_tri_bbox(v0_screen, v1_screen, v2_screen, vt0->uv, vt1->uv, vt2->uv, vt0->color, vt1->color, vt2->color);
   }
 
   frz_end_frame();

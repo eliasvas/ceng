@@ -565,11 +565,9 @@ Ogl_Render_Target ogl_render_target_make(u32 w, u32 h, u32 attachment_count, Ogl
   return rt;
 }
 
-
 void ogl_render_target_deinit(Ogl_Render_Target *rt) {
   glDeleteFramebuffers(1, (GLuint*)&rt->impl_state);
 }
-
 
 void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle) {
   ogl_shader_deinit(&bundle->sp);
