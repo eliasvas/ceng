@@ -153,7 +153,7 @@ static f64 frz_edge(v2 a, v2 b, v2 c) {
 }
 
 static v4 frz_apply_viewport_transform(v4 p_ndc, v2 wdim) {
-    return v4m(((p_ndc.x+1) / 2) * wdim.x, ((1 - p_ndc.y)/2)*wdim.y, p_ndc.z, p_ndc.w); 
+    return v4m(((p_ndc.x+1) / 2) * wdim.x, ((1 + p_ndc.y)/2)*wdim.y, p_ndc.z, p_ndc.w); 
 }
 
 static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc) {
@@ -166,10 +166,8 @@ static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca,
   bbox.h = maximum(a.y, maximum(b.y, c.y)) - bbox.y;
   f64 area = frz_edge(v2_from_v4(a), v2_from_v4(b), v2_from_v4(c));
 
-  // FIXME: Why is negative area the fucking correct facing pixels? (right-handed)
   // Non CCW face removal right now! in 2D of course
   //if (area < 0) return;
-  //if (area < 0) { printf("WRONG WINDING - provide verts in CCW!!\n"); }
 
   for (s32 y = bbox.y; y <= bbox.y+bbox.h; y+=1) {
     for (s32 x = bbox.x; x <= bbox.x+bbox.w; x+=1) {
