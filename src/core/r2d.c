@@ -114,7 +114,7 @@ static b32 r2d_cam_eq(R2D_Cam a, R2D_Cam b) {
 }
 static m4 r2d_cam_make_view_mat(R2D_Cam *cam) {
   //m4 rot = m4d(1.0); // FIXME: implement rotations!
-  m4 rot = mat4_rotate(cam->rot_deg, v3m(0,0,1));
+  m4 rot = m4_rotate(cam->rot_deg, v3m(0,0,1));
   return m4_mult(m4_translate(v3m(cam->offset.x, cam->offset.y, 0)),m4_mult(rot,m4_mult(m4_scale(v3m(cam->zoom, cam->zoom,0)), m4_translate(v3m(-cam->origin.x, -cam->origin.y,0)))));
 }
 

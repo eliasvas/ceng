@@ -49,26 +49,24 @@ void game_update(Game_State *gs, float dt) {
     FRZ_Vertex *vt1 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+1]];
     FRZ_Vertex *vt2 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+2]];
 
-    // m4 model = ...
-    // m4 view  = ...
-    m4 proj = frustum_from_fovx(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
-    //m4 proj = m4_ortho(-10, 10, -10, 10, 0.1, 100);
+    m4 clip_from_view  = m4_persp(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
+    m4 view_from_world = m4_view(v3m(0,0,6), v3m(0,0,0), v3m(0,1,0));
 
     v3 v0_world  = v3_multf(v3_rot_y(vt0->pos, rot), 2); 
-    v3 v0_cam    = v3_sub(v0_world, cam_pos);
-    v4 v0_clip   = m4_multv(proj, v4m(v0_cam.x, v0_cam.y, v0_cam.z, 1.0));
+    v4 v0_view   = m4_multv(view_from_world, v4_from_v3(v0_world, 1.0));
+    v4 v0_clip   = m4_multv(clip_from_view, v0_view);
     v4 v0_ndc    = v4_divf(v0_clip, v0_clip.w);
     v4 v0_screen = frz_apply_viewport_transform(v0_ndc, gs->wdim);
 
     v3 v1_world  = v3_multf(v3_rot_y(vt1->pos, rot), 2); 
-    v3 v1_cam    = v3_sub(v1_world, cam_pos);
-    v4 v1_clip   = m4_multv(proj, v4m(v1_cam.x, v1_cam.y, v1_cam.z, 1.0));
+    v4 v1_view   = m4_multv(view_from_world, v4_from_v3(v1_world, 1.0));
+    v4 v1_clip   = m4_multv(clip_from_view, v1_view);
     v4 v1_ndc    = v4_divf(v1_clip, v1_clip.w);
     v4 v1_screen = frz_apply_viewport_transform(v1_ndc, gs->wdim);
 
     v3 v2_world  = v3_multf(v3_rot_y(vt2->pos, rot), 2); 
-    v3 v2_cam    = v3_sub(v2_world, cam_pos);
-    v4 v2_clip   = m4_multv(proj, v4m(v2_cam.x, v2_cam.y, v2_cam.z, 1.0));
+    v4 v2_view   = m4_multv(view_from_world, v4_from_v3(v2_world, 1.0));
+    v4 v2_clip   = m4_multv(clip_from_view, v2_view);
     v4 v2_ndc    = v4_divf(v2_clip, v2_clip.w);
     v4 v2_screen = frz_apply_viewport_transform(v2_ndc, gs->wdim);
 

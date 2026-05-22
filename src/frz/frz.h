@@ -164,10 +164,11 @@ static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca,
   };
   bbox.w = maximum(a.x, maximum(b.x, c.x)) - bbox.x;
   bbox.h = maximum(a.y, maximum(b.y, c.y)) - bbox.y;
+  //printf("bbox: (%f %f %f %f)\n", bbox.x, bbox.y, bbox.w, bbox.h);
   f64 area = frz_edge(v2_from_v4(a), v2_from_v4(b), v2_from_v4(c));
 
   // Non CCW face removal right now! in 2D of course
-  //if (area < 0) return;
+  if (area < 0) return;
 
   for (s32 y = bbox.y; y <= bbox.y+bbox.h; y+=1) {
     for (s32 x = bbox.x; x <= bbox.x+bbox.w; x+=1) {
@@ -178,8 +179,8 @@ static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca,
       f32 gamma = frz_edge(v2_from_v4(a), v2_from_v4(b), v2m(p.x, p.y)) / area;
 
       v2 interp_uv = v2_add(v2_multf(uva, alpha), v2_add(v2_multf(uvb, beta), v2_multf(uvc, gamma)));
-      f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
-      //f32 tex_color= 1;
+      //f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
+      f32 tex_color= 1;
 
       v4 interpolated_color = v4_add(v4_multf(ca, alpha), v4_add(v4_multf(cb, beta), v4_multf(cc, gamma)));
       interpolated_color = v4_multf(interpolated_color, tex_color);

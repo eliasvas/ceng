@@ -142,28 +142,6 @@ INLINE m4 m4d(f32 d) {
     return res;
 }
 
-INLINE m4 m4_look_at(v3 eye, v3 center, v3 f_up) {
-  v3 f = v3_norm(v3_sub(center, eye));
-  v3 u = v3_norm(f_up);
-  v3 s = v3_norm(v3_cross(f, u));
-  u = v3_cross(s, f);
-
-  m4 res = m4d(1.0);
-  res.col[0][0] = s.x;
-  res.col[1][0] = s.y;
-  res.col[2][0] = s.z;
-  res.col[0][1] = u.x;
-  res.col[1][1] = u.y;
-  res.col[2][1] = u.z;
-  res.col[0][2] = -f.x;
-  res.col[1][2] = -f.y;
-  res.col[2][2] = -f.z;
-  res.col[3][0] = -v3_dot(s, eye);
-  res.col[3][1] = -v3_dot(u, eye);
-  res.col[3][2] = v3_dot(f, eye);
-  return res;
-}
-
 INLINE m4 m4_ortho(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f) {
     m4 res = {};
     res.col[0][0] = 2.0f / (r - l);
@@ -176,9 +154,61 @@ INLINE m4 m4_ortho(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f) {
     return res;
 }
 
+INLINE m4 m4_rotate(f32 angle, v3 axis) {
+  m4 res = m4d(1.0f);
+
+  axis = v3_norm(axis);
+
+  f32 radians = DEG2RAD(angle);
+  f32 sinA = sin_f32(radians);
+  f32 cosA = cos_f32(radians);
+  f32 t = 1.0f - cosA;
+
+  res.col[0][0] = t * axis.x * axis.x + cosA;
+  res.col[0][1] = t * axis.x * axis.y - axis.z * sinA;
+  res.col[0][2] = t * axis.x * axis.z + axis.y * sinA;
+
+  res.col[1][0] = t * axis.y * axis.x + axis.z * sinA;
+  res.col[1][1] = t * axis.y * axis.y + cosA;
+  res.col[1][2] = t * axis.y * axis.z - axis.x * sinA;
+
+  res.col[2][0] = t * axis.z * axis.x - axis.y * sinA;
+  res.col[2][1] = t * axis.z * axis.y + axis.x * sinA;
+  res.col[2][2] = t * axis.z * axis.z + cosA;
+
+  return res;
+}
+
+// World-Space -> View-Space
+INLINE m4 m4_view(v3 eye, v3 target, v3 fake_up) {
+  m4 m = m4d(1.0);
+  v3 fwd  = v3_norm(v3_sub(eye, target));
+  v3 left = v3_norm(v3_cross(fake_up, fwd));
+  v3 up   = v3_cross(fwd, left);
+
+  // rotation
+  m.raw[0]  = left.x;
+  m.raw[4]  = left.y;
+  m.raw[8]  = left.z;
+  m.raw[1]  = up.x;
+  m.raw[5]  = up.y;
+  m.raw[9]  = up.z;
+  m.raw[2]  = fwd.x;
+  m.raw[6]  = fwd.y;
+  m.raw[10] = fwd.z;
+
+  // translation
+  m.raw[12] = -v3_dot(left, eye);
+  m.raw[13] = -v3_dot(up, eye);
+  m.raw[14] = -v3_dot(fwd, eye);
+
+  return m;
+}
+
+// View-Space -> Clip-Space
 // fovx in degrees, aspect is w/h
-INLINE m4 frustum_from_fovx(f32 fovx, f32 aspect, f32 near, f32 far) {
-  m4 m = {0};
+INLINE m4 m4_persp(f32 fovx, f32 aspect, f32 near, f32 far) {
+  m4 m = {};
   f32 D2R = acos(-1.0f) / 180;
 
   f32 tangent = tan(fovx/2 * D2R);
@@ -278,31 +308,6 @@ INLINE m4 m4_inv(m4 m) {
   return inv_out;
 }
 
-
-INLINE m4 mat4_rotate(f32 angle, v3 axis) {
-  m4 res = m4d(1.0f);
-
-  axis = v3_norm(axis);
-
-  f32 radians = DEG2RAD(angle);
-  f32 sinA = sin_f32(radians);
-  f32 cosA = cos_f32(radians);
-  f32 t = 1.0f - cosA;
-
-  res.col[0][0] = t * axis.x * axis.x + cosA;
-  res.col[0][1] = t * axis.x * axis.y - axis.z * sinA;
-  res.col[0][2] = t * axis.x * axis.z + axis.y * sinA;
-
-  res.col[1][0] = t * axis.y * axis.x + axis.z * sinA;
-  res.col[1][1] = t * axis.y * axis.y + cosA;
-  res.col[1][2] = t * axis.y * axis.z - axis.x * sinA;
-
-  res.col[2][0] = t * axis.z * axis.x - axis.y * sinA;
-  res.col[2][1] = t * axis.z * axis.y + axis.x * sinA;
-  res.col[2][2] = t * axis.z * axis.z + cosA;
-
-  return res;
-}
 
 typedef union {
   struct { f32 x,y,w,h; };
