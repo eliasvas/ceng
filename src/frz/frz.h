@@ -27,6 +27,7 @@ typedef struct {
 #define FRZ_BLUE color_from_rgba8(0, 0, 255, 255)
 #define FRZ_BLACK color_from_rgba8(0, 0, 0, 255)
 
+// TODO: Maybe make a 24-vertex VBO, to have correct UVs everywhere..
 // Just the first face done for now, should also do the others..
 FRZ_Vertex frz_cube_verts[] = {
   (FRZ_Vertex) {.pos = v3m(-0.5, -0.5, +0.5), .uv = v2m(0,0), .color = FRZ_RED,},
@@ -42,12 +43,18 @@ FRZ_Vertex frz_cube_verts[] = {
 };
 
 s32 frz_cube_indices[] = {
-  0,1,2, 0,2,3,
-  1,4,7, 1,7,2,
-  4,5,6, 4,6,7,
-  5,0,3, 5,3,6,
-  0,1,4, 0,4,5,
-  3,2,7, 3,7,6,
+  // front (+Z)
+  0, 1, 2, 0, 2, 3,
+  // right (+X)
+  1, 4, 7, 1, 7, 2,
+  // back (-Z)
+  4, 5, 6, 4, 6, 7,
+  // left (-X)
+  5, 0, 3, 5, 3, 6,
+  // bottom (-Y)
+  5, 4, 1, 5, 1, 0,
+  // top (+Y)
+  3, 2, 7, 3, 7, 6,
 };
 
 const uint8_t arrow_tex[16][16] = {
@@ -179,8 +186,8 @@ static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca,
       f32 gamma = frz_edge(v2_from_v4(a), v2_from_v4(b), v2m(p.x, p.y)) / area;
 
       v2 interp_uv = v2_add(v2_multf(uva, alpha), v2_add(v2_multf(uvb, beta), v2_multf(uvc, gamma)));
-      //f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
-      f32 tex_color= 1;
+      f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
+      //f32 tex_color= 1;
 
       v4 interpolated_color = v4_add(v4_multf(ca, alpha), v4_add(v4_multf(cb, beta), v4_multf(cc, gamma)));
       interpolated_color = v4_multf(interpolated_color, tex_color);

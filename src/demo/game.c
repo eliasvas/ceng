@@ -43,34 +43,33 @@ void game_update(Game_State *gs, float dt) {
     //printf("campos: %f %f %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
   }
 
-  f32 rot = gs->time_sec*2.0;
   for (u32 cube_idx_triplet= 0; cube_idx_triplet < array_count(frz_cube_indices); cube_idx_triplet+=3) {
     FRZ_Vertex *vt0 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+0]];
     FRZ_Vertex *vt1 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+1]];
     FRZ_Vertex *vt2 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+2]];
 
-    m4 clip_from_view  = m4_persp(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
-    m4 view_from_world = m4_view(v3m(0,0,6), v3m(0,0,0), v3m(0,1,0));
+    m4 world_from_model = m4_rotate(gs->time_sec*2.0, v3m(0,1,0));
+    m4 view_from_world  = m4_view(v3m(0,0,6), v3m(0,0,0), v3m(0,1,0));
+    m4 clip_from_view   = m4_persp(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
 
-    v3 v0_world  = v3_multf(v3_rot_y(vt0->pos, rot), 2); 
+    v3 v0_world  = v3_from_v4(m4_multv(world_from_model, v4_from_v3(vt0->pos,1))); 
     v4 v0_view   = m4_multv(view_from_world, v4_from_v3(v0_world, 1.0));
     v4 v0_clip   = m4_multv(clip_from_view, v0_view);
     v4 v0_ndc    = v4_divf(v0_clip, v0_clip.w);
     v4 v0_screen = frz_apply_viewport_transform(v0_ndc, gs->wdim);
 
-    v3 v1_world  = v3_multf(v3_rot_y(vt1->pos, rot), 2); 
+    v3 v1_world  = v3_from_v4(m4_multv(world_from_model, v4_from_v3(vt1->pos,1))); 
     v4 v1_view   = m4_multv(view_from_world, v4_from_v3(v1_world, 1.0));
     v4 v1_clip   = m4_multv(clip_from_view, v1_view);
     v4 v1_ndc    = v4_divf(v1_clip, v1_clip.w);
     v4 v1_screen = frz_apply_viewport_transform(v1_ndc, gs->wdim);
 
-    v3 v2_world  = v3_multf(v3_rot_y(vt2->pos, rot), 2); 
+    v3 v2_world  = v3_from_v4(m4_multv(world_from_model, v4_from_v3(vt2->pos,1))); 
     v4 v2_view   = m4_multv(view_from_world, v4_from_v3(v2_world, 1.0));
     v4 v2_clip   = m4_multv(clip_from_view, v2_view);
     v4 v2_ndc    = v4_divf(v2_clip, v2_clip.w);
     v4 v2_screen = frz_apply_viewport_transform(v2_ndc, gs->wdim);
 
-    //------
     frz_imm_tri_bbox(v0_screen, v1_screen, v2_screen, vt0->uv, vt1->uv, vt2->uv, vt0->color, vt1->color, vt2->color);
   }
 

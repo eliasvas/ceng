@@ -154,13 +154,14 @@ INLINE m4 m4_ortho(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f) {
     return res;
 }
 
+// Investigate this, not sure its correct for our coordinate system, the sin is suspect
 INLINE m4 m4_rotate(f32 angle, v3 axis) {
   m4 res = m4d(1.0f);
 
   axis = v3_norm(axis);
 
-  f32 radians = DEG2RAD(angle);
-  f32 sinA = sin_f32(radians);
+  f32 radians = (angle);
+  f32 sinA = -sin_f32(radians);
   f32 cosA = cos_f32(radians);
   f32 t = 1.0f - cosA;
 
@@ -185,7 +186,6 @@ INLINE m4 m4_view(v3 eye, v3 target, v3 fake_up) {
   v3 fwd  = v3_norm(v3_sub(eye, target));
   v3 left = v3_norm(v3_cross(fake_up, fwd));
   v3 up   = v3_cross(fwd, left);
-
   // rotation
   m.raw[0]  = left.x;
   m.raw[4]  = left.y;
@@ -196,12 +196,10 @@ INLINE m4 m4_view(v3 eye, v3 target, v3 fake_up) {
   m.raw[2]  = fwd.x;
   m.raw[6]  = fwd.y;
   m.raw[10] = fwd.z;
-
   // translation
   m.raw[12] = -v3_dot(left, eye);
   m.raw[13] = -v3_dot(up, eye);
   m.raw[14] = -v3_dot(fwd, eye);
-
   return m;
 }
 
