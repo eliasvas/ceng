@@ -5,15 +5,14 @@
 // frz : A fast 3D rasterizer (!!)
 // Most generic math functions can be found at src/base/bmath.h
 // along with a list of references for more math study.
+//
+// https://fgiesen.wordpress.com/2011/07/09/a-trip-through-the-graphics-pipeline-2011-index/
+// https://fgiesen.wordpress.com/2013/02/17/optimizing-sw-occlusion-culling-index/
 /////////////////////////////////////////////
 
 #include "base/base_inc.h"
 
-// TODO: Make this proper single header lib
-// TODO: Multithreading
-// TODO: Options for face removal / and stuff
-// TODO: Right handed cube (w/ Index buffer too?)
-
+// TODO: Currently this is just a reference rasterizer, we need to optimize it someday
 typedef struct {
   v3 pos;
   v3 norm;
@@ -134,14 +133,9 @@ static void frz_imm_px(s32 x, s32 y, color c) {
 static void frz_imm_line(v2 a, v2 b, color c) {
   // if line has bigger slope on the y-axis we invert it.. and write to [y,x] pixels
   b32 inverted = (abs_f32(b.x - a.x) < abs_f32(b.y - a.y));
-  if (inverted) {
-    FRZ_SWAP(f32, a.x, a.y); 
-    FRZ_SWAP(f32, b.x, b.y); 
-  }
+  if (inverted) { FRZ_SWAP(f32, a.x, a.y); FRZ_SWAP(f32, b.x, b.y); }
   // a.x is always smaller
-  if (a.x > b.x) {
-    FRZ_SWAP(v2, a, b);
-  }
+  if (a.x > b.x) { FRZ_SWAP(v2, a, b); }
 
   for (f32 x = a.x; x <= b.x; x += 1) {
     f32 t = (x - a.x) / (b.x - a.x); 
@@ -155,12 +149,14 @@ static void frz_imm_line(v2 a, v2 b, color c) {
 }
 
 // Barycentric coord calculation
+// This function will thest if point A is 'inside' i.e to the right of the plane defined by BC
+// This calculates the signed area of the parallelogram formed
 static f64 frz_edge(v2 a, v2 b, v2 c) {
     return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x);
 }
 
 static v4 frz_apply_viewport_transform(v4 p_ndc, v2 wdim) {
-    return v4m(((p_ndc.x+1) / 2) * wdim.x, ((1 + p_ndc.y)/2)*wdim.y, p_ndc.z, p_ndc.w); 
+    return v4m(((p_ndc.x+1) / 2) * wdim.x, ((p_ndc.y+1)/2)*wdim.y, p_ndc.z, p_ndc.w); 
 }
 
 static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc) {
@@ -185,21 +181,23 @@ static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca,
       f32 beta  = frz_edge(v2_from_v4(a), v2m(p.x, p.y), v2_from_v4(c)) / area;
       f32 gamma = frz_edge(v2_from_v4(a), v2_from_v4(b), v2m(p.x, p.y)) / area;
 
-      v2 interp_uv = v2_add(v2_multf(uva, alpha), v2_add(v2_multf(uvb, beta), v2_multf(uvc, gamma)));
-      f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
-      //f32 tex_color= 1;
-
-      v4 interpolated_color = v4_add(v4_multf(ca, alpha), v4_add(v4_multf(cb, beta), v4_multf(cc, gamma)));
-      interpolated_color = v4_multf(interpolated_color, tex_color);
-
-
       if (alpha < 0 || beta < 0 || gamma < 0) continue;
 
-      // TODO: depth policy, less/lequal/greater/none whatever
       f32 interpolated_depth = alpha * a.z + beta * b.z + gamma * c.z;
       if (interpolated_depth < ctx->zbuf[(s32)((s32)p.x + (s32)p.y * ctx->dim.x)]) {
+        f32 ia = 1.0f / a.w;
+        f32 ib = 1.0f / b.w;
+        f32 ic = 1.0f / c.w;
+        v2 interp_uv = v2_divf( v2_add( v2_multf(uva, alpha * ia), v2_add( v2_multf(uvb, beta * ib), v2_multf(uvc, gamma * ic))), alpha * ia + beta * ib + gamma * ic);
+
+        f32 tex_color = arrow_tex[15 - (s32)(interp_uv.y * 15.99)][(s32)(interp_uv.x * 15.99)] / 255;
+        //f32 tex_color= 1;
+
+        v4 interp_color = v4_divf( v4_add( v4_multf(ca, alpha * ia), v4_add( v4_multf(cb, beta * ib), v4_multf(cc, gamma * ic))), alpha * ia + beta * ib + gamma * ic);
+        interp_color = v4_multf(interp_color, tex_color);
+
         ctx->zbuf[(s32)((s32)p.x + (s32)p.y * ctx->dim.x)] = interpolated_depth;
-        frz_imm_px(p.x, p.y, interpolated_color);
+        frz_imm_px(p.x, p.y, interp_color);
       }
     }
   }
