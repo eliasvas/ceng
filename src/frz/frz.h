@@ -1,18 +1,17 @@
 #ifndef FRZ_H__
 #define FRZ_H__
+#include "base/base_inc.h"
 
 /////////////////////////////////////////////
 // frz : A fast 3D rasterizer (!!)
 // Most generic math functions can be found at src/base/bmath.h
 // along with a list of references for more math study.
 //
+// Next Steps:
 // https://fgiesen.wordpress.com/2011/07/09/a-trip-through-the-graphics-pipeline-2011-index/
 // https://fgiesen.wordpress.com/2013/02/17/optimizing-sw-occlusion-culling-index/
 /////////////////////////////////////////////
 
-#include "base/base_inc.h"
-
-// TODO: Currently this is just a reference rasterizer, we need to optimize it someday
 typedef struct {
   v3 pos;
   v3 norm;
@@ -25,6 +24,14 @@ typedef struct {
 #define FRZ_GREEN color_from_rgba8(0, 255, 0, 255)
 #define FRZ_BLUE color_from_rgba8(0, 0, 255, 255)
 #define FRZ_BLACK color_from_rgba8(0, 0, 0, 255)
+
+#ifndef FRZ_IMPLEMENTATION
+void frz_begin_frame(u32 *backbuffer, v2 dim, Arena *talloc);
+void frz_end_frame();
+void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc);
+void frz_clear();
+v4 frz_apply_viewport_transform(v4 p_ndc, v2 wdim);
+#else
 
 // TODO: Maybe make a 24-vertex VBO, to have correct UVs everywhere..
 // Just the first face done for now, should also do the others..
@@ -92,7 +99,7 @@ static FRZ_Ctx* frz_get_gctx() {
   return &g_ctx;
 }
 
-static void frz_begin_frame(u32 *backbuffer, v2 dim, Arena *talloc) {
+void frz_begin_frame(u32 *backbuffer, v2 dim, Arena *talloc) {
   g_ctx.backbuffer = backbuffer;
   g_ctx.dim = dim;
   g_ctx.talloc = talloc;
@@ -103,11 +110,11 @@ static void frz_begin_frame(u32 *backbuffer, v2 dim, Arena *talloc) {
 
 }
 
-static void frz_end_frame() {
+void frz_end_frame() {
 
 }
 
-static void frz_clear() {
+void frz_clear() {
   FRZ_Ctx *ctx = frz_get_gctx();
 
   for (s32 y = 0; y < (s32)ctx->dim.y; y+=1) {
@@ -148,18 +155,9 @@ static void frz_imm_line(v2 a, v2 b, color c) {
   }
 }
 
-// Barycentric coord calculation
-// This function will thest if point A is 'inside' i.e to the right of the plane defined by BC
-// This calculates the signed area of the parallelogram formed
-static f64 frz_edge(v2 a, v2 b, v2 c) {
-    return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x);
-}
-
-static v4 frz_apply_viewport_transform(v4 p_ndc, v2 wdim) {
-    return v4m(((p_ndc.x+1) / 2) * wdim.x, ((p_ndc.y+1)/2)*wdim.y, p_ndc.z, p_ndc.w); 
-}
-
-static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc) {
+static f64 frz_edge(v2 a, v2 b, v2 c) { return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x); }
+v4 frz_apply_viewport_transform(v4 p_ndc, v2 wdim) { return v4m(((p_ndc.x+1) / 2) * wdim.x, ((p_ndc.y+1)/2)*wdim.y, p_ndc.z, p_ndc.w); }
+void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca, color cb, color cc) {
   FRZ_Ctx *ctx = frz_get_gctx();
   rect bbox = {
     .x = minimum(a.x, minimum(b.x, c.x)),
@@ -202,5 +200,49 @@ static void frz_imm_tri_bbox(v4 a, v4 b, v4 c, v2 uva, v2 uvb, v2 uvc, color ca,
     }
   }
 }
+#endif
+
+// Small working example
+#if 0
+  frz_begin_frame(gs->pixels, gs->wdim, gs->frame_arena);
+  frz_clear();
+  v2 mp = input_get_mouse_pos(&gs->input);
+  mp.y = gs->wdim.y - mp.y;
+  frz_imm_line(v2m(0,0), mp, col(1,1,1,1));
+
+
+  m4 world_from_model = m4_rotate(gs->time_sec*2.0, v3m(0,1,0));
+  m4 view_from_world  = m4_view(v3m(0,0,6), v3m(0,0,0), v3m(0,1,0));
+  m4 clip_from_view   = m4_persp(45, gs->wdim.x/(f32)gs->wdim.y, 0.1, 100);
+
+  for (u32 cube_idx_triplet= 0; cube_idx_triplet < array_count(frz_cube_indices); cube_idx_triplet+=3) {
+    FRZ_Vertex *vt0 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+0]];
+    FRZ_Vertex *vt1 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+1]];
+    FRZ_Vertex *vt2 = &frz_cube_verts[frz_cube_indices[cube_idx_triplet+2]];
+
+
+    v3 v0_world  = v3_from_v4(m4_multv(world_from_model, v4_from_v3(vt0->pos,1))); 
+    v4 v0_view   = m4_multv(view_from_world, v4_from_v3(v0_world, 1.0));
+    v4 v0_clip   = m4_multv(clip_from_view, v0_view);
+    v4 v0_ndc    = v4_div(v0_clip, v4m(v0_clip.w, v0_clip.w, v0_clip.w, 1));
+    v4 v0_screen = frz_apply_viewport_transform(v0_ndc, gs->wdim);
+
+    v3 v1_world  = v3_from_v4(m4_multv(world_from_model, v4_from_v3(vt1->pos,1))); 
+    v4 v1_view   = m4_multv(view_from_world, v4_from_v3(v1_world, 1.0));
+    v4 v1_clip   = m4_multv(clip_from_view, v1_view);
+    v4 v1_ndc    = v4_div(v1_clip, v4m(v1_clip.w, v1_clip.w, v1_clip.w, 1));
+    v4 v1_screen = frz_apply_viewport_transform(v1_ndc, gs->wdim);
+
+    v3 v2_world  = v3_from_v4(m4_multv(world_from_model, v4_from_v3(vt2->pos,1))); 
+    v4 v2_view   = m4_multv(view_from_world, v4_from_v3(v2_world, 1.0));
+    v4 v2_clip   = m4_multv(clip_from_view, v2_view);
+    v4 v2_ndc    = v4_div(v2_clip, v4m(v2_clip.w, v2_clip.w, v2_clip.w, 1));
+    v4 v2_screen = frz_apply_viewport_transform(v2_ndc, gs->wdim);
+
+    frz_imm_tri_bbox(v0_screen, v1_screen, v2_screen, vt0->uv, vt1->uv, vt2->uv, vt0->color, vt1->color, vt2->color);
+  }
+
+  frz_end_frame();
+#endif
 
 #endif

@@ -15,7 +15,6 @@ typedef struct {
   v4 dst_rect;
   v4 color;
   f32 rot_rad;
-  int tex_slot;
 } Batch_Vertex;
 
 typedef struct {
@@ -32,8 +31,8 @@ typedef struct R2D_Quad_Chunk_Node R2D_Quad_Chunk_Node;
 struct R2D_Quad_Chunk_Node {
   R2D_Quad_Chunk_Node *next;
   R2D_Quad *arr;
-  u64 cap;
-  u64 count;
+  s64 cap;
+  s64 count;
 };
 
 typedef struct R2D_Quad_Chunk_List R2D_Quad_Chunk_List;
@@ -43,26 +42,20 @@ struct R2D_Quad_Chunk_List {
   R2D_Quad_Chunk_Node *first;
   R2D_Quad_Chunk_Node *last;
 
-  u64 node_count;
-  u64 quad_count;
+  s64 node_count;
+  s64 quad_count;
 };
 
 typedef struct R2D_Quad_Array R2D_Quad_Array;
 struct R2D_Quad_Array {
   R2D_Quad *arr;
-  u64 count;
+  s64 count;
 };
 
 typedef struct {
-  Ogl_Tex *textures;
-  u64 count;
-  u64 cap;
-} R2D_Tex_Array;
-
-typedef struct {
   R2D_Quad_Chunk_List list;
-  R2D_Tex_Array tex_array;
   Arena *arena;
+  Ogl_Tex gtex;
 } R2D;
 
 // TODO: make the trick with the macro for scale initialization

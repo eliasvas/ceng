@@ -321,7 +321,7 @@ int main(void) {
 #else 
     dt = (frame_end - frame_start) / (f64)get_nano_freq();
     gs.time_sec += platform_get_time() - frame_start / (f64) get_nano_freq();
-    printf("fps=%f begin=%f end=%f\n", 1.0/dt, (f32)frame_start, (f32)frame_end);
+    //printf("fps=%f begin=%f end=%f\n", 1.0/dt, (f32)frame_start, (f32)frame_end);
     //printf("sec: %f\n", gs.time_sec);
 #endif // (ARCH_WASM64 || ARCH_WASM32)
 

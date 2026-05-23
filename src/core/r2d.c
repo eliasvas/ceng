@@ -1,4 +1,7 @@
 #include "r2d.h"
+// TODO: GLES3.0 doesn't support sampler arrays! 
+// We can't really support multiple textures in the batch renderer..
+// maybe add an ifdef and make it configurable or something?
 
 // HMMMMMMM
 static Ogl_Render_Bundle batch_bundle = {};
@@ -14,7 +17,6 @@ layout(location=0) in vec4 src_rect;
 layout(location=1) in vec4 dst_rect;
 layout(location=2) in vec4 v_color;
 layout(location=3) in float v_rot_rad;
-layout(location=4) in int v_tex_slot;
 
 layout (std140) uniform BatchUbo { mat4 view_proj; };
 
@@ -34,7 +36,6 @@ vec2 tex_coords[4] = vec2[](
 
 out vec4 f_color;
 out vec2 f_tc;
-flat out int f_tex_slot;
 
 mat2 rotate2d(float angle) { return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)); }
 
@@ -55,13 +56,9 @@ void main() {
 	gl_Position = view_proj * vec4(pos, 0.0, 1.0);
 
   f_color = v_color;
-  f_tex_slot = v_tex_slot;
 
   vec2 uv = tex_coords[gl_VertexID];
   f_tc = src_rect.xy + uv * src_rect.zw;
-  //f_tc = src_rect.xy*vec2(1,-1) + uv * src_rect.zw - vec2(0, src_rect.w);
-
-  //f_tc = src_rect.xy*vec2(1,-1) + tex_coords[gl_VertexID] * src_rect.zw - vec2(0, src_rect.w);
 }
 )";
 
@@ -71,31 +68,17 @@ layout(location = 0) out vec4 out_color;
 
 in vec2 f_tc;
 in vec4 f_color;
-flat in int f_tex_slot;
-
-uniform sampler2D u_textures[4];
+uniform sampler2D u_tex;
 
 void main() {
-    ivec2 texture_size;
-    vec2 tc;
-    // FIXME: I HATE this, GLES30 doesn't support c-style sampler2D array indexing so we have to hack..
-    if (f_tex_slot == 0){
-      texture_size = textureSize(u_textures[0], 0);
-      tc = f_tc / vec2(texture_size.x, texture_size.y);
-      out_color = f_color * texture(u_textures[0], tc);
-    } else if (f_tex_slot == 1){
-      texture_size = textureSize(u_textures[1], 0);
-      tc = f_tc / vec2(texture_size.x, texture_size.y);
-      out_color = f_color * texture(u_textures[1], tc).rgba;
-    } else if (f_tex_slot == 2){
-      texture_size = textureSize(u_textures[2], 0);
-      tc = f_tc / vec2(texture_size.x, texture_size.y);
-      out_color = f_color * texture(u_textures[2], tc);
-    } else if (f_tex_slot == 3){
-      texture_size = textureSize(u_textures[3], 0);
-      tc = f_tc / vec2(texture_size.x, texture_size.y);
-      out_color = f_color * texture(u_textures[3], tc);
-    }
+  ivec2 texture_size;
+  vec2 tc;
+
+  // FIXME: GLES30 doesn't support c-style sampler2D array indexing so we have to use max 1 texture
+  texture_size = textureSize(u_tex, 0);
+  tc = f_tc / vec2(texture_size.x, texture_size.y);
+  out_color = f_color * texture(u_tex, tc);
+  //out_color = f_color;
 }
 
 )";
@@ -116,22 +99,6 @@ static m4 r2d_cam_make_view_mat(R2D_Cam *cam) {
   //m4 rot = m4d(1.0); // FIXME: implement rotations!
   m4 rot = m4_rotate(cam->rot_deg, v3m(0,0,1));
   return m4_mult(m4_translate(v3m(cam->offset.x, cam->offset.y, 0)),m4_mult(rot,m4_mult(m4_scale(v3m(cam->zoom, cam->zoom,0)), m4_translate(v3m(-cam->origin.x, -cam->origin.y,0)))));
-}
-
-static s64 rend_tex_array_try_add(R2D_Tex_Array *tarray, Ogl_Tex tex) {
-  for (u64 tex_idx = 0; tex_idx < tarray->count; ++tex_idx) {
-    if (tarray->textures[tex_idx].impl_state == tex.impl_state) return tex_idx;
-  }
-  // If not found try to push_back
-  if (tarray->count < tarray->cap){
-    tarray->textures[tarray->count] = tex;
-    return tarray->count++;
-  }
-  return -1;
-}
-static void rend_tex_array_clear(R2D_Tex_Array *tarray) {
-  M_ZERO(tarray->textures, sizeof(Ogl_Tex) * tarray->cap);
-  tarray->count = 0;
 }
 
 // Maybe the R2D_Quad should be passed by pointer, it might be YUGE!
@@ -155,7 +122,7 @@ static R2D_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R2D_Quad_Chunk
 
   qa.count = list->quad_count;
   qa.arr = arena_push_array(arena, R2D_Quad, qa.count);
-  u64 itr = 0;
+  s64 itr = 0;
   for (R2D_Quad_Chunk_Node *node = list->first; node != nullptr; node = node->next) {
     M_COPY(&qa.arr[itr], node->arr, sizeof(R2D_Quad)*node->count);
     itr += node->count;
@@ -169,19 +136,11 @@ static R2D_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R2D_Quad_Chunk
 // TODO: We could save the prev arena offset and reset to that, no arena_pop nonsense!
 static void r2d_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
   u64 arena_prev_pos = arena_get_current_pos(rend->arena); 
-  // We set the correct texture for each slot, if not found, we just assign a dummy white texture for debug purposes
-  for (u64 tex_idx = 0; tex_idx < rend->tex_array.cap; tex_idx+=1) {
-    buf sampler_name = arena_sprintf(rend->arena, "u_textures[%lu]", tex_idx);
+  buf sampler_name = arena_sprintf(rend->arena, "u_tex");
+  batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = rend->gtex,};
 
-    if (tex_idx < rend->tex_array.count) {
-      batch_bundle.textures[tex_idx] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = rend->tex_array.textures[tex_idx],};
-    } else {
-      batch_bundle.textures[tex_idx] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = white_tex,};
-    }
-  }
   ogl_buf_update(&batch_bundle.vbos[0].buffer, 0, vertices, count, sizeof(Batch_Vertex));
   ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, count);
-  rend_tex_array_clear(&rend->tex_array);
   arena_reset_to_pos(rend->arena, arena_prev_pos);
 }
 
@@ -201,7 +160,6 @@ R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
             [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect), .stride = sizeof(Batch_Vertex),.instanced = true,  },
             [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),    .stride = sizeof(Batch_Vertex),.instanced = true,  },
             [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [4] = { .location = 4, .type = OGL_DATA_TYPE_INT,   .offset = offsetof(Batch_Vertex, tex_slot),  .stride = sizeof(Batch_Vertex),.instanced = true, },
           },
         },
       },
@@ -227,11 +185,6 @@ R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
   R2D *rend = arena_push_array(arena, R2D, 1);
   rend->arena = arena;
 
-  // initialize the tex array
-  rend->tex_array.count = 0;
-  rend->tex_array.cap = REND_MAX_TEXTURES;
-  rend->tex_array.textures = arena_push_array(arena, Ogl_Tex, rend->tex_array.cap);
-
   return rend;
 }
 
@@ -239,30 +192,23 @@ void r2d_end(R2D *rend) {
   if (rend) {
     R2D_Quad_Array quads = rend_quad_chunk_list_to_array(rend->arena, &rend->list);
     if (quads.count) {
-      R2D_Tex_Array textures = {};
-      textures.count = 0;
-
       Batch_Vertex *batch_vertices = arena_push_array(rend->arena, Batch_Vertex,REND_MAX_INSTANCES);
 
-      u64 vertex_idx  = 0;
-      for (u64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
+      s64 vertex_idx  = 0;
+      for (s64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
         R2D_Quad *q = &quads.arr[quad_idx];
-
-        s64 tex_idx = rend_tex_array_try_add(&rend->tex_array, q->tex);
-        bool tex_added = (tex_idx >= 0);
 
         Batch_Vertex v = (Batch_Vertex){
           .src_rect = *(v4*)&q->src_rect,
           .dst_rect = *(v4*)&q->dst_rect,
           .color = q->c,
           .rot_rad = DEG2RAD(q->rot_deg),
-          .tex_slot = tex_idx,
         };
 
         batch_vertices[vertex_idx] = v;
         vertex_idx+=1;
 
-        if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || !tex_added) {
+        if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count) {
           r2d_flush(rend, batch_vertices, vertex_idx);
           vertex_idx = 0;
         }
@@ -321,6 +267,12 @@ void r2d_render_cmds(Arena *arena, R2D_Cmd_Chunk_List *cmd_list) {
           }
           break;
         case R2D_CMD_KIND_ADD_QUAD: 
+          if (rend->gtex.impl_state != 0  ||
+              cmd.q.tex.impl_state != rend->gtex.impl_state) {
+            r2d_end(rend);
+            rend = r2d_begin(arena, &c, viewport, scissor);
+          }
+          rend->gtex = cmd.q.tex;
           r2d_push_quad(rend, cmd.q);
           break;
         default:
