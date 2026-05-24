@@ -614,7 +614,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the uniform buffer(s)
-  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (s64 slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
     Ogl_Uniform_Buffer_Slot *ubo = &bundle->ubos[slot_idx];
     if (ogl_buf_count_bytes(&ubo->buffer) > 0) {
       GLuint ubo_block_idx = glGetUniformBlockIndex(bundle->sp.impl_state, ubo->name);
@@ -623,7 +623,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the texture(s)
-  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (s64 slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
     if (tex->tex.impl_state) {
       glActiveTexture(GL_TEXTURE0+slot_idx);

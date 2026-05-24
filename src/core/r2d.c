@@ -28,10 +28,10 @@ vec2 vertices[4] = vec2[](
 );
 
 vec2 tex_coords[4] = vec2[](
-  vec2(0.0,0.0),
   vec2(0.0,1.0),
-  vec2(1.0,1.0),
-  vec2(1.0,0.0)
+  vec2(0.0,0.0),
+  vec2(1.0,0.0),
+  vec2(1.0,1.0)
 );
 
 out vec4 f_color;
@@ -96,7 +96,6 @@ static b32 r2d_cam_eq(R2D_Cam a, R2D_Cam b) {
       );
 }
 static m4 r2d_cam_make_view_mat(R2D_Cam *cam) {
-  //m4 rot = m4d(1.0); // FIXME: implement rotations!
   m4 rot = m4_rotate(cam->rot_deg, v3m(0,0,1));
   return m4_mult(m4_translate(v3m(cam->offset.x, cam->offset.y, 0)),m4_mult(rot,m4_mult(m4_scale(v3m(cam->zoom, cam->zoom,0)), m4_translate(v3m(-cam->origin.x, -cam->origin.y,0)))));
 }
@@ -145,7 +144,7 @@ static void r2d_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
 }
 
 R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
-  m4 proj = m4_ortho(0,viewport.w,viewport.h,0,-1,1);
+  m4 proj = m4_ortho(0,viewport.w,0,viewport.h,-1,1);
   m4 view = r2d_cam_make_view_mat(cam);
   m4 m = m4_mult(proj, view);
 
@@ -267,7 +266,7 @@ void r2d_render_cmds(Arena *arena, R2D_Cmd_Chunk_List *cmd_list) {
           }
           break;
         case R2D_CMD_KIND_ADD_QUAD: 
-          if (rend->gtex.impl_state != 0  ||
+          if (rend->gtex.impl_state != 0 &&
               cmd.q.tex.impl_state != rend->gtex.impl_state) {
             r2d_end(rend);
             rend = r2d_begin(arena, &c, viewport, scissor);
@@ -284,4 +283,18 @@ void r2d_render_cmds(Arena *arena, R2D_Cmd_Chunk_List *cmd_list) {
   r2d_clear_cmds(cmd_list);
 }
 
+void r2d_push_cmd(Arena *arena, R2D_Cmd_Chunk_List *cmd_list, R2D_Cmd cmd, u64 cap) {
+  R2D_Cmd_Chunk_Node *node = cmd_list->first;
+  if (node == nullptr || node->count >= node->cap) {
+    node = arena_push_struct(arena, R2D_Cmd_Chunk_Node);
+    node->arr = arena_push_array(arena, R2D_Cmd, cap);
+    node->cap = cap;
+
+    sll_queue_push(cmd_list->first, cmd_list->last, node);
+    cmd_list->node_count+=1;
+  }
+  node->arr[node->count] = cmd;
+  node->count+=1;
+  cmd_list->cmd_count+=1;
+}
 

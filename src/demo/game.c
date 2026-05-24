@@ -33,25 +33,24 @@ void game_render(Game_State *gs, float dt) {
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
 
-  f32 scale_factor = mod_f32(gs->time_sec, 1.0);
-  scale_factor = ease_in_quad(scale_factor);
+  f32 hero_w = 128;
 
-  v2 screen_mp = v2_multf(gs->wdim, 0.5);
-  f32 hero_w = 300;
-  hero_w = hero_w * scale_factor;
+  static v2 hero_pos = v2m(0,0); 
+  if (input_key_pressed(&gs->input, KEY_SCANCODE_RIGHT)) { hero_pos.x+=16; }
+  if (input_key_pressed(&gs->input, KEY_SCANCODE_LEFT)) { hero_pos.x-=16; }
+  if (input_key_pressed(&gs->input, KEY_SCANCODE_UP)) { hero_pos.y+=16; }
+  if (input_key_pressed(&gs->input, KEY_SCANCODE_DOWN)) { hero_pos.y-=16; }
 
-
-  // TODO: add helper for upper left and middle quads
   R2D_Quad quad = (R2D_Quad) {
       //.src_rect = rec(9*8,0*8,8,8),
-      .src_rect = rec(8*8,1*8,8,8),
-      .dst_rect = rec(screen_mp.x - hero_w*0.5, screen_mp.y - hero_w*0.5, hero_w, hero_w),
+      .src_rect = rec(4*8,9*8,8,8),
+      //.dst_rect = rec(screen_mp.x - hero_w*0.5, screen_mp.y - hero_w*0.5, hero_w, hero_w),
+      .dst_rect = rec(hero_pos.x, hero_pos.y, hero_w, hero_w),
       .c = col(1,1,1,1),
       .tex = gs->atlas,
       .rot_deg = 0,
   };
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-  // Uncomment this to see da flame
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
 }

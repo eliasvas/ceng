@@ -30,8 +30,10 @@ typedef struct {
   R2D_Cmd_Chunk_List cmd_list;
   Game_Audio_Output_Buffer audio_out;
 
+#ifdef SOFT_REND
   Ogl_Tex g_backbuffer;
   u32* pixels;
+#endif
 
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;

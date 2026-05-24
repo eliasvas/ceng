@@ -113,22 +113,7 @@ struct R2D_Cmd_Chunk_List {
   u64 cmd_count;
 };
 
-static void r2d_push_cmd(Arena *arena, R2D_Cmd_Chunk_List *cmd_list, R2D_Cmd cmd, u64 cap) {
-  R2D_Cmd_Chunk_Node *node = cmd_list->first;
-  if (node == nullptr || node->count >= node->cap) {
-    node = arena_push_struct(arena, R2D_Cmd_Chunk_Node);
-    node->arr = arena_push_array(arena, R2D_Cmd, cap);
-    node->cap = cap;
-
-    sll_queue_push(cmd_list->first, cmd_list->last, node);
-    cmd_list->node_count+=1;
-  }
-  node->arr[node->count] = cmd;
-  node->count+=1;
-  cmd_list->cmd_count+=1;
-}
-
-
+void r2d_push_cmd(Arena *arena, R2D_Cmd_Chunk_List *cmd_list, R2D_Cmd cmd, u64 cap);
 void r2d_render_cmds(Arena *arena, R2D_Cmd_Chunk_List *cmd_list);
 void r2d_clear_cmds(R2D_Cmd_Chunk_List *cmd_list);
 

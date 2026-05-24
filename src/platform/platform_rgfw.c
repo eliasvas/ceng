@@ -144,7 +144,9 @@ int main(void) {
   gs.atlas_sprites_per_dim = v2m(16,10);
   gs.font = font_util_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
   stbi_image_free(image.data);
+#ifdef SOFT_REND
   gs.g_backbuffer = ogl_tex_make(nullptr,0,0,OGL_TEX_FORMAT_RGBA8U,(Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
+#endif
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;
   game_api.init(&gs);
@@ -226,7 +228,13 @@ int main(void) {
           s32 scancode = 0;
           // @TODO: More keys mapped needed here please
           if (value >= 'A' && value <= 'Z') scancode = KEY_SCANCODE_A + (value-'A');
-          else if (value >= '0' && value < '9') scancode = (value == '0') ? KEY_SCANCODE_0 : KEY_SCANCODE_1 + (value - '1');
+          else if (value >= 'a' && value <= 'z') scancode = KEY_SCANCODE_A + (value-'a');
+          else if (value >= '0' && value <= '9') scancode = (value == '0') ? KEY_SCANCODE_0 : KEY_SCANCODE_1 + (value - '1');
+          else if (value == RGFW_keyUp) scancode = KEY_SCANCODE_UP;
+          else if (value == RGFW_keyDown) scancode = KEY_SCANCODE_DOWN;
+          else if (value == RGFW_keyLeft) scancode = KEY_SCANCODE_LEFT;
+          else if (value == RGFW_keyRight) scancode = KEY_SCANCODE_RIGHT;
+
           input_event.evt = (Input_Event){
             .data.ke = (Input_Keeb_Event) {
               .scancode = (Key_Scancode)scancode,
@@ -259,17 +267,22 @@ int main(void) {
     /////////////////////////////////////////////////////
     // 2.3 Perform update + render calling the game lib
     /////////////////////////////////////////////////////
+#ifdef SOFT_REND
     gs.pixels = arena_push(gs.frame_arena, sizeof(u32)*gs.wdim.x*gs.wdim.y);
+#endif
     {
       TIME_BLOCK("GAME_UPDATERENDER");
       game_api.update(&gs, dt);
       game_api.render(&gs, dt);
+#ifdef SOFT_REND
       ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.wdim.x, gs.wdim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
+#endif
     }
 
     /////////////////////////////////////////////////////
     // 2.4 Render the software rendered texture
     /////////////////////////////////////////////////////
+#ifdef SOFT_REND
     {
       TIME_BLOCK("GL_Render");
       R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
@@ -289,7 +302,7 @@ int main(void) {
       cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
       r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
     }
-
+#endif
     /////////////////////////////////////////////////////
     // 2.5 Render all the quads (captured in game_render(..))
     /////////////////////////////////////////////////////
