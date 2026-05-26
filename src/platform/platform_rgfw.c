@@ -196,6 +196,9 @@ int main(void) {
           game_api.lib = game_lib;
           game_api.last_modified = mod_time;
           printf("reload mod time: %ld\n", mod_time);
+          // Should we actually do this? I don't think so!
+          game_api.init(&gs);
+          //---------------------------------------------
         }
       }
     }

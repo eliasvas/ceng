@@ -3,13 +3,34 @@
 
 #include "game.h"
 #include "gui/gui.h"
+#include "entity.h"
 
 // TODO: Move to a better 2D renderer that can do arbitrary polygons not just AABBS rotated?
 // TODO: lookup a good fzf pipeline to be able to search
 // TODO: Maybe this should be just a test-bed and have repos reference this?? idk, I dont want many assets inside this repo maybe
 // TODO: make-prg for building via build.sh and make an argument to only build, also run, and also just export the object files
 
-void game_init(Game_State *gs) { }
+
+const char* entity_map= R"(@@@@@@@@@@
+@$#######@
+@##$$####@
+@##$#####@
+@##$$####@
+@#$####$$@
+@@@@@@@@@@
+)";
+
+void game_init(Game_State *gs) {
+  entity_store_init();
+  // Add the map
+  entity_store_add_map(entity_map);
+  // Make the hero
+  Entity *hero = entity_store_add();
+  hero->kind = ENTITY_KIND_HERO;
+  hero->tex_coords = rec(4*8,9*8,8,8);
+  hero->coords = (iv3){1,1,0};
+  hero->layer = 1;
+}
 
 void game_update(Game_State *gs, float dt) {
   static bool gui_initialized = false;
@@ -18,7 +39,6 @@ void game_update(Game_State *gs, float dt) {
     gui_initialized = true;
   }
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
-
 }
 
 
@@ -29,30 +49,10 @@ void game_render(Game_State *gs, float dt) {
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
   //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
+  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
-
-  f32 hero_w = 128;
-
-  static v2 hero_pos = v2m(0,0); 
-  if (input_key_pressed(&gs->input, KEY_SCANCODE_RIGHT)) { hero_pos.x+=16; }
-  if (input_key_pressed(&gs->input, KEY_SCANCODE_LEFT)) { hero_pos.x-=16; }
-  if (input_key_pressed(&gs->input, KEY_SCANCODE_UP)) { hero_pos.y+=16; }
-  if (input_key_pressed(&gs->input, KEY_SCANCODE_DOWN)) { hero_pos.y-=16; }
-
-  R2D_Quad quad = (R2D_Quad) {
-      //.src_rect = rec(9*8,0*8,8,8),
-      .src_rect = rec(4*8,9*8,8,8),
-      //.dst_rect = rec(screen_mp.x - hero_w*0.5, screen_mp.y - hero_w*0.5, hero_w, hero_w),
-      .dst_rect = rec(hero_pos.x, hero_pos.y, hero_w, hero_w),
-      .c = col(1,1,1,1),
-      .tex = gs->atlas,
-      .rot_deg = 0,
-  };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-
+  entity_store_update_render(gs);
 }
 
 void game_shutdown(Game_State *gs) {
