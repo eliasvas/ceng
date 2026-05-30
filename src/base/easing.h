@@ -5,6 +5,10 @@
 // For x in [0,1] these functions will produce a y in [0,1]
 // with the correct easing behavior
 
+static f32 ease_in_linear(f32 x) {
+  return x;
+}
+
 static f32 ease_in_quad(f32 x) {
   return x * x;
 }

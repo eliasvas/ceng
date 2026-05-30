@@ -12,13 +12,20 @@ typedef enum {
 typedef u64 Entity_Id;
 typedef struct {
   Entity_Id id;
-  v3 coords;
+
+  // This way entity position is always animate-able property
+  v3 start_coords;
   v3 target_coords;
+
+  f32 move_timer_elapsed;
+  f32 move_timer_duration;
+
+  f32 bump_timer_elapsed;
+  f32 bump_timer_duration;
+  v3 bump_dir;
+
   rect tex_coords;
   Entity_Kind kind;
-
-  f32 action_timer_sec;
-
   s32 layer; // 0..1 currently
 } Entity;
 typedef struct Entity_Node Entity_Node;
@@ -53,6 +60,31 @@ static Entity_Store entity_store;
 u64 entity_hash_id(u64 entity_id) {
   return (entity_id % entity_store.slot_count);
 }
+
+v3 entity_get_anim_coords(Entity *e) {
+  if (e->move_timer_duration > 0.0) { // Regular movement
+    f32 delta = (e->move_timer_elapsed / e->move_timer_duration);
+    v3 anim_coords = anim_coords = v3_lerp(e->start_coords, e->target_coords, ease_in_quad(delta));
+    return anim_coords;
+  } else if (e->bump_timer_duration > 0.0) { // Wall bump
+    f32 delta = (e->bump_timer_elapsed / e->bump_timer_duration);
+    f32 offset = sin_f32(delta * M_PI);
+    f32 bump_scale_factor = 0.1;
+    return v3_add(e->target_coords, v3_multf(e->bump_dir, bump_scale_factor*offset));
+  } else { // Non-anim entity
+    return e->target_coords;
+  }
+}
+
+void entity_set_coords_imm(Entity *e, v3 coords) {
+  e->start_coords = coords;
+  e->target_coords = coords;
+}
+
+b32 entity_is_still(Entity *e) {
+  return equalf(e->move_timer_elapsed, e->move_timer_duration, 0.001) && equalf(e->bump_timer_elapsed, e->bump_timer_duration, 0.001);
+}
+
 
 // TODO: Temoval example (reuse via a freelist)
 #if 0
@@ -90,21 +122,21 @@ void entity_store_add_map(const char *map) {
         e = entity_store_add();
         e->tex_coords = rec(3*8,5*8,8,8);
         e->kind = ENTITY_KIND_WALL;
-        e->coords = coords;
+        entity_set_coords_imm(e, coords);
         coords.x+=1;
         break;
       case '#':
         e = entity_store_add();
         e->tex_coords = rec(4*8,5*8,8,8);
         e->kind = ENTITY_KIND_GRASS;
-        e->coords = coords;
+        entity_set_coords_imm(e, coords);
         coords.x+=1;
         break;
       case '$':
         e = entity_store_add();
         e->tex_coords = rec(5*8,5*8,8,8);
         e->kind = ENTITY_KIND_EMPTY;
-        e->coords = coords;
+        entity_set_coords_imm(e, coords);
         coords.x+=1;
         break;
       case '\n':
@@ -129,7 +161,8 @@ Entity *entity_store_find(Game_State *gs, v3 coords) {
     Entity_Node *en = entity_store.slots[hash_slot].hash_first;
     while (en) {
       Entity *e = &(en->e);
-      if (e->coords.x == coords.x && e->coords.y == coords.y && e->coords.z == coords.z) return e;
+      v3 anim_coords = entity_get_anim_coords(e);
+      if (anim_coords.x == coords.x && anim_coords.y == coords.y && anim_coords.z == coords.z) return e;
       en = en->hash_next;
     }
   }
@@ -149,28 +182,32 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
           switch(e->kind) {
             case ENTITY_KIND_HERO:
 
-              f32 hero_speed = 30.0;
-              v3 next_tile_coords = e->coords;
+              v3 next_tile_coords = e->target_coords;
               if (input_key_pressed(&gs->input, KEY_SCANCODE_RIGHT)) { next_tile_coords.x+=1; }
               else if (input_key_pressed(&gs->input, KEY_SCANCODE_LEFT)) { next_tile_coords.x-=1; }
               else if (input_key_pressed(&gs->input, KEY_SCANCODE_UP)) { next_tile_coords.y+=1; }
               else if (input_key_pressed(&gs->input, KEY_SCANCODE_DOWN)) { next_tile_coords.y-=1; }
 
-
-              if (!v3_eq(e->coords, next_tile_coords)) {
-                Entity *next_tile = entity_store_find(gs, next_tile_coords);
-                if (next_tile && next_tile->kind != ENTITY_KIND_WALL) {
+              Entity * target_tile = entity_store_find(gs, next_tile_coords);
+              // If the next_tile_coords have advanced and object static
+              if ( !v3_eq(e->target_coords, next_tile_coords) && entity_is_still(e)) {
+                e->start_coords = e->target_coords;
+                if ( target_tile->kind != ENTITY_KIND_WALL) {
+                  e->bump_timer_duration = 0.0f;
+                  e->bump_timer_elapsed= 0.0f;
+                  e->move_timer_elapsed = 0.0f;
+                  e->move_timer_duration = 0.1f;
                   e->target_coords = next_tile_coords;
+                } else {
+                  e->move_timer_duration = 0.0f;
+                  e->move_timer_elapsed= 0.0f;
+                  e->bump_timer_elapsed = 0.0f;
+                  e->bump_timer_duration = 0.1f;
+                  e->bump_dir = v3_sub(next_tile_coords, e->target_coords);
                 }
               }
-
-              // update movement
-              v3 move_to = v3_add(e->coords, v3_multf(v3_norm(v3_sub(e->target_coords, e->coords)), hero_speed * dt));
-              if (v3_len(v3_sub(move_to, e->target_coords)) > v3_len(v3_sub(e->coords, e->target_coords))) {
-                  e->coords = e->target_coords;
-              } else {
-                e->coords = move_to;
-              }
+              e->move_timer_elapsed = minimum(e->move_timer_elapsed+dt, e->move_timer_duration);
+              e->bump_timer_elapsed = minimum(e->bump_timer_elapsed+dt, e->bump_timer_duration);
 
               break;
             case ENTITY_KIND_GRASS:
@@ -181,9 +218,10 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
               break;
           }
 
+          v3 anim_coords = entity_get_anim_coords(e);
           R2D_Quad quad = (R2D_Quad) {
               .src_rect = en->e.tex_coords,
-              .dst_rect = rec(en->e.coords.x * tile_w_px, en->e.coords.y * tile_w_px, tile_w_px, tile_w_px),
+              .dst_rect = rec(anim_coords.x * tile_w_px, anim_coords.y * tile_w_px, tile_w_px, tile_w_px),
               .c = col(1,1,1,1),
               .tex = gs->atlas,
               .rot_deg = 0,

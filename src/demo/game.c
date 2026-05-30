@@ -29,8 +29,9 @@ void game_init(Game_State *gs) {
   hero->kind = ENTITY_KIND_HERO;
   hero->tex_coords = rec(4*8,9*8,8,8);
 
-  hero->coords = v3m(1,1,0);
+  hero->start_coords = v3m(1,1,0);
   hero->target_coords = v3m(1,1,0);
+  entity_set_coords_imm(hero, v3m(1,1,0));
 
   hero->layer = 1;
 }

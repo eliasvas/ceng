@@ -46,6 +46,7 @@ static f32 F32_MIN_POS = 1.175494351e-38F;
 // Helpful Macros
 ///////////////////
 
+// FIXME: Why are all these macros not ALL_CAPS?
 #define KB(val) ((val)*1024LL)
 #define MB(val) ((KB(val))*1024LL)
 #define GB(val) ((MB(val))*1024LL)
@@ -73,6 +74,9 @@ static f32 F32_MIN_POS = 1.175494351e-38F;
 #define signof(x) ((x) > 0 ? 1 : ((x) < 0 ? -1 : 0))
 #define each_enumv(type, upper, it) type it = (type)0; it < upper##_COUNT; it = (type)(it+1)
 #define MATH_PI 3.14159265358979323846
+
+// FIXME: This are.. defined in windows.h as.. they should be..
+// :| :| :| :| :| :| :| :| :| :| :| :| |: |: |: |:| :| :| :| :| :|
 #define RAD2DEG(X) (180 * X / MATH_PI)
 #define DEG2RAD(X) (X * MATH_PI / 180)
 
