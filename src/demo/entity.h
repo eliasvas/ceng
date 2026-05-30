@@ -1,10 +1,6 @@
 #include "game.h"
 
-// TODO: add this to.. math? maybe?
-typedef struct {
-  s32 x,y,z;
-} iv3;
-
+// TWEEN POSITION TWEEN POSITION TWEEN POSITION
 
 typedef enum {
   ENTITY_KIND_HERO,
@@ -16,9 +12,13 @@ typedef enum {
 typedef u64 Entity_Id;
 typedef struct {
   Entity_Id id;
-  iv3 coords;
+  v3 coords;
+  v3 target_coords;
   rect tex_coords;
   Entity_Kind kind;
+
+  f32 action_timer_sec;
+
   s32 layer; // 0..1 currently
 } Entity;
 typedef struct Entity_Node Entity_Node;
@@ -81,7 +81,7 @@ Entity* entity_store_add() {
 }
 
 void entity_store_add_map(const char *map) {
-  iv3 coords = {0,0,0};
+  v3 coords = v3m(0,0,0);
   for (s32 c_idx = 0; c_idx < strlen(map); c_idx+=1) {
     char c = map[c_idx];
     Entity* e = nullptr;
@@ -124,7 +124,7 @@ void entity_store_init() {
   entity_store.slots = arena_push_array(entity_store.entity_arena, Entity_Hash_Slot, entity_store.slot_count);
 }
 
-Entity *entity_store_find(Game_State *gs, iv3 coords) {
+Entity *entity_store_find(Game_State *gs, v3 coords) {
   for (s64 hash_slot = 0; hash_slot < entity_store.slot_count; hash_slot+=1) {
     Entity_Node *en = entity_store.slots[hash_slot].hash_first;
     while (en) {
@@ -136,7 +136,7 @@ Entity *entity_store_find(Game_State *gs, iv3 coords) {
   return nullptr;
 }
 
-void entity_store_update_render(Game_State *gs) {
+void entity_store_update_render(Game_State *gs, f32 dt) {
   // TODO: layer range should be inside entity_store
   for (s32 layer = 0; layer <=1; layer+=1) {
     for (s64 hash_slot = 0; hash_slot < entity_store.slot_count; hash_slot+=1) {
@@ -149,16 +149,29 @@ void entity_store_update_render(Game_State *gs) {
           switch(e->kind) {
             case ENTITY_KIND_HERO:
 
-              iv3 next_tile_coords = e->coords;
+              f32 hero_speed = 30.0;
+              v3 next_tile_coords = e->coords;
               if (input_key_pressed(&gs->input, KEY_SCANCODE_RIGHT)) { next_tile_coords.x+=1; }
               else if (input_key_pressed(&gs->input, KEY_SCANCODE_LEFT)) { next_tile_coords.x-=1; }
               else if (input_key_pressed(&gs->input, KEY_SCANCODE_UP)) { next_tile_coords.y+=1; }
               else if (input_key_pressed(&gs->input, KEY_SCANCODE_DOWN)) { next_tile_coords.y-=1; }
 
-              Entity *next_tile = entity_store_find(gs, next_tile_coords);
-              if (next_tile && next_tile->kind != ENTITY_KIND_WALL) {
-                e->coords = next_tile_coords;
+
+              if (!v3_eq(e->coords, next_tile_coords)) {
+                Entity *next_tile = entity_store_find(gs, next_tile_coords);
+                if (next_tile && next_tile->kind != ENTITY_KIND_WALL) {
+                  e->target_coords = next_tile_coords;
+                }
               }
+
+              // update movement
+              v3 move_to = v3_add(e->coords, v3_multf(v3_norm(v3_sub(e->target_coords, e->coords)), hero_speed * dt));
+              if (v3_len(v3_sub(move_to, e->target_coords)) > v3_len(v3_sub(e->coords, e->target_coords))) {
+                  e->coords = e->target_coords;
+              } else {
+                e->coords = move_to;
+              }
+
               break;
             case ENTITY_KIND_GRASS:
             case ENTITY_KIND_EMPTY:

@@ -28,7 +28,10 @@ void game_init(Game_State *gs) {
   Entity *hero = entity_store_add();
   hero->kind = ENTITY_KIND_HERO;
   hero->tex_coords = rec(4*8,9*8,8,8);
-  hero->coords = (iv3){1,1,0};
+
+  hero->coords = v3m(1,1,0);
+  hero->target_coords = v3m(1,1,0);
+
   hero->layer = 1;
 }
 
@@ -52,7 +55,7 @@ void game_render(Game_State *gs, float dt) {
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
-  entity_store_update_render(gs);
+  entity_store_update_render(gs, dt);
 }
 
 void game_shutdown(Game_State *gs) {
