@@ -217,9 +217,6 @@ void r2d_end(R2D *rend) {
 }
 
 void r2d_push_quad(R2D *rend, R2D_Quad q) {
-  // If the quad doesn't have a texture, assign white_tex here by default!
-  if (q.tex.impl_state == 0) q.tex = white_tex;
-
   // Then push it to the chunk list as normal
   rend_quad_chunk_list_push(rend->arena, &rend->list, 256, q);
 }
@@ -266,8 +263,11 @@ void r2d_render_cmds(Arena *arena, R2D_Cmd_Chunk_List *cmd_list) {
           }
           break;
         case R2D_CMD_KIND_ADD_QUAD: 
-          if (rend->gtex.impl_state != 0 &&
-              cmd.q.tex.impl_state != rend->gtex.impl_state) {
+          if (cmd.q.tex.impl_state == 0) {
+            rend->gtex = white_tex;
+            cmd.q.tex = white_tex;
+          }
+          if (rend->gtex.impl_state != 0 && cmd.q.tex.impl_state != rend->gtex.impl_state) {
             r2d_end(rend);
             rend = r2d_begin(arena, &c, viewport, scissor);
           }

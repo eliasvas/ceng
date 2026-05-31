@@ -173,7 +173,8 @@ int main(void) {
         printf("couldn't stat libgame.so\n");
       } else {
         s64 mod_time = glib_stat.st_mtim.tv_nsec;
-        if (game_api.last_modified != mod_time) {
+        if (game_api.last_modified != mod_time || gs.request_reload) {
+          gs.request_reload = false;
           static int reload_count = 0;
           reload_count+=1;
           // This is ugly as hell

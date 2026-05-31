@@ -114,7 +114,7 @@ Entity* entity_store_add() {
 
 void entity_store_add_map(const char *map) {
   v3 coords = v3m(0,0,0);
-  for (s32 c_idx = 0; c_idx < strlen(map); c_idx+=1) {
+  for (s32 c_idx = 0; c_idx < (s32)strlen(map); c_idx+=1) {
     char c = map[c_idx];
     Entity* e = nullptr;
     switch(c) {
@@ -183,10 +183,10 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
             case ENTITY_KIND_HERO:
 
               v3 next_tile_coords = e->target_coords;
-              if (input_key_pressed(&gs->input, KEY_SCANCODE_RIGHT)) { next_tile_coords.x+=1; }
-              else if (input_key_pressed(&gs->input, KEY_SCANCODE_LEFT)) { next_tile_coords.x-=1; }
-              else if (input_key_pressed(&gs->input, KEY_SCANCODE_UP)) { next_tile_coords.y+=1; }
-              else if (input_key_pressed(&gs->input, KEY_SCANCODE_DOWN)) { next_tile_coords.y-=1; }
+              if (input_key_down(&gs->input, KEY_SCANCODE_RIGHT)) { next_tile_coords.x+=1; }
+              if (input_key_down(&gs->input, KEY_SCANCODE_LEFT)) { next_tile_coords.x-=1; }
+              if (input_key_down(&gs->input, KEY_SCANCODE_UP)) { next_tile_coords.y+=1; }
+              if (input_key_down(&gs->input, KEY_SCANCODE_DOWN)) { next_tile_coords.y-=1; }
 
               Entity * target_tile = entity_store_find(gs, next_tile_coords);
               // If the next_tile_coords have advanced and object static

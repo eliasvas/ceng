@@ -69,6 +69,7 @@ INCLUDE_DIRS="-Iext -I$ENGINE_DIR/frz -I$ENGINE_DIR/src"
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
 "$ENGINE_DIR"/src/gui/*.c \
+"$ENGINE_DIR"/src/gui2/*.c \
 -o "$OUTPUT_DIR/libgame.so"
 
 [ $? -eq 0 ] && echo "Game Build succeeded. ✅" || { echo "Game Build failed. ❌"; exit 1; }

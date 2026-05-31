@@ -29,6 +29,7 @@ typedef struct {
   Input input;
   R2D_Cmd_Chunk_List cmd_list;
   Game_Audio_Output_Buffer audio_out;
+  b32 request_reload;
 
 #ifdef SOFT_REND
   Ogl_Tex g_backbuffer;

@@ -16,7 +16,7 @@ static u64 djb2_buf(buf b) {
   return hash;
 }
 
-static u64 djb2(char *s) {
+static inline u64 djb2(char *s) {
   return djb2_buf(MAKE_STR(s));
 }
 

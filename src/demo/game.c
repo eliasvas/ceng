@@ -3,6 +3,7 @@
 
 #include "game.h"
 #include "gui/gui.h"
+#include "gui2/g2.h"
 #include "entity.h"
 
 // TODO: Move to a better 2D renderer that can do arbitrary polygons not just AABBS rotated?
@@ -34,6 +35,8 @@ void game_init(Game_State *gs) {
   entity_set_coords_imm(hero, v3m(1,1,0));
 
   hero->layer = 1;
+
+  g2_init(gs->frame_arena, &gs->font, &gs->cmd_list, &gs->input);
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -57,6 +60,13 @@ void game_render(Game_State *gs, float dt) {
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
   entity_store_update_render(gs, dt);
+
+  // Perform a reload if reset button is clicked
+  g2_begin(gs->game_viewport);
+  if (g2_button(MAKE_STR("reset"), v2m(20,20))) {
+    gs->request_reload = true;
+  }
+  g2_end();
 }
 
 void game_shutdown(Game_State *gs) {
