@@ -2,11 +2,18 @@
 set -e
 
 # TODO: Maybe we could add the asset handling here
+#
+#CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
+CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g"
+CC="clang"
 
 # -----------------------------
 # Parse arguments
-# Usage: ./build.sh gd=../my_game od=out clean=0
-# -----------------------------
+# Usage: ./build.sh ed=./ceng gd=../my_game od=out clean=0
+# --------------------------------------------------------------
+
+CLEAN=1
+
 for arg in "$@"; do
   case $arg in
   gd=*)
@@ -14,6 +21,9 @@ for arg in "$@"; do
     ;;
   od=*)
     OUTPUT_DIR="${arg#*=}"
+    ;;
+  ed=*)
+    ENGINE_DIR="${arg#*=}"
     ;;
   clean=*)
     CLEAN="${arg#*=}"
@@ -32,6 +42,11 @@ if [ -z $GAME_DIR ]; then
   OUTPUT_DIR="./build"
   CLEAN=1
 fi
+# --------------------------------------------------------------
+# Convert to realpaths
+GAME_DIR="$(realpath "$GAME_DIR")"
+OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
+ENGINE_DIR="$(realpath "$ENGINE_DIR")"
 
 # -----------------------------
 # Prepare output directory
@@ -42,12 +57,6 @@ if [ "$CLEAN" -eq 1 ]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
-
-#CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
-CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g"
-CC="clang"
-
-source "build_common.sh"
 
 #export ASAN_OPTIONS=detect_stack_use_after_return=1
 #export LSAN_OPTIONS=suppressions=lsan_ignore.txt
@@ -64,7 +73,7 @@ CLIBS="-lX11 -lGL -lGLEW -lXrandr -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
-INCLUDE_DIRS="-Iext -I$ENGINE_DIR/frz -I$ENGINE_DIR/src"
+INCLUDE_DIRS="-Iext -I$ENGINE_DIR/frz -I$ENGINE_DIR/src -I$GAME_DIR"
 
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
@@ -82,11 +91,11 @@ echo "Building engine..."
 pushd "$ENGINE_DIR" > /dev/null
 
 $CC $CFLAGS $DEBUG_FLAGS \
-    -Iext -Isrc -I"$GAME_DIR" \
+    -Iext -Isrc -I$GAME_DIR \
     -L"$OUTPUT_DIR" \
     src/core/*.c \
     src/platform/platform_rgfw.c \
-    -o "$OUTPUT_DIR/prototype" \
+    -o "$OUTPUT_DIR/ceng" \
     $CLIBS \
     -Wl,-rpath,'$ORIGIN'
 

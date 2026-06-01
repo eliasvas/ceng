@@ -1,7 +1,38 @@
 # Good reference for emscripten building https://github.com/ocornut/imgui/blob/master/examples/example_sdl3_opengl3/Makefile.emscripten
 # TODO: MUCH more customization needed, rn its GARBO
 
-source "build_common.sh"
+# source "build_common.sh" ------------------------------------------
+
+# -----------------------------
+# Parse arguments
+# Usage: ./build.sh gd=../my_game od=out clean=0
+# -----------------------------
+for arg in "$@"; do
+  case $arg in
+  gd=*)
+    GAME_DIR="${arg#*=}"
+    ;;
+  od=*)
+    OUTPUT_DIR="${arg#*=}"
+    ;;
+  clean=*)
+    CLEAN="${arg#*=}"
+    ;;
+  *)
+    echo "Unknown option: $arg"
+    exit 1
+    ;;
+  esac
+done
+
+
+if [ -z $GAME_DIR ]; then
+  GAME_DIR="./src/demo"
+  ENGINE_DIR="./"
+  OUTPUT_DIR="./build"
+  CLEAN=1
+fi
+# -----------------------------------------------------------------------
 
 EMCC=emcc
 

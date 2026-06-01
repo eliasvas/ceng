@@ -18,10 +18,10 @@ git clone --recursive https://github.com/eliasvas/prototype
 ### Linux (inside vim)
 ```
 # add these to your .vimrc
-nnoremap <F7> :!./build/prototype&<CR>
+nnoremap <F7> :!./build/ceng&<CR>
 nnoremap <F7> :!./build.sh<CR>
 nnoremap <F6> :!gf2<CR>
-nnoremap <F5> :!bash -c 'source ./build.sh && ./build/prototype'<CR>
+nnoremap <F5> :!bash -c 'source ./build.sh && ./build/ceng'<CR>
 
 ```
 ### Web (From Linux)
@@ -39,24 +39,26 @@ You can easily use this engine to make a game by plugging your game's source/dat
     mkdir my_awesome_game
     cd my_awesome_game
     git init
-    git submodule add https://github.com/eliasvas/prototype
+    git submodule add https://github.com/eliasvas/ceng
     git submodule update --init --recursive
 
-    cp -r prototype/src/demo/ ./game
-    cp -r prototype/data ./data
+    cp -r ceng/src/demo/ ./game
+    cp -r ceng/data ./data
+    git-lfs track *.png
+    git-lfs track *.ttf
 
     cat > build.sh << 'EOF'
     #!/usr/bin/env bash
     set -e
-    ENGINE_DIR="./prototype"
+    ENGINE_DIR="./ceng"
     GAME_DIR="./game"
     OUTPUT_DIR="./build"
-    "$ENGINE_DIR/build.sh" gd="$GAME_DIR" od="$OUTPUT_DIR"
+    "$ENGINE_DIR/build.sh" ed="$ENGINE_DIR" gd="$GAME_DIR" od="$OUTPUT_DIR"
     EOF
     chmod +x build.sh
 
     ./build.sh
-    ./build/prototype
+    ./build/ceng
 ```
 
 ## Module Architecture
