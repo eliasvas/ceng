@@ -13,7 +13,7 @@ typedef struct {
   Arena *temp_arena;
 
   Font_Info *font;
-  R2D_Cmd_Chunk_List *cmd_list;
+  R_Cmd_Chunk_List *cmd_list;
   Input *input;
 
   g2ID hot_id;
@@ -21,7 +21,7 @@ typedef struct {
 
 } g2_ctx;
 
-void g2_init(Arena *tarena, Font_Info *font, R2D_Cmd_Chunk_List *cmd_list, Input *input);
+void g2_init(Arena *tarena, Font_Info *font, R_Cmd_Chunk_List *cmd_list, Input *input);
 b32 g2_button(buf label, v2 coords);
 
 void g2_begin(rect viewport);

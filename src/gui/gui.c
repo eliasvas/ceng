@@ -362,7 +362,7 @@ void gui_build_end(void) {
 }
 
 
-void gui_frame_begin(v2 screen_dim, Input *input, R2D_Cmd_Chunk_List *cmd_list, f64 dt) {
+void gui_frame_begin(v2 screen_dim, Input *input, R_Cmd_Chunk_List *cmd_list, f64 dt) {
   g_gui_ctx.screen_dim = screen_dim;
   g_gui_ctx.dt = dt;
   g_gui_ctx.input_ref = input;
@@ -550,31 +550,31 @@ void gui_draw_rect_clip(rect r, v4 c, rect clip_rect) {
   rect viewport = rec(0,0,gctx->screen_dim.x, gctx->screen_dim.y);
 
   /*
-  R2D* r_rend = r2d_begin(gctx->temp_arena, &(R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, }, viewport, clip_rect);
-  r2d_push_quad(r_rend, (R2D_Quad) {
+  R2D* r_rend = r_begin(gctx->temp_arena, &(R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, }, viewport, clip_rect);
+  r_push_quad(r_rend, (R_Quad) {
       .dst_rect = r,
       .c = c,
   });
-  r2d_end(r_rend);
+  r_end(r_rend);
   */
 
   // set viewport 
-  R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = viewport };
-  r2d_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
+  R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = viewport };
+  r_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
   // set scissor
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = clip_rect};
-  r2d_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = clip_rect};
+  r_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
   // set camera
-  R2D_Cam cam = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = cam };
-  r2d_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
+  R_Cam cam = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, };
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = cam };
+  r_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
   // push quad
-  R2D_Quad quad = (R2D_Quad) {
+  R_Quad quad = (R_Quad) {
       .dst_rect = r,
       .c = c,
   };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-  r2d_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
+  r_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
 
 }
 

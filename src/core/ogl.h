@@ -730,14 +730,68 @@ void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint3
     }
   };
 
-  .
-  .
-
   rbundle.dyn_state.viewport = (rect){0,0,gs->screen_dim.x,gs->screen_dim.y};
   ogl_render_bundle_draw(&rbundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
 */
 
 
+/*
+ * ogl example so I don't forget! (you can paste this in platform.c and will probably work..)
+  const char* vs_source = R"(#version 300 es
+  precision highp float;
+  layout (location = 0) in vec3 v_pos;
+  layout (location = 1) in vec3 v_col;
+  layout (location = 2) in vec2 v_tc;
+  out vec3 f_color;
+  out vec2 f_tc;
+  layout (std140) uniform UboExample { vec4 ubo_tc; };
+  void main() { gl_Position = vec4(v_pos, 1.0f); f_color = v_col; f_tc = v_tc; }
+  )";
+
+  const char* fs_source = R"(#version 300 es
+  precision highp float;
+  layout(location = 0) out vec4 out_color;
+  in vec3 f_color;
+  in vec2 f_tc;
+  uniform sampler2D tex;
+  layout (std140) uniform UboExample { vec4 ubo_tc; };
+  void main() { out_color = vec4(f_color, 1.0) * texture2D(tex, f_tc); }
+  )";
+
+
+  Ogl_Render_Bundle rbundle = (Ogl_Render_Bundle){
+    .sp = ogl_shader_make(vs_source, fs_source),
+    .vbos = {
+      [0] = {
+        .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, (f32[]) {
+              -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f,    // top left
+              -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
+               0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+               0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
+            }, 4, 8*sizeof(f32)),
+        .vattribs = {
+          [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3, .offset = 0 },
+          [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3, .offset = 3*sizeof(f32) },
+          [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2, .offset = 6*sizeof(f32) },
+        },
+      },
+    },
+    .ubos = {
+      [0] = { .name = "UboExample", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (f32[]) { 0.9, 0,0,0 }, 1, sizeof(f32)*4), .start_offset = 0, .size = sizeof(float)*4 },
+    },
+    .textures = {
+      [0] = { .name = "tex", .tex = ogl_tex_make((u8[]){200,40,40,255}, 1,1, OGL_TEX_FORMAT_R8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+      //[1] = { .name = "tex2", .tex = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT}),},
+    },
+    //.rt = ogl_render_target_make(gs->screen_dim.x, gs->screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
+    .dyn_state = (Ogl_Dyn_State){
+      .viewport = {0,0,gs.wdim.x,gs.wdim.y},
+    }
+  };
+
+  rbundle.dyn_state.viewport = (rect){0,0,800,600};
+  ogl_render_bundle_draw(&rbundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+*/
 
 #ifdef __cplusplus
 }

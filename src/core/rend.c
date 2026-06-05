@@ -1,16 +1,54 @@
-#include "r2d.h"
-// TODO: GLES3.0 doesn't support sampler arrays! 
-// We can't really support multiple textures in the batch renderer..
+#include "rend.h"
 // maybe add an ifdef and make it configurable or something?
+// TODO: Support for another bundle, BLURS!
 
 // HMMMMMMM
 static Ogl_Render_Bundle batch_bundle = {};
+static Ogl_Render_Bundle tri_bundle = {};
 static Ogl_Tex white_tex = {};
 
-/////////////////////
-// SHADERS
-/////////////////////
+////////////////////////////////////////////////
+// Triangle Shaders
+////////////////////////////////////////////////
 
+const char* tri_vs = R"(#version 300 es
+precision highp float;
+layout(location=0) in vec3 pos;
+layout(location=1) in vec3 norm;
+layout(location=2) in vec2 tc;
+layout(location=3) in vec4 color;
+
+layout (std140) uniform BatchUbo { mat4 view_proj; };
+
+out vec4 f_color;
+out vec2 f_tc;
+
+void main() { 
+	gl_Position = view_proj * vec4(pos, 1.0);
+  f_color = color;
+  f_tc = tc;
+}
+)";
+
+const char* tri_fs= R"(#version 300 es
+precision highp float;
+layout(location = 0) out vec4 out_color;
+
+in vec2 f_tc;
+in vec4 f_color;
+uniform sampler2D u_tex;
+
+void main() {
+  ivec2 texture_size;
+  vec2 tc;
+
+  out_color = f_color * texture(u_tex, f_tc);
+}
+)";
+
+////////////////////////////////////////////////
+// Batch Shaders
+////////////////////////////////////////////////
 const char* batch_vs = R"(#version 300 es
 precision highp float;
 layout(location=0) in vec4 src_rect;
@@ -87,7 +125,7 @@ void main() {
 // Actual Implementation
 /////////////////////
 
-static b32 r2d_cam_eq(R2D_Cam a, R2D_Cam b) {
+static b32 r_cam_eq(R_Cam a, R_Cam b) {
   return (
       v2_eq(a.origin, b.origin) &&
       v2_eq(a.offset, b.offset) &&
@@ -95,17 +133,17 @@ static b32 r2d_cam_eq(R2D_Cam a, R2D_Cam b) {
       equalf(a.rot_deg, b.rot_deg, 0.001)
       );
 }
-static m4 r2d_cam_make_view_mat(R2D_Cam *cam) {
+static m4 r_cam_make_view_mat(R_Cam *cam) {
   m4 rot = m4_rotate(cam->rot_deg, v3m(0,0,1));
   return m4_mult(m4_translate(v3m(cam->offset.x, cam->offset.y, 0)),m4_mult(rot,m4_mult(m4_scale(v3m(cam->zoom, cam->zoom,0)), m4_translate(v3m(-cam->origin.x, -cam->origin.y,0)))));
 }
 
-// Maybe the R2D_Quad should be passed by pointer, it might be YUGE!
-static void rend_quad_chunk_list_push(Arena *arena, R2D_Quad_Chunk_List* list, u64 cap, R2D_Quad quad) {
-  R2D_Quad_Chunk_Node *node = list->first;
+// Maybe the R_Quad should be passed by pointer, it might be YUGE!
+static void rend_quad_chunk_list_push(Arena *arena, R_Quad_Chunk_List* list, u64 cap, R_Quad quad) {
+  R_Quad_Chunk_Node *node = list->first;
   if (node == nullptr || node->count >= node->cap) {
-    node = arena_push_struct(arena, R2D_Quad_Chunk_Node);
-    node->arr = arena_push_array(arena, R2D_Quad, cap);
+    node = arena_push_struct(arena, R_Quad_Chunk_Node);
+    node->arr = arena_push_array(arena, R_Quad, cap);
 
     node->cap = cap;
     sll_queue_push(list->first, list->last, node);
@@ -116,14 +154,14 @@ static void rend_quad_chunk_list_push(Arena *arena, R2D_Quad_Chunk_List* list, u
   list->quad_count+=1;
 }
 
-static R2D_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R2D_Quad_Chunk_List *list) {
-  R2D_Quad_Array qa = {};
+static R_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R_Quad_Chunk_List *list) {
+  R_Quad_Array qa = {};
 
   qa.count = list->quad_count;
-  qa.arr = arena_push_array(arena, R2D_Quad, qa.count);
+  qa.arr = arena_push_array(arena, R_Quad, qa.count);
   s64 itr = 0;
-  for (R2D_Quad_Chunk_Node *node = list->first; node != nullptr; node = node->next) {
-    M_COPY(&qa.arr[itr], node->arr, sizeof(R2D_Quad)*node->count);
+  for (R_Quad_Chunk_Node *node = list->first; node != nullptr; node = node->next) {
+    M_COPY(&qa.arr[itr], node->arr, sizeof(R_Quad)*node->count);
     itr += node->count;
     assert(itr <= qa.count);
   }
@@ -133,7 +171,7 @@ static R2D_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R2D_Quad_Chunk
 }
 
 // TODO: We could save the prev arena offset and reset to that, no arena_pop nonsense!
-static void r2d_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
+static void r_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
   u64 arena_prev_pos = arena_get_current_pos(rend->arena); 
   buf sampler_name = arena_sprintf(rend->arena, "u_tex");
   batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = rend->gtex,};
@@ -143,9 +181,9 @@ static void r2d_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
   arena_reset_to_pos(rend->arena, arena_prev_pos);
 }
 
-R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
+R2D* r_begin(Arena *arena, R_Cam *cam, rect viewport, rect scissor) {
   m4 proj = m4_ortho(0,viewport.w,0,viewport.h,-1,1);
-  m4 view = r2d_cam_make_view_mat(cam);
+  m4 view = r_cam_make_view_mat(cam);
   m4 m = m4_mult(proj, view);
 
   if (batch_bundle.sp.impl_state == 0) {
@@ -175,6 +213,34 @@ R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
     white_tex = ogl_tex_make((u8[]){255,255,255,255}, 1,1, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   }
 
+  if (tri_bundle.sp.impl_state == 0) {
+    tri_bundle = (Ogl_Render_Bundle){
+      .sp = ogl_shader_make(batch_vs, batch_fs),
+      .vbos = {
+        [0] = {
+          // the vertex buffer for this should probably be made after r_end has been called
+          .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Tri_Vertex)),
+          .vattribs = {
+            [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, pos), .stride = sizeof(Tri_Vertex), .instanced = false, },
+            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, norm), .stride = sizeof(Tri_Vertex), .instanced = false,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2,  .offset = offsetof(Tri_Vertex, tc),    .stride = sizeof(Tri_Vertex), .instanced = false,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Tri_Vertex, color),  .stride = sizeof(Tri_Vertex), .instanced = false,  },
+          },
+        },
+      },
+      .ubos = {
+        [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) },
+      },
+      //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
+      .dyn_state = (Ogl_Dyn_State){
+        .viewport = viewport,
+        .scissor  = scissor,
+        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
+      }
+    };
+  }
+
+
   batch_bundle.dyn_state.viewport = viewport;
   batch_bundle.dyn_state.scissor = scissor;
 
@@ -187,15 +253,15 @@ R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
   return rend;
 }
 
-void r2d_end(R2D *rend) {
+void r_end(R2D *rend) {
   if (rend) {
-    R2D_Quad_Array quads = rend_quad_chunk_list_to_array(rend->arena, &rend->list);
+    R_Quad_Array quads = rend_quad_chunk_list_to_array(rend->arena, &rend->list);
     if (quads.count) {
       Batch_Vertex *batch_vertices = arena_push_array(rend->arena, Batch_Vertex,REND_MAX_INSTANCES);
 
       s64 vertex_idx  = 0;
       for (s64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
-        R2D_Quad *q = &quads.arr[quad_idx];
+        R_Quad *q = &quads.arr[quad_idx];
 
         Batch_Vertex v = (Batch_Vertex){
           .src_rect = *(v4*)&q->src_rect,
@@ -208,7 +274,7 @@ void r2d_end(R2D *rend) {
         vertex_idx+=1;
 
         if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count) {
-          r2d_flush(rend, batch_vertices, vertex_idx);
+          r_flush(rend, batch_vertices, vertex_idx);
           vertex_idx = 0;
         }
       }
@@ -216,12 +282,12 @@ void r2d_end(R2D *rend) {
   }
 }
 
-void r2d_push_quad(R2D *rend, R2D_Quad q) {
+void r_push_quad(R2D *rend, R_Quad q) {
   // Then push it to the chunk list as normal
   rend_quad_chunk_list_push(rend->arena, &rend->list, 256, q);
 }
 
-void r2d_clear_cmds(R2D_Cmd_Chunk_List *cmd_list) {
+void r_clear_cmds(R_Cmd_Chunk_List *cmd_list) {
   cmd_list->first = nullptr;
   cmd_list->last = nullptr;
 
@@ -230,64 +296,64 @@ void r2d_clear_cmds(R2D_Cmd_Chunk_List *cmd_list) {
 }
 
 // This is platform specific, thus is inside the implementation file
-void r2d_render_cmds(Arena *arena, R2D_Cmd_Chunk_List *cmd_list) {
+void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list) {
   // TODO: We could make the stacks here, so that we will be able to push/pop these properties
   // We will flush if a new camera/scissor/viewport is inserted and add it for subsequent calls
   R2D *rend = nullptr;  
-  R2D_Cam c = {}; // Should get the default from the nil stack!! 
+  R_Cam c = {}; // Should get the default from the nil stack!! 
   rect viewport = {}; // Should get the default from the nil stack!!
   rect scissor = {}; // Should get the default from the nil stack!!
-  for (R2D_Cmd_Chunk_Node *node = cmd_list->first; node != nullptr; node = node->next) {
+  for (R_Cmd_Chunk_Node *node = cmd_list->first; node != nullptr; node = node->next) {
     for (u64 idx = 0; idx < node->count; idx+=1) {
-      R2D_Cmd cmd = node->arr[idx];
+      R_Cmd cmd = node->arr[idx];
       switch (cmd.kind) {
-        case R2D_CMD_KIND_SET_VIEWPORT: 
+        case R_CMD_KIND_SET_VIEWPORT: 
           if (!rect_equals(viewport, cmd.r)) {
-            r2d_end(rend);
+            r_end(rend);
             viewport = cmd.r;
-            rend = r2d_begin(arena, &c, viewport, scissor);
+            rend = r_begin(arena, &c, viewport, scissor);
           }
           break;
-        case R2D_CMD_KIND_SET_SCISSOR:
+        case R_CMD_KIND_SET_SCISSOR:
           if (!rect_equals(scissor, cmd.r)) {
-            r2d_end(rend);
+            r_end(rend);
             scissor = cmd.r;
-            rend = r2d_begin(arena, &c, viewport, scissor);
+            rend = r_begin(arena, &c, viewport, scissor);
           }
           break;
-        case R2D_CMD_KIND_SET_CAMERA: 
-          if (!r2d_cam_eq(c ,cmd.c)) {
-            r2d_end(rend);
+        case R_CMD_KIND_SET_CAMERA: 
+          if (!r_cam_eq(c ,cmd.c)) {
+            r_end(rend);
             c = cmd.c;
-            rend = r2d_begin(arena, &c, viewport, scissor);
+            rend = r_begin(arena, &c, viewport, scissor);
           }
           break;
-        case R2D_CMD_KIND_ADD_QUAD: 
+        case R_CMD_KIND_ADD_QUAD: 
           if (cmd.q.tex.impl_state == 0) {
             rend->gtex = white_tex;
             cmd.q.tex = white_tex;
           }
           if (rend->gtex.impl_state != 0 && cmd.q.tex.impl_state != rend->gtex.impl_state) {
-            r2d_end(rend);
-            rend = r2d_begin(arena, &c, viewport, scissor);
+            r_end(rend);
+            rend = r_begin(arena, &c, viewport, scissor);
           }
           rend->gtex = cmd.q.tex;
-          r2d_push_quad(rend, cmd.q);
+          r_push_quad(rend, cmd.q);
           break;
         default:
           break;
       }
     }
   }
-  r2d_end(rend);
-  r2d_clear_cmds(cmd_list);
+  r_end(rend);
+  r_clear_cmds(cmd_list);
 }
 
-void r2d_push_cmd(Arena *arena, R2D_Cmd_Chunk_List *cmd_list, R2D_Cmd cmd, u64 cap) {
-  R2D_Cmd_Chunk_Node *node = cmd_list->first;
+void r_push_cmd(Arena *arena, R_Cmd_Chunk_List *cmd_list, R_Cmd cmd, u64 cap) {
+  R_Cmd_Chunk_Node *node = cmd_list->first;
   if (node == nullptr || node->count >= node->cap) {
-    node = arena_push_struct(arena, R2D_Cmd_Chunk_Node);
-    node->arr = arena_push_array(arena, R2D_Cmd, cap);
+    node = arena_push_struct(arena, R_Cmd_Chunk_Node);
+    node->arr = arena_push_array(arena, R_Cmd, cap);
     node->cap = cap;
 
     sll_queue_push(cmd_list->first, cmd_list->last, node);

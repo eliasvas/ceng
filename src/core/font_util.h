@@ -2,7 +2,7 @@
 #define _FONT_UTIL_H__
 #include "base/base_inc.h"
 #include "core/ogl.h" // TODO: This should GO
-#include "r2d.h"
+#include "rend.h"
 
 // TODO: LOD stuff and our own lookup data structure (Glyph_Cache?)
 // TODO: SDF font support
@@ -31,6 +31,6 @@ f32 font_util_measure_text_height(Font_Info *font_info, buf text, f32 scale);
 s64 font_util_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f32 target_width);
 
 // TODO: This should be elsewhere ok?
-void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R2D_Cmd_Chunk_List *cmd_list, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
+void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R_Cmd_Chunk_List *cmd_list, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
 
 #endif

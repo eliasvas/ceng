@@ -3,7 +3,7 @@
 
 #include "base/base_inc.h"
 #include "ogl.h"
-#include "r2d.h"
+#include "rend.h"
 #include "input.h"
 #include "font_util.h"
 #include "json_util.h"

@@ -219,7 +219,7 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
           }
 
           v3 anim_coords = entity_get_anim_coords(e);
-          R2D_Quad quad = (R2D_Quad) {
+          R_Quad quad = (R_Quad) {
               .src_rect = en->e.tex_coords,
               .dst_rect = rec(anim_coords.x * tile_w_px, anim_coords.y * tile_w_px, tile_w_px, tile_w_px),
               .c = col(1,1,1,1),
@@ -227,8 +227,8 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
               .rot_deg = 0,
           };
 
-          R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-          r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+          R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
+          r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
         }
 
         en = en->hash_next;

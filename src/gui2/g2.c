@@ -1,10 +1,10 @@
 #include "g2.h"
 
-void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R2D_Cmd_Chunk_List *cmd_list, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
+void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R_Cmd_Chunk_List *cmd_list, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
 
 static g2_ctx ctx;
 
-void g2_init(Arena *tarena, Font_Info *font, R2D_Cmd_Chunk_List *cmd_list, Input *input) {
+void g2_init(Arena *tarena, Font_Info *font, R_Cmd_Chunk_List *cmd_list, Input *input) {
   ctx.arena = arena_make(MB(256));
   ctx.temp_arena = tarena;
   ctx.g_scale = 1.0;

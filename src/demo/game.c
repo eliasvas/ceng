@@ -37,6 +37,7 @@ void game_init(Game_State *gs) {
   hero->layer = 1;
 
   g2_init(gs->frame_arena, &gs->font, &gs->cmd_list, &gs->input);
+
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -51,13 +52,13 @@ void game_update(Game_State *gs, float dt) {
 
 void game_render(Game_State *gs, float dt) {
   // Push viewport, scissor and camera (we will not change these the whole frame except in UI pass)
-  R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
   entity_store_update_render(gs, dt);
 

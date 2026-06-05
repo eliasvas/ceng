@@ -289,28 +289,28 @@ int main(void) {
 #ifdef SOFT_REND
     {
       TIME_BLOCK("GL_Render");
-      R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
-      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-      cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs.game_viewport };
-      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-      //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs.game_viewport.w/2.0, gs.game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs.zoom, .rot_deg = 0} };
-      cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
-      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-      R2D_Quad quad = (R2D_Quad) {
+      R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
+      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = gs.game_viewport };
+      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(gs.game_viewport.w/2.0, gs.game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs.zoom, .rot_deg = 0} };
+      cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
+      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      R_Quad quad = (R_Quad) {
           .src_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
           .dst_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
           .c = col(1,1,1,1),
           .tex = gs.g_backbuffer,
           .rot_deg = 0,
       };
-      cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-      r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
+      cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
+      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
     }
 #endif
     /////////////////////////////////////////////////////
     // 2.5 Render all the quads (captured in game_render(..))
     /////////////////////////////////////////////////////
-    r2d_render_cmds(gs.frame_arena, &gs.cmd_list);
+    r_render_cmds(gs.frame_arena, &gs.cmd_list);
 
     /////////////////////////////////////////////////////
     // 2.6 Swap the window (Desktop mode only)

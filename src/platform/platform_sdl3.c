@@ -238,7 +238,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     .samples_requested = 0,
   };
 
-  r2d_clear_cmds(&sdl_state->gs.cmd_list);
+  r_clear_cmds(&sdl_state->gs.cmd_list);
 
   // IMPORTANT:
   // These are used by the game, loaded in platform code for now.
@@ -364,26 +364,26 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     ogl_tex_update(&g_backbuffer, (u8*)sdl_state->gs.pixels, sdl_state->gs.wdim.x, sdl_state->gs.wdim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   //}
   Game_State *gs = &sdl_state->gs; 
-  R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  R2D_Quad quad = (R2D_Quad) {
+  R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  R_Quad quad = (R_Quad) {
       .src_rect = rec(0,0,gs->wdim.x,gs->wdim.y),
       .dst_rect = rec(0,0,gs->wdim.x,gs->wdim.y),
       .c = col(1,1,1,0.5),
       .tex = g_backbuffer,
       .rot_deg = 0,
   };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
-  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
+  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
   //---------------------------------------------------------------------------
 
-  // Do platform-side rendering of given commands, with r2d_begin/end + ogl
-  r2d_render_cmds(sdl_state->gs.frame_arena, &sdl_state->gs.cmd_list);
+  // Do platform-side rendering of given commands, with r_begin/end + ogl
+  r_render_cmds(sdl_state->gs.frame_arena, &sdl_state->gs.cmd_list);
 
   // Swap the window
   {
