@@ -3,11 +3,6 @@
 
 // To debug OpenGL error on the fly
 //GLuint e; for (e = glGetError(); e != GL_NO_ERROR; e = glGetError()) { printf("Error: %d\n", e); }
-
-// TODO: Make an API to begin..end drawing, for when we want to draw many stuff with same render bundle state
-// TODO: Maybe we should have views to buffers instead of actual ones right?
-// TODO: viewport and scissor are still OpenGL style, to fix we need to somehow know the screen_dim right?
-
 // https://www.3dgep.com/forward-plus/
 
 #ifdef __cplusplus
@@ -37,8 +32,7 @@ typedef enum {
 #define OGL_MAX_ACTIVE_TEXTURES 4
 #define OGL_MAX_RENDER_TARGET_ATTACHMENTS 4
 
-
-typedef enum{
+typedef enum {
   OGL_BUF_HINT_STATIC, // Data set once
   OGL_BUF_HINT_DYNAMIC, // Data updated occasionally
   OGL_BUF_HINT_STREAM, // Data updated after every use
@@ -75,15 +69,16 @@ typedef struct {
   bool instanced;
 } Ogl_Vert_Attrib;
 
-
 typedef enum {
   OGL_TEX_FILTER_NEAREST,
   OGL_TEX_FILTER_LINEAR,
 } Ogl_Tex_Filter;
 
+// TODO: clamp to border would be GREAT but webgl2 doesnt support it
 typedef enum {
   OGL_TEX_WRAP_MODE_CLAMP_TO_EDGE,
   OGL_TEX_WRAP_MODE_REPEAT,
+  OGL_TEX_WRAP_MODE_MIRRORED_REPEAT,
 } Ogl_Tex_Wrap_Mode;
 
 typedef struct {
@@ -113,6 +108,27 @@ typedef struct {
   u64 impl_state;
 } Ogl_Tex;
 
+typedef enum {
+  OGL_DFUNC_ALWAYS,
+  OGL_DFUNC_NEVER,
+  OGL_DFUNC_LESS,
+  OGL_DFUNC_EQUAL,
+  OGL_DFUNC_LEQUAL,
+  OGL_DFUNC_GREATER,
+  OGL_DFUNC_NOTEQUAL,
+  OGL_DFUNC_GEQUAL,
+} Ogl_Depth_Func;
+
+typedef enum {
+  OGL_DEPTH_WRITE_ENABLED,
+  OGL_DEPTH_WRITE_DISABLED,
+} Ogl_Depth_Write_State;
+
+typedef struct {
+  Ogl_Depth_Func dfunc;
+  Ogl_Depth_Write_State dwrite;
+} Ogl_Depth_State;
+
 typedef struct {
   // This is kind-of a hack, we use Ogl_Vert_Attrib's and don't fill most fields
   Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
@@ -122,7 +138,6 @@ typedef struct {
 
 typedef enum { 
   OGL_DYN_STATE_FLAG_SCISSOR    = (0x1 << 0),
-  OGL_DYN_STATE_FLAG_DEPTH_TEST = (0x1 << 1),
   OGL_DYN_STATE_FLAG_BLEND      = (0x1 << 2),
 } Ogl_Dyn_State_Flags;
 
@@ -172,6 +187,7 @@ typedef struct {
 
   Ogl_Render_Target rt;
 
+  Ogl_Depth_State depth_state;
   Ogl_Dyn_State dyn_state;
 } Ogl_Render_Bundle;
 
@@ -421,6 +437,19 @@ static GLuint ogl_to_gl_tex_filter(Ogl_Tex_Filter filter) {
   }
 }
 
+static GLuint ogl_to_gl_depth_func(Ogl_Depth_Func dfunc) {
+  switch (dfunc) {
+    case OGL_DFUNC_ALWAYS:   return GL_ALWAYS; 
+    case OGL_DFUNC_NEVER:    return GL_NEVER;
+    case OGL_DFUNC_LESS:     return GL_LESS;
+    case OGL_DFUNC_EQUAL:    return GL_EQUAL;
+    case OGL_DFUNC_LEQUAL:   return GL_LEQUAL;
+    case OGL_DFUNC_GREATER:  return GL_GREATER;
+    case OGL_DFUNC_NOTEQUAL: return GL_NOTEQUAL;
+    case OGL_DFUNC_GEQUAL:   return GL_GEQUAL;
+  }
+}
+
 static bool ogl_tex_format_is_floating_point(Ogl_Tex_Format format) {
   switch (format) {
     case OGL_TEX_FORMAT_R32F:    return true;
@@ -653,12 +682,9 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   } else {
     glDisable(GL_SCISSOR_TEST);
   }
-  if (bundle->dyn_state.flags & OGL_DYN_STATE_FLAG_DEPTH_TEST) {
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-  } else {
-    glDisable(GL_DEPTH_TEST);
-  }
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(ogl_to_gl_depth_func(bundle->depth_state.dfunc));
+  glDepthMask((bundle->depth_state.dwrite == OGL_DEPTH_WRITE_ENABLED) ? GL_TRUE : GL_FALSE);
   if (bundle->dyn_state.flags & OGL_DYN_STATE_FLAG_BLEND) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -784,6 +810,10 @@ void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint3
       //[1] = { .name = "tex2", .tex = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT}),},
     },
     //.rt = ogl_render_target_make(gs->screen_dim.x, gs->screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
+    .depth_state = (Ogl_Depth_State) {
+      .dwrite = OGL_DEPTH_WRITE_ENABLED,
+      .dfunc  = OGL_DFUNC_GEQUAL,
+    },
     .dyn_state = (Ogl_Dyn_State){
       .viewport = {0,0,gs.wdim.x,gs.wdim.y},
     }
