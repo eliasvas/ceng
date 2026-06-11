@@ -425,8 +425,9 @@ void ogl_shader_deinit(Ogl_Shader *shader) {
 
 static GLuint ogl_to_gl_wrap_mode(Ogl_Tex_Wrap_Mode mode) {
   switch (mode) {
-    case OGL_TEX_WRAP_MODE_CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
-    case OGL_TEX_WRAP_MODE_REPEAT: return GL_REPEAT;
+    case OGL_TEX_WRAP_MODE_CLAMP_TO_EDGE:   return GL_CLAMP_TO_EDGE;
+    case OGL_TEX_WRAP_MODE_REPEAT:          return GL_REPEAT;
+    case OGL_TEX_WRAP_MODE_MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
   }
 }
 

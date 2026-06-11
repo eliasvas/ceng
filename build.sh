@@ -2,9 +2,9 @@
 set -e
 
 # TODO: Maybe we could add the asset handling here
-#
+# TODO: Maybe compile with -pedantic
 #CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
-CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g"
+CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum -fno-exceptions -fstack-protector -g"
 CC="clang"
 
 # -----------------------------

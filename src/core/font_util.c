@@ -156,13 +156,13 @@ void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R_Cmd_Chunk_L
   cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = clip_rect};
   r_push_cmd(arena, cmd_list, cmd, 256);
   // set camera
-  R_Cam cam = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, };
-  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = cam };
+  R_C2D cam = (R_C2D){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, };
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA_2D, .c = cam };
   r_push_cmd(arena, cmd_list, cmd, 256);
   // push quad
 
 
-  //R2D* text_rend = r_begin(arena, &(R_Cam){ .offset = v2m(0, 0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, }, viewport, clip_rect);
+  //R2D* text_rend = r_begin(arena, &(R_C2D){ .offset = v2m(0, 0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, }, viewport, clip_rect);
 
   rect tr = font_util_calc_text_rect(font_info, text, baseline_pos, scale);
   if (draw_box) {

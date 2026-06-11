@@ -51,7 +51,6 @@ static f32 F32_MIN_POS = 1.175494351e-38F;
 #define MB(val) ((KB(val))*1024LL)
 #define GB(val) ((MB(val))*1024LL)
 #define TB(val) ((GB(val))*1024LL)
-#define PI 3.1415926535897f
 #define align_pow2(val, align) (((val) + ((align) - 1)) & ~(((val) - (val)) + (align) - 1))
 #define align2(val) align_pow2(val,2)
 #define align4(val) align_pow2(val,4)

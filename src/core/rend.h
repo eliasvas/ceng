@@ -59,26 +59,48 @@ struct R_Quad_Array {
   s64 count;
 };
 
+typedef enum {
+  R_CAM_MODE_2D = 0,
+  R_CAM_MODE_3D = 1,
+} R_Cam_Mode;
+
+// Camera2D
+typedef struct {
+  v2 origin;
+  v2 offset;
+  f32 zoom;
+  // TODO: make this rad?
+  f32 rot_deg;
+} R_C2D;
+
+// Camera3D
+typedef struct {
+  v3 pos;
+  v3 pitch;
+  v3 raw;
+  v3 yaw;
+  f32 zoom;
+} R_C3D;
+
 typedef struct {
   R_Quad_Chunk_List list;
   Arena *arena;
   Ogl_Tex gtex;
-} R2D;
 
-// TODO: make the trick with the macro for scale initialization
-typedef struct {
-  v2 origin;
-  v2 offset;
-  float zoom;
-  // TODO: make this rad?
-  float rot_deg;
-} R_Cam;
+  rect viewport;
+  rect scissor;
+  union {
+    R_C2D cam2d;
+    R_C3D cam3d;
+  };
+  R_Cam_Mode c_mode;
+} R2D;
 
 /////////////////////
 // Low-Level (ogl-Based) API
 /////////////////////
 
-R2D* r_begin(Arena *arena, R_Cam *cam, rect viewport, rect clip_rect);
+R2D* r_begin2d(Arena *arena, R_C2D cam, rect viewport, rect clip_rect);
 void r_end(R2D *rend);
 void r_push_quad(R2D *rend, R_Quad q);
 
@@ -90,14 +112,15 @@ void r_push_quad(R2D *rend, R_Quad q);
 typedef enum {
   R_CMD_KIND_SET_VIEWPORT,
   R_CMD_KIND_SET_SCISSOR,
-  R_CMD_KIND_SET_CAMERA,
+  R_CMD_KIND_SET_CAMERA_2D,
+  R_CMD_KIND_SET_CAMERA_3D,
   R_CMD_KIND_ADD_QUAD,
 } R_Cmd_Kind;
 
 typedef struct {
   union {
     rect r;
-    R_Cam c;
+    R_C2D c;
     R_Quad q;
   };
   R_Cmd_Kind kind;

@@ -11,6 +11,16 @@
 // TODO: Maybe this should be just a test-bed and have repos reference this?? idk, I dont want many assets inside this repo maybe
 // TODO: make-prg for building via build.sh and make an argument to only build, also run, and also just export the object files
 
+/*
+  - Batch renderer brainstorming
+
+  r_begin2d(list, viewport, scissor);
+  r_push_cmd(..);
+  r_push_cmd(..);
+  r_push_cmd(..);
+  r_end2d(list);
+
+*/
 
 const char* entity_map= R"(@@@@@@@@@@
 @$#######@
@@ -56,8 +66,8 @@ void game_render(Game_State *gs, float dt) {
   r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
   cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
   r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
-  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
+  //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_C2D){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA_2D, .c = (R_C2D){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
   r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
   entity_store_update_render(gs, dt);

@@ -68,7 +68,7 @@ v3 entity_get_anim_coords(Entity *e) {
     return anim_coords;
   } else if (e->bump_timer_duration > 0.0) { // Wall bump
     f32 delta = (e->bump_timer_elapsed / e->bump_timer_duration);
-    f32 offset = sin_f32(delta * M_PI);
+    f32 offset = sin_f32(delta * MATH_PI);
     f32 bump_scale_factor = 0.1;
     return v3_add(e->target_coords, v3_multf(e->bump_dir, bump_scale_factor*offset));
   } else { // Non-anim entity

@@ -550,7 +550,7 @@ void gui_draw_rect_clip(rect r, v4 c, rect clip_rect) {
   rect viewport = rec(0,0,gctx->screen_dim.x, gctx->screen_dim.y);
 
   /*
-  R2D* r_rend = r_begin(gctx->temp_arena, &(R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, }, viewport, clip_rect);
+  R2D* r_rend = r_begin(gctx->temp_arena, &(R_C2D){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, }, viewport, clip_rect);
   r_push_quad(r_rend, (R_Quad) {
       .dst_rect = r,
       .c = c,
@@ -565,8 +565,8 @@ void gui_draw_rect_clip(rect r, v4 c, rect clip_rect) {
   cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = clip_rect};
   r_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
   // set camera
-  R_Cam cam = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, };
-  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = cam };
+  R_C2D cam = (R_C2D){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0.0, };
+  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA_2D, .c = cam };
   r_push_cmd(gctx->temp_arena, gctx->cmd_list_ref, cmd, 256);
   // push quad
   R_Quad quad = (R_Quad) {

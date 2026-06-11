@@ -125,7 +125,7 @@ void main() {
 // Actual Implementation
 /////////////////////
 
-static b32 r_cam_eq(R_Cam a, R_Cam b) {
+static b32 r_cam_eq(R_C2D a, R_C2D b) {
   return (
       v2_eq(a.origin, b.origin) &&
       v2_eq(a.offset, b.offset) &&
@@ -133,7 +133,7 @@ static b32 r_cam_eq(R_Cam a, R_Cam b) {
       equalf(a.rot_deg, b.rot_deg, 0.001)
       );
 }
-static m4 r_cam_make_view_mat(R_Cam *cam) {
+static m4 r_cam_make_view_mat(R_C2D *cam) {
   m4 rot = m4_rotate(cam->rot_deg, v3m(0,0,1));
   return m4_mult(m4_translate(v3m(cam->offset.x, cam->offset.y, 0)),m4_mult(rot,m4_mult(m4_scale(v3m(cam->zoom, cam->zoom,0)), m4_translate(v3m(-cam->origin.x, -cam->origin.y,0)))));
 }
@@ -176,16 +176,23 @@ static void r_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
   buf sampler_name = arena_sprintf(rend->arena, "u_tex");
   batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = rend->gtex,};
 
+  // set vertex buffer
+  // @BEWARE only for 2D rendering, for 3D we gotta branch
   ogl_buf_update(&batch_bundle.vbos[0].buffer, 0, vertices, count, sizeof(Batch_Vertex));
+
+  // set the ubo (currently only the VP matrix)
+  m4 proj = m4_ortho(0,rend->viewport.w,0,rend->viewport.h,-1,1);
+  m4 view = r_cam_make_view_mat(&rend->cam2d);
+  m4 m = m4_mult(proj, view);
+  ogl_buf_update(&batch_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
+
   ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, count);
   arena_reset_to_pos(rend->arena, arena_prev_pos);
 }
 
-R2D* r_begin(Arena *arena, R_Cam *cam, rect viewport, rect scissor) {
-  m4 proj = m4_ortho(0,viewport.w,0,viewport.h,-1,1);
-  m4 view = r_cam_make_view_mat(cam);
-  m4 m = m4_mult(proj, view);
+R2D* r_begin2d(Arena *arena, R_C2D cam, rect viewport, rect scissor) {
 
+  m4 m = {};
   if (batch_bundle.sp.impl_state == 0) {
     batch_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(batch_vs, batch_fs),
@@ -200,9 +207,7 @@ R2D* r_begin(Arena *arena, R_Cam *cam, rect viewport, rect scissor) {
           },
         },
       },
-      .ubos = {
-        [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) },
-      },
+      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
       .dyn_state = (Ogl_Dyn_State){
         .viewport = viewport,
@@ -228,27 +233,30 @@ R2D* r_begin(Arena *arena, R_Cam *cam, rect viewport, rect scissor) {
           },
         },
       },
-      .ubos = {
-        [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) },
-      },
+      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
       .dyn_state = (Ogl_Dyn_State){
-        .viewport = viewport,
-        .scissor  = scissor,
+//        .viewport = viewport,
+//        .scissor  = scissor,
         .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
       }
     };
   }
 
-
   batch_bundle.dyn_state.viewport = viewport;
   batch_bundle.dyn_state.scissor = scissor;
-
-  ogl_buf_update(&batch_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
+  // Should also happen for batch bundle????
+  //tri_bundle.dyn_state.viewport = viewport;
+  //tri_bundle.dyn_state.scissor = scissor;
 
 
   R2D *rend = arena_push_array(arena, R2D, 1);
   rend->arena = arena;
+
+  rend->viewport = viewport;
+  rend->scissor = scissor;
+  rend->c_mode = R_CAM_MODE_2D;
+  rend->cam2d = cam;
 
   return rend;
 }
@@ -300,7 +308,7 @@ void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list) {
   // TODO: We could make the stacks here, so that we will be able to push/pop these properties
   // We will flush if a new camera/scissor/viewport is inserted and add it for subsequent calls
   R2D *rend = nullptr;  
-  R_Cam c = {}; // Should get the default from the nil stack!! 
+  R_C2D c = {}; // Should get the default from the nil stack!! 
   rect viewport = {}; // Should get the default from the nil stack!!
   rect scissor = {}; // Should get the default from the nil stack!!
   for (R_Cmd_Chunk_Node *node = cmd_list->first; node != nullptr; node = node->next) {
@@ -311,21 +319,21 @@ void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list) {
           if (!rect_equals(viewport, cmd.r)) {
             r_end(rend);
             viewport = cmd.r;
-            rend = r_begin(arena, &c, viewport, scissor);
+            rend = r_begin2d(arena, c, viewport, scissor);
           }
           break;
+        case R_CMD_KIND_SET_CAMERA_2D: 
+          if (!r_cam_eq(c ,cmd.c)) {
+            r_end(rend);
+            c = cmd.c;
+            rend = r_begin2d(arena, c, viewport, scissor);
+           }
+           break;
         case R_CMD_KIND_SET_SCISSOR:
           if (!rect_equals(scissor, cmd.r)) {
             r_end(rend);
             scissor = cmd.r;
-            rend = r_begin(arena, &c, viewport, scissor);
-          }
-          break;
-        case R_CMD_KIND_SET_CAMERA: 
-          if (!r_cam_eq(c ,cmd.c)) {
-            r_end(rend);
-            c = cmd.c;
-            rend = r_begin(arena, &c, viewport, scissor);
+            rend = r_begin2d(arena, c, viewport, scissor);
           }
           break;
         case R_CMD_KIND_ADD_QUAD: 
@@ -335,7 +343,7 @@ void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list) {
           }
           if (rend->gtex.impl_state != 0 && cmd.q.tex.impl_state != rend->gtex.impl_state) {
             r_end(rend);
-            rend = r_begin(arena, &c, viewport, scissor);
+            rend = r_begin2d(arena, c, viewport, scissor);
           }
           rend->gtex = cmd.q.tex;
           r_push_quad(rend, cmd.q);
@@ -364,3 +372,7 @@ void r_push_cmd(Arena *arena, R_Cmd_Chunk_List *cmd_list, R_Cmd cmd, u64 cap) {
   cmd_list->cmd_count+=1;
 }
 
+#if 0
+// TODO
+R2D* r_begin3d(Arena *arena, R_C2D *cam, rect viewport, rect scissor) { }
+#endif
