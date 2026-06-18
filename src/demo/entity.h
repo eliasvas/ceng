@@ -228,7 +228,8 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
           };
 
           R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
-          r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+          //r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+          rn_push_quad(rn_pass_top(), quad);
         }
 
         en = en->hash_next;

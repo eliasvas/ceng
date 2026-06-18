@@ -276,6 +276,7 @@ int main(void) {
 #endif
     {
       TIME_BLOCK("GAME_UPDATERENDER");
+      rn_begin(gs.frame_arena, gs.game_viewport);
       game_api.update(&gs, dt);
       game_api.render(&gs, dt);
 #ifdef SOFT_REND
@@ -311,6 +312,7 @@ int main(void) {
     // 2.5 Render all the quads (captured in game_render(..))
     /////////////////////////////////////////////////////
     r_render_cmds(gs.frame_arena, &gs.cmd_list);
+    rn_flush_all();
 
 
     /////////////////////////////////////////////////////

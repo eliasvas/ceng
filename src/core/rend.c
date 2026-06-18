@@ -1,6 +1,4 @@
 #include "rend.h"
-// maybe add an ifdef and make it configurable or something?
-// TODO: Support for another bundle, BLURS!
 
 // HMMMMMMM
 static Ogl_Render_Bundle batch_bundle = {};
@@ -283,7 +281,6 @@ void r_end(R2D *rend) {
 
         if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count) {
           r_flush(rend, batch_vertices, vertex_idx);
-          vertex_idx = 0;
         }
       }
     }
@@ -372,7 +369,161 @@ void r_push_cmd(Arena *arena, R_Cmd_Chunk_List *cmd_list, R_Cmd cmd, u64 cap) {
   cmd_list->cmd_count+=1;
 }
 
-#if 0
-// TODO
-R2D* r_begin3d(Arena *arena, R_C2D *cam, rect viewport, rect scissor) { }
-#endif
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////
+// New API
+/////////////////////////////////////////////////
+
+static Arena *__frame_arena;
+static RN_Pass_List __render_passes;
+
+void rn_begin(Arena *arena, rect dummy_viewport) {
+  M_ZERO_STRUCT(&__render_passes);
+  __frame_arena = arena;
+
+  // Push a dummy render pass
+  R_C2D dummy_cam = (R_C2D){
+    .offset = v2m(0,0),
+    .origin = v2m(0,0),
+    .zoom = 10.0, 
+    .rot_deg = 0
+  };
+  RN_Pass *top_pass = rn_push_pass(RN_PASS_KIND_2D, dummy_cam, dummy_viewport);
+  assert(top_pass);
+
+  m4 m = {};
+  if (batch_bundle.sp.impl_state == 0) {
+    batch_bundle = (Ogl_Render_Bundle){
+      .sp = ogl_shader_make(batch_vs, batch_fs),
+      .vbos = {
+        [0] = {
+          .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC,nullptr, REND_MAX_INSTANCES, sizeof(Batch_Vertex)),
+          .vattribs = {
+            [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect), .stride = sizeof(Batch_Vertex), .instanced = true, },
+            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect), .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),    .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
+          },
+        },
+      },
+      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
+      //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
+      .dyn_state = (Ogl_Dyn_State){
+//        .viewport = viewport,
+//        .scissor  = scissor,
+        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
+      }
+    };
+    white_tex = ogl_tex_make((u8[]){255,255,255,255}, 1,1, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
+  }
+
+  if (tri_bundle.sp.impl_state == 0) {
+    tri_bundle = (Ogl_Render_Bundle){
+      .sp = ogl_shader_make(batch_vs, batch_fs),
+      .vbos = {
+        [0] = {
+          // the vertex buffer for this should probably be made after r_end has been called
+          .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Tri_Vertex)),
+          .vattribs = {
+            [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, pos), .stride = sizeof(Tri_Vertex), .instanced = false, },
+            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, norm), .stride = sizeof(Tri_Vertex), .instanced = false,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2,  .offset = offsetof(Tri_Vertex, tc),    .stride = sizeof(Tri_Vertex), .instanced = false,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Tri_Vertex, color),  .stride = sizeof(Tri_Vertex), .instanced = false,  },
+          },
+        },
+      },
+      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
+      //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
+      .dyn_state = (Ogl_Dyn_State){
+//        .viewport = viewport,
+//        .scissor  = scissor,
+        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
+      }
+    };
+  }
+}
+
+void rn_flush_all() {
+
+  //R_Quad_Array quads = rend_quad_chunk_list_to_array(rend->arena, &rend->list); if (quads.count) {
+
+  for ( RN_Pass *pass = __render_passes.first; pass != nullptr; pass = pass->next) {
+    R_Quad_Array quads =  (R_Quad_Array) {
+      pass->cmds,
+      pass->cmd_count,
+    };
+    Batch_Vertex *batch_vertices = arena_push_array(__frame_arena, Batch_Vertex,REND_MAX_INSTANCES);
+
+    s64 vertex_idx  = 0;
+    for (s64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
+      R_Quad *q = &quads.arr[quad_idx];
+
+      Batch_Vertex v = (Batch_Vertex){
+        .src_rect = *(v4*)&q->src_rect,
+        .dst_rect = *(v4*)&q->dst_rect,
+        .color = q->c,
+        .rot_rad = DEG2RAD(q->rot_deg),
+      };
+
+      batch_vertices[vertex_idx] = v;
+      vertex_idx+=1;
+
+      if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || quads.arr[quad_idx+1].tex.impl_state != q->tex.impl_state) {
+        //r_flush(rend, batch_vertices, vertex_idx);
+
+        u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
+        buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
+        batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = q->tex,};
+
+        // set vertex buffer
+        // @BEWARE only for 2D rendering, for 3D we gotta branch
+        ogl_buf_update(&batch_bundle.vbos[0].buffer, 0, batch_vertices, vertex_idx, sizeof(Batch_Vertex));
+
+        // set the ubo (currently only the VP matrix)
+        m4 proj = m4_ortho(0,pass->viewport.w,0,pass->viewport.h,-1,1);
+        m4 view = r_cam_make_view_mat(&pass->cam2d);
+        m4 m = m4_mult(proj, view);
+        ogl_buf_update(&batch_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
+
+        ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, vertex_idx);
+        arena_reset_to_pos(__frame_arena, arena_prev_pos);
+        vertex_idx = 0;
+      }
+    }
+  }
+}
+
+RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport) {
+  // 0. Allocate pass
+  RN_Pass *pass = arena_push_array(__frame_arena, RN_Pass, 1);
+
+  // 1. Hook it up to our g_list
+  sll_stack_push(__render_passes.first, pass);
+  __render_passes.count += 1;
+
+  // 2. Fill some info
+  pass->kind = kind;
+  pass->viewport = viewport;
+  pass->cam2d = cam2d;
+
+  return pass;
+}
+
+// TODO: Should become better
+RN_Pass *rn_pass_top() {
+  return __render_passes.first;
+}
+
+void rn_push_quad(RN_Pass *pass, R_Quad q) {
+  pass->cmds[pass->cmd_count++] = q; 
+}
+
+

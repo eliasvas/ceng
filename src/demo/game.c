@@ -12,16 +12,17 @@
 // TODO: make-prg for building via build.sh and make an argument to only build, also run, and also just export the object files
 
 /*
-  - Batch renderer brainstorming
-
-  r_begin2d(list, viewport, scissor);
-  r_push_cmd(..);
-  r_push_cmd(..);
-  r_push_cmd(..);
-  r_end2d(list);
-
+Simple game idea:
+3d navmesh where player pathfinds
+the world is hit with missiles from the top he has
+to navigate to not get BLASTED there is screen shake and particles.
 */
 
+/*
+r_pass_list
+r_push_pass(..)
+r_pop_pass() ??
+*/
 const char* entity_map= R"(@@@@@@@@@@
 @$#######@
 @##$$####@

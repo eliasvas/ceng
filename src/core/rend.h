@@ -104,10 +104,6 @@ R2D* r_begin2d(Arena *arena, R_C2D cam, rect viewport, rect clip_rect);
 void r_end(R2D *rend);
 void r_push_quad(R2D *rend, R_Quad q);
 
-/////////////////////
-// High-Level (Command-Based) API
-/////////////////////
-
 // TODO: Maybe make these 'push' to a stack instead of 'set'
 typedef enum {
   R_CMD_KIND_SET_VIEWPORT,
@@ -146,5 +142,42 @@ struct R_Cmd_Chunk_List {
 void r_push_cmd(Arena *arena, R_Cmd_Chunk_List *cmd_list, R_Cmd cmd, u64 cap);
 void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list);
 void r_clear_cmds(R_Cmd_Chunk_List *cmd_list);
+
+
+typedef enum {
+  RN_PASS_KIND_2D,
+  RN_PASS_KIND_3D, // TBA
+} RN_Pass_Kind;
+
+typedef R_Cmd RN_Cmd;
+
+typedef struct RN_Pass RN_Pass;
+struct RN_Pass {
+#define RN_MAX_CMD 256
+  // TODO: Chunked array as well right?
+  R_Quad cmds[RN_MAX_CMD];
+  s32 cmd_count;
+  RN_Pass_Kind kind;
+
+  R_C2D cam2d;
+  rect viewport;
+
+
+  RN_Pass *next;
+  RN_Pass *prev;
+};
+
+typedef struct {
+  RN_Pass *first;
+//  RN_Pass *last;
+  s32 count;
+} RN_Pass_List;
+
+// NEW API
+void rn_begin(Arena *arena, rect dummy_viewport);
+RN_Pass *rn_pass_top();
+void rn_flush_all();
+RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport);
+void rn_push_quad(RN_Pass *pass, R_Quad q);
 
 #endif
