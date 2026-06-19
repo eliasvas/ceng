@@ -271,9 +271,6 @@ int main(void) {
     /////////////////////////////////////////////////////
     // 2.3 Perform update + render calling the game lib
     /////////////////////////////////////////////////////
-#ifdef SOFT_REND
-    gs.pixels = arena_push(gs.frame_arena, sizeof(u32)*gs.wdim.x*gs.wdim.y);
-#endif
     {
       TIME_BLOCK("GAME_UPDATERENDER");
       rn_begin(gs.frame_arena, gs.game_viewport);
@@ -285,35 +282,9 @@ int main(void) {
     }
 
     /////////////////////////////////////////////////////
-    // 2.4 Render the software rendered texture
+    // 2.5 Render all the stuff (captured in game_render(..))
     /////////////////////////////////////////////////////
-#ifdef SOFT_REND
-    {
-      TIME_BLOCK("GL_Render");
-      R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
-      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-      cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = gs.game_viewport };
-      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-      //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(gs.game_viewport.w/2.0, gs.game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs.zoom, .rot_deg = 0} };
-      cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
-      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-      R_Quad quad = (R_Quad) {
-          .src_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
-          .dst_rect = rec(0,0,gs.wdim.x,gs.wdim.y),
-          .c = col(1,1,1,1),
-          .tex = gs.g_backbuffer,
-          .rot_deg = 0,
-      };
-      cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
-      r_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-    }
-#endif
-    /////////////////////////////////////////////////////
-    // 2.5 Render all the quads (captured in game_render(..))
-    /////////////////////////////////////////////////////
-    r_render_cmds(gs.frame_arena, &gs.cmd_list);
     rn_flush_all();
-
 
     /////////////////////////////////////////////////////
     // 2.6 Swap the window (Desktop mode only)

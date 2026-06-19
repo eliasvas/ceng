@@ -1,15 +1,14 @@
 #include "g2.h"
 
-void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R_Cmd_Chunk_List *cmd_list, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
+void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
 
 static g2_ctx ctx;
 
-void g2_init(Arena *tarena, Font_Info *font, R_Cmd_Chunk_List *cmd_list, Input *input) {
+void g2_init(Arena *tarena, Font_Info *font, Input *input) {
   ctx.arena = arena_make(MB(256));
   ctx.temp_arena = tarena;
   ctx.g_scale = 1.0;
   ctx.font = font;
-  ctx.cmd_list = cmd_list;
   ctx.input = input;
 }
 
@@ -46,7 +45,7 @@ b32 g2_button(buf label, v2 coords) {
   if (is_hot) color_mod = 0.7;
   if (is_active) color_mod = 1.0;
 
-  font_util_debug_draw_text(ctx.font, ctx.temp_arena, ctx.cmd_list, ctx.viewport , ctx.viewport, label, v2m(coords.x, coords.y), ctx.g_scale, col(color_mod, color_mod, color_mod,1), true);
+  font_util_debug_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, label, v2m(coords.x, coords.y), ctx.g_scale, col(color_mod, color_mod, color_mod,1), true);
   return res;
 }
 

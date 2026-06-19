@@ -34,6 +34,14 @@ typedef struct {
   Ogl_Tex tex;
 } R_Quad;
 
+typedef struct R_Quad_Array R_Quad_Array;
+struct R_Quad_Array {
+  R_Quad *arr;
+  s64 count;
+};
+
+
+#if 0
 typedef struct R_Quad_Chunk_Node R_Quad_Chunk_Node;
 struct R_Quad_Chunk_Node {
   R_Quad_Chunk_Node *next;
@@ -53,11 +61,21 @@ struct R_Quad_Chunk_List {
   s64 quad_count;
 };
 
-typedef struct R_Quad_Array R_Quad_Array;
-struct R_Quad_Array {
-  R_Quad *arr;
-  s64 count;
-};
+
+typedef struct {
+  R_Quad_Chunk_List list;
+  Arena *arena;
+  Ogl_Tex gtex;
+
+  rect viewport;
+  rect scissor;
+  union {
+    R_C2D cam2d;
+    R_C3D cam3d;
+  };
+  R_Cam_Mode c_mode;
+} R2D;
+#endif
 
 typedef enum {
   R_CAM_MODE_2D = 0,
@@ -82,28 +100,15 @@ typedef struct {
   f32 zoom;
 } R_C3D;
 
-typedef struct {
-  R_Quad_Chunk_List list;
-  Arena *arena;
-  Ogl_Tex gtex;
-
-  rect viewport;
-  rect scissor;
-  union {
-    R_C2D cam2d;
-    R_C3D cam3d;
-  };
-  R_Cam_Mode c_mode;
-} R2D;
-
 /////////////////////
 // Low-Level (ogl-Based) API
 /////////////////////
 
-R2D* r_begin2d(Arena *arena, R_C2D cam, rect viewport, rect clip_rect);
-void r_end(R2D *rend);
-void r_push_quad(R2D *rend, R_Quad q);
+//R2D* r_begin2d(Arena *arena, R_C2D cam, rect viewport, rect clip_rect);
+//void r_end(R2D *rend);
+//void r_push_quad(R2D *rend, R_Quad q);
 
+#if 0
 // TODO: Maybe make these 'push' to a stack instead of 'set'
 typedef enum {
   R_CMD_KIND_SET_VIEWPORT,
@@ -138,18 +143,17 @@ struct R_Cmd_Chunk_List {
   u64 node_count;
   u64 cmd_count;
 };
+#endif
 
-void r_push_cmd(Arena *arena, R_Cmd_Chunk_List *cmd_list, R_Cmd cmd, u64 cap);
-void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list);
-void r_clear_cmds(R_Cmd_Chunk_List *cmd_list);
+//void r_push_cmd(Arena *arena, R_Cmd_Chunk_List *cmd_list, R_Cmd cmd, u64 cap);
+//void r_render_cmds(Arena *arena, R_Cmd_Chunk_List *cmd_list);
+//void r_clear_cmds(R_Cmd_Chunk_List *cmd_list);
 
 
 typedef enum {
   RN_PASS_KIND_2D,
   RN_PASS_KIND_3D, // TBA
 } RN_Pass_Kind;
-
-typedef R_Cmd RN_Cmd;
 
 typedef struct RN_Pass RN_Pass;
 struct RN_Pass {
@@ -169,13 +173,14 @@ struct RN_Pass {
 
 typedef struct {
   RN_Pass *first;
-//  RN_Pass *last;
+  RN_Pass *last;
   s32 count;
 } RN_Pass_List;
 
 // NEW API
 void rn_begin(Arena *arena, rect dummy_viewport);
-RN_Pass *rn_pass_top();
+RN_Pass *rn_pass_front();
+RN_Pass *rn_pass_back();
 void rn_flush_all();
 RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport);
 void rn_push_quad(RN_Pass *pass, R_Quad q);

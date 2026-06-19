@@ -170,6 +170,17 @@ Entity *entity_store_find(Game_State *gs, v3 coords) {
 }
 
 void entity_store_update_render(Game_State *gs, f32 dt) {
+
+  // TODO: viewport top (stack)
+  R_C2D entity_cam = (R_C2D){
+    .offset = v2m(0,0),
+    .origin = v2m(0,0),
+    .zoom = 10.0, 
+    .rot_deg = 0
+  };
+  RN_Pass *entity_pass = rn_push_pass(RN_PASS_KIND_2D, entity_cam, gs->game_viewport);
+  //RN_Pass *entity_pass = rn_pass_front();
+
   // TODO: layer range should be inside entity_store
   for (s32 layer = 0; layer <=1; layer+=1) {
     for (s64 hash_slot = 0; hash_slot < entity_store.slot_count; hash_slot+=1) {
@@ -227,9 +238,9 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
               .rot_deg = 0,
           };
 
-          R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
+          //R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_ADD_QUAD, .q = quad};
           //r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-          rn_push_quad(rn_pass_top(), quad);
+          rn_push_quad(entity_pass, quad);
         }
 
         en = en->hash_next;

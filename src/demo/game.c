@@ -6,23 +6,6 @@
 #include "gui2/g2.h"
 #include "entity.h"
 
-// TODO: Move to a better 2D renderer that can do arbitrary polygons not just AABBS rotated?
-// TODO: lookup a good fzf pipeline to be able to search
-// TODO: Maybe this should be just a test-bed and have repos reference this?? idk, I dont want many assets inside this repo maybe
-// TODO: make-prg for building via build.sh and make an argument to only build, also run, and also just export the object files
-
-/*
-Simple game idea:
-3d navmesh where player pathfinds
-the world is hit with missiles from the top he has
-to navigate to not get BLASTED there is screen shake and particles.
-*/
-
-/*
-r_pass_list
-r_push_pass(..)
-r_pop_pass() ??
-*/
 const char* entity_map= R"(@@@@@@@@@@
 @$#######@
 @##$$####@
@@ -47,7 +30,7 @@ void game_init(Game_State *gs) {
 
   hero->layer = 1;
 
-  g2_init(gs->frame_arena, &gs->font, &gs->cmd_list, &gs->input);
+  g2_init(gs->frame_arena, &gs->font, &gs->input);
 
 }
 
@@ -62,6 +45,7 @@ void game_update(Game_State *gs, float dt) {
 
 
 void game_render(Game_State *gs, float dt) {
+#if 0
   // Push viewport, scissor and camera (we will not change these the whole frame except in UI pass)
   R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
   r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
@@ -70,6 +54,7 @@ void game_render(Game_State *gs, float dt) {
   //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_C2D){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
   cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA_2D, .c = (R_C2D){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
   r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+#endif
 
   entity_store_update_render(gs, dt);
 
