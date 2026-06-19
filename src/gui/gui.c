@@ -388,11 +388,11 @@ void gui_layout_calc_constant_sizes(Gui_Box *root, Gui_Axis axis) {
   if (root->pref_size[axis].kind == GUI_SIZE_KIND_TEXT_CONTENT) {
       f32 padding = root->pref_size[axis].value;
       f32 text_size = 0;
-      // TODO: make a font_util_measure_text_dim? :)
+      // TODO: make a bfont_measure_text_dim? :)
       if (axis == GUI_AXIS_X) {
-        text_size = font_util_measure_text_width(state->font, root->s, root->font_scale);
+        text_size = bfont_measure_text_width(state->font, root->s, root->font_scale);
       } else {
-        text_size = font_util_measure_text_height(state->font, root->s, root->font_scale);
+        text_size = bfont_measure_text_height(state->font, root->s, root->font_scale);
       }
       root->fixed_size.raw[axis] = padding + text_size;
   }
@@ -554,13 +554,13 @@ void gui_draw_text_clip(rect r, v4 c, f32 font_scale, Gui_Text_Alignment text_al
   Gui_Context *gctx = gui_get_ctx();
   buf s_without_doublehash = buf_lcut(s, MAKE_STR("##"));
 
-  rect label_rect = font_util_calc_text_rect(g_gui_ctx.font, s_without_doublehash, v2m(0,0), font_scale);
+  rect label_rect = bfont_calc_text_rect(g_gui_ctx.font, s_without_doublehash, v2m(0,0), font_scale);
   rect fitted_rect = rect_fit_inside(label_rect, r, (Rect_Fit_Mode)text_alignment);
   v2 top_left = v2m(fitted_rect.x, fitted_rect.y);
   v2 baseline = v2_sub(top_left, label_rect.p0);
 
   rect viewport = rec(0,0,gctx->screen_dim.x, gctx->screen_dim.y);
-  font_util_debug_draw_text(gctx->font, gctx->temp_arena, viewport, clip_rect, s_without_doublehash, baseline, font_scale, c, false);
+  bfont_draw_text(gctx->font, gctx->temp_arena, viewport, clip_rect, s_without_doublehash, baseline, font_scale, c, false);
 }
 
 
@@ -857,10 +857,10 @@ Gui_Signal gui_multi_line_text(buf s, buf text) {
   buf mtext = text;
 
   while (max_x && mtext.count) {
-    s64 glyphs_needed = font_util_count_glyphs_until_width(gui_get_ctx()->font, mtext, gui_top_font_scale(), max_x);
+    s64 glyphs_needed = bfont_count_glyphs_until_width(gui_get_ctx()->font, mtext, gui_top_font_scale(), max_x);
     glyphs_needed = maximum(glyphs_needed, 1); // in case no glyphs fit
     buf substr = buf_make(mtext.data, glyphs_needed);
-    u32 text_h = font_util_measure_text_height(gui_get_ctx()->font, substr, gui_top_font_scale());
+    u32 text_h = bfont_measure_text_height(gui_get_ctx()->font, substr, gui_top_font_scale());
                          
     gui_set_next_pref_size(GUI_AXIS_X, (Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1.0, 0.0});
     gui_set_next_pref_size(GUI_AXIS_Y, (Gui_Size){.kind = GUI_SIZE_KIND_PIXELS, text_h, 0.0});

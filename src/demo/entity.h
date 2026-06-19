@@ -180,6 +180,7 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
   };
   RN_Pass *entity_pass = rn_push_pass(RN_PASS_KIND_2D, entity_cam, gs->game_viewport);
   //RN_Pass *entity_pass = rn_pass_front();
+  //assert(entity_pass->prev == rn_pass_front());
 
   // TODO: layer range should be inside entity_store
   for (s32 layer = 0; layer <=1; layer+=1) {

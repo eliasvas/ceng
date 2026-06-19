@@ -142,7 +142,7 @@ int main(void) {
   //gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
   gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
   gs.atlas_sprites_per_dim = v2m(16,10);
-  gs.font = font_util_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
+  gs.font = bfont_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
   stbi_image_free(image.data);
 #ifdef SOFT_REND
   gs.g_backbuffer = ogl_tex_make(nullptr,0,0,OGL_TEX_FORMAT_RGBA8U,(Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});

@@ -45,22 +45,11 @@ void game_update(Game_State *gs, float dt) {
 
 
 void game_render(Game_State *gs, float dt) {
-#if 0
-  // Push viewport, scissor and camera (we will not change these the whole frame except in UI pass)
-  R_Cmd cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
-  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
-  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  //cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA, .c = (R_C2D){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
-  cmd = (R_Cmd){ .kind = R_CMD_KIND_SET_CAMERA_2D, .c = (R_C2D){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
-  r_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-#endif
 
   entity_store_update_render(gs, dt);
-
   // Perform a reload if reset button is clicked
   g2_begin(gs->game_viewport);
-  if (g2_button(MAKE_STR("reset"), v2m(20,20))) {
+  if (g2_button(MAKE_STR("Reset[p]"), v2m(20,20))) {
     gs->request_reload = true;
   }
   g2_end();

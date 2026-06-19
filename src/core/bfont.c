@@ -2,7 +2,7 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
 
-#include "font_util.h"
+#include "bfont.h"
 
 #include "base/base_inc.h"
 #include "ogl.h"
@@ -13,15 +13,15 @@ static const u8 default_font_data[] = {
 #embed "../../data/ProggyClean.ttf"
 };
 
-Font_Info font_util_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
+Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
   Font_Info font = {};
 
   font.first_codepoint = 32; // ' ' 
   font.last_codepoint = 127; // '~'
-  font.glyph_count = font.last_codepoint - font.first_codepoint + 1; 
+  font.glyph_count = font.last_codepoint - font.first_codepoint; 
+  font.glyph_height_in_px = glyph_height_in_px;
 
   u8 *font_bitmap = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height);
-
   stbtt_packedchar *packed_chars = arena_push_array(arena, stbtt_packedchar, font.glyph_count);
   stbtt_aligned_quad *aligned_quads = arena_push_array(arena, stbtt_aligned_quad, font.glyph_count);
 
@@ -31,32 +31,38 @@ Font_Info font_util_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32
   stbtt_PackFontRange(&pctx, default_font_data, 0, glyph_height_in_px, font.first_codepoint, font.glyph_count, packed_chars);
   stbtt_PackEnd(&pctx);
 
-  for (u32 glyph_idx = 0; glyph_idx < font.glyph_count; ++glyph_idx) {
+  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
     f32 trash_x, trash_y;
     stbtt_GetPackedQuad(packed_chars, atlas_width, atlas_height, glyph_idx, &trash_x, &trash_y, &aligned_quads[glyph_idx], 1);
   }
 
   // Calculate our internal font metrics, which we will use in-engine for font rendering
-  for (u32 glyph_idx = 0; glyph_idx < font.glyph_count; ++glyph_idx) {
+  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
+    Glyph_Info *font_glyph = &font.glyphs[glyph_idx];
+
     stbtt_packedchar pc = packed_chars[glyph_idx];
-    stbtt_aligned_quad ac = aligned_quads[glyph_idx];
-    font.glyphs[glyph_idx].r = (rect){
+    font_glyph->r = (rect){
       .x = pc.x0,
       .y = pc.y0,
       .w = pc.x1 - pc.x0,
       .h = pc.y1 - pc.y0,
     };
+    font_glyph->off = v2m(pc.xoff, pc.yoff);
+    font_glyph->xadvance = pc.xadvance;
+
+    // Is this needed?
+    font_glyph->dim = v2m(pc.x1 - pc.x0, pc.y1 - pc.y0);
 
     // w/h = atlas_width atlas_height
     // NOTE: Not sure if this one is needed..
-    font.glyphs[glyph_idx].tc = (rect){
+    stbtt_aligned_quad ac = aligned_quads[glyph_idx];
+    font_glyph->tc = (rect){
       .x = ac.s0,
       .y = ac.t0,
       .w = ac.s1 - ac.s0,
       .h = ac.t1 - ac.t0,
     };
-    font.glyphs[glyph_idx].off = v2m(pc.xoff, pc.yoff);
-    font.glyphs[glyph_idx].xadvance = pc.xadvance;
+    printf("Loaded glyph=[%c] off=(%f, %f) dim=(%f, %f) xadv=(%.1f)\n", ' ' + glyph_idx, font_glyph->off.x, font_glyph->off.y, font_glyph->dim.x, font_glyph->dim.y, font_glyph->xadvance);
   }
 
   // @HACK, This is because stbtt_Pack API is made to pack glyphs so the SPACE on has
@@ -69,9 +75,14 @@ Font_Info font_util_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32
   stbtt_GetCodepointHMetrics(&font_info, font.first_codepoint + space_glyph_idx, &advance, &lsb);
   font.glyphs[space_glyph_idx].xadvance = advance * scale;
  
+  s32 ascent, descent, line_gap;
+  stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
+  font.ascent_px= (f32)ascent*scale;
+  font.descent_px = (f32)descent*scale;
+  font.line_gap_px = (f32)line_gap*scale;
 
   // Transform to OpenGL-style texture (mainly by convention, I like the upright view on renderdoc) + make the actual texture
-  font_util_flip_bitmap(font_bitmap, atlas_width, atlas_height);
+  bfont_flip_bitmap(font_bitmap, atlas_width, atlas_height);
 
   // Transform to RGBA
   u8 *font_bitmap_rgba = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height*4);
@@ -88,9 +99,9 @@ Font_Info font_util_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32
   return font;
 }
 
-void font_util_flip_bitmap(u8 *bitmap, u32 width, u32 height) {
-  for (u32 y = 0; y < height/2; ++y) {
-    for (u32 x = 0; x < width; ++x) {
+void bfont_flip_bitmap(u8 *bitmap, s32 width, s32 height) {
+  for (s32 y = 0; y < height/2; ++y) {
+    for (s32 x = 0; x < width; ++x) {
       u8 temp = bitmap[x + y * width];
       bitmap[x+y*width] = bitmap[x+(height-y)*width];
       bitmap[x+(height-y)*width] = temp;
@@ -98,45 +109,46 @@ void font_util_flip_bitmap(u8 *bitmap, u32 width, u32 height) {
   }
 }
 
-rect font_util_calc_text_rect(Font_Info *font_info, buf text, v2 baseline_pos, f32 scale) {
+rect bfont_calc_text_rect(Font_Info *font_info, buf text, v2 pos, f32 scale) {
   u32 glyph_count = text.count;
   if (glyph_count == 0) return (rect){};
 
   Glyph_Info first_glyph = font_info->glyphs[text.data[0] - font_info->first_codepoint];
   rect r = (rect) {
-    .x = baseline_pos.x,// + first_glyph.off.x*scale,
-    .y = baseline_pos.y,// + first_glyph.off.y*scale,
-    .w = first_glyph.r.w*scale,
-    .h = first_glyph.r.h*scale,
+    .x = pos.x,
+    .y = pos.y,// + first_glyph.off.y*scale,
+    .w = first_glyph.dim.x*scale,
+    .h = first_glyph.dim.y*scale,
   };
 
   for (u32 glyph_idx = 0; glyph_idx < glyph_count; ++glyph_idx) {
     Glyph_Info glyph = font_info->glyphs[text.data[glyph_idx] - font_info->first_codepoint];
     rect r1 = (rect) {
-      .x = baseline_pos.x,// + glyph.off.x*scale,
-      .y = baseline_pos.y,// + glyph.off.y*scale,
-      .w = glyph.r.w*scale,
-      .h = glyph.r.h*scale,
+      .x = pos.x + glyph.off.x*scale,
+      .y = pos.y,// + glyph.off.y*scale,
+      .w = glyph.dim.x*scale,
+      //.h = glyph.dim.y*scale,
+      .h = font_info->glyph_height_in_px,
     };
-    baseline_pos.x += glyph.xadvance*scale;
+    pos.x += glyph.xadvance*scale;
     r = rect_calc_bounding_rect(r, r1);
   }
 
   return r;
 }
 
-f32 font_util_measure_text_width(Font_Info *font_info, buf text, f32 scale) {
-  return font_util_calc_text_rect(font_info, text, v2m(0,0), scale).w;
+f32 bfont_measure_text_width(Font_Info *font_info, buf text, f32 scale) {
+  return bfont_calc_text_rect(font_info, text, v2m(0,0), scale).w;
 }
 
-f32 font_util_measure_text_height(Font_Info *font_info, buf text, f32 scale) {
-  return font_util_calc_text_rect(font_info, text, v2m(0,0), scale).h;
+f32 bfont_measure_text_height(Font_Info *font_info, buf text, f32 scale) {
+  return bfont_calc_text_rect(font_info, text, v2m(0,0), scale).h;
 }
 
-s64 font_util_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f32 target_width) {
+s64 bfont_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f32 target_width) {
   s64 glyph_count = 0;
   while (glyph_count < text.count) {
-    f32 text_w = font_util_measure_text_width(font_info, buf_make(text.data, glyph_count), scale);
+    f32 text_w = bfont_measure_text_width(font_info, buf_make(text.data, glyph_count), scale);
     if (text_w >= target_width) {
       if (glyph_count > 0) glyph_count -= 1;
       break;
@@ -147,24 +159,26 @@ s64 font_util_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale
   return glyph_count;
 }
 
-void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box) {
-  rect tr = font_util_calc_text_rect(font_info, text, baseline_pos, scale);
-  if (draw_box) {
+void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 pos, f32 scale, color col, bool draw_bounding_box) {
+  rect tr = bfont_calc_text_rect(font_info, text, pos, scale);
+  if (draw_bounding_box) {
     R_Quad quad = (R_Quad) {
         .dst_rect = tr,
         .c = col(0.9,0.4,0.4,1.0),
         .tex = {0},
     };
-    rn_push_quad(rn_pass_back(), quad);
+    rn_push_quad(rn_pass_front(), quad);
   }
 
-  for (s32 i = 0; i < text.count; ++i) {
+  v2 baseline_pos = pos;
+  baseline_pos.y -= font_info->descent_px * scale;
+  for (s32 i = 0; i < text.count; i+=1) {
     u8 c = text.data[i];
     Glyph_Info metrics = font_info->glyphs[c - font_info->first_codepoint];
     f32 atlas_height = font_info->atlas.height;
     R_Quad quad = (R_Quad) {
-        .dst_rect = rec(baseline_pos.x,//+metrics.off.x*scale,
-                        baseline_pos.y,//+metrics.off.y*scale, 
+        .dst_rect = rec(baseline_pos.x + ((i==0)?0:metrics.off.x*scale),
+                        baseline_pos.y - (metrics.off.y*scale + metrics.r.h*scale),//+metrics.off.y*scale, 
                         metrics.r.w*scale,
                         metrics.r.h*scale
         ),
@@ -176,9 +190,7 @@ void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, rect viewport
         .c = col,
         .tex = font_info->atlas,
     };
-    rn_push_quad(rn_pass_back(), quad);
+    rn_push_quad(rn_pass_front(), quad);
     baseline_pos.x += metrics.xadvance*scale;
   }
 }
-
-

@@ -1,6 +1,7 @@
 #include "rend.h"
 
 // HMMMMMMM
+// Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle batch_bundle = {};
 static Ogl_Render_Bundle tri_bundle = {};
 static Ogl_Tex white_tex = {};
@@ -253,7 +254,7 @@ RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport) {
   RN_Pass *pass = arena_push_array(__frame_arena, RN_Pass, 1);
 
   // 1. Hook it up to our g_list
-  sll_queue_push(__render_passes.first, __render_passes.last, pass);
+  dll_push_back(__render_passes.first, __render_passes.last, pass);
   __render_passes.count += 1;
 
   // 2. Fill some info
