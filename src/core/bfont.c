@@ -62,7 +62,7 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
       .w = ac.s1 - ac.s0,
       .h = ac.t1 - ac.t0,
     };
-    printf("Loaded glyph=[%c] off=(%f, %f) dim=(%f, %f) xadv=(%.1f)\n", ' ' + glyph_idx, font_glyph->off.x, font_glyph->off.y, font_glyph->dim.x, font_glyph->dim.y, font_glyph->xadvance);
+    //printf("Loaded glyph=[%c] off=(%f, %f) dim=(%f, %f) xadv=(%.1f)\n", ' ' + glyph_idx, font_glyph->off.x, font_glyph->off.y, font_glyph->dim.x, font_glyph->dim.y, font_glyph->xadvance);
   }
 
   // @HACK, This is because stbtt_Pack API is made to pack glyphs so the SPACE on has

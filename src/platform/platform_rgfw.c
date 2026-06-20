@@ -25,6 +25,9 @@
 #define INPUT_IMPLEMENTATION
 #include "core/input.h"
 
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio/miniaudio.h"
+
 #include "game.h"
 
 #define RGFW_DEBUG
@@ -35,6 +38,12 @@
 #define RGFW_DEBUG
 #define GL_SILENCE_DEPRECATION
 #include <RGFW/RGFW.h>
+
+ma_engine ma_eng;
+// Currently we just export this to the game layer, there should be better way
+void platform_play_sound(const char *sound) {
+  ma_engine_play_sound(&ma_eng, sound, nullptr);
+}
 
 u64 platform_read_cpu_timer() {
   return get_time_ns();
@@ -125,9 +134,20 @@ int main(void) {
       return -1;
   }
 #endif // !(ARCH_WASM64 || ARCH_WASM32)
+  /////////////////////////////////////////////////////
+  // 1. miniaudio initialization
+  /////////////////////////////////////////////////////
+  ma_result result;
+  ma_engine_config engineConfig;
+  engineConfig = ma_engine_config_init();
+  result = ma_engine_init(&engineConfig, &ma_eng);
+  if (result != MA_SUCCESS) {
+      return result;
+  }
+  ma_engine_set_volume(&ma_eng, 0.05);
 
   /////////////////////////////////////////////////////
-  // 1. Game_State initialization
+  // 2. Game_State initialization
   /////////////////////////////////////////////////////
   gs.persistent_arena = arena_make(GB(1));
   gs.frame_arena = arena_make(MB(256));
@@ -152,7 +172,7 @@ int main(void) {
   game_api.init(&gs);
 
   /////////////////////////////////////////////////////
-  // 2. Game Loop
+  // 3. Game Loop
   /////////////////////////////////////////////////////
   while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
     frame_count+=1;
@@ -164,7 +184,7 @@ int main(void) {
 
 
     /////////////////////////////////////////////////////
-    // 2.1 Reloading logic (happens once every second/target_frames)
+    // 3.1 Reloading logic (happens once every second/target_frames)
     /////////////////////////////////////////////////////
 #if !(ARCH_WASM64 || ARCH_WASM32) 
     if (frame_count % 60 == 0) {
@@ -206,7 +226,7 @@ int main(void) {
 #endif // !(ARCH_WASM64 || ARCH_WASM32) 
 
     /////////////////////////////////////////////////////
-    // 2.2 Handling incoming events for the frame
+    // 3.2 Handling incoming events for the frame
     /////////////////////////////////////////////////////
     RGFW_event event;
     while (RGFW_window_checkEvent(win, &event)) {
@@ -269,7 +289,7 @@ int main(void) {
     input_process_events(&gs.input);
 
     /////////////////////////////////////////////////////
-    // 2.3 Perform update + render calling the game lib
+    // 3.3 Perform update + render calling the game lib
     /////////////////////////////////////////////////////
     {
       TIME_BLOCK("GAME_UPDATERENDER");
@@ -282,12 +302,12 @@ int main(void) {
     }
 
     /////////////////////////////////////////////////////
-    // 2.5 Render all the stuff (captured in game_render(..))
+    // 3.4 Render all the stuff (captured in game_render(..))
     /////////////////////////////////////////////////////
     rn_flush_all();
 
     /////////////////////////////////////////////////////
-    // 2.6 Swap the window (Desktop mode only)
+    // 3.5 Swap the window (Desktop mode only)
     /////////////////////////////////////////////////////
 #if !(ARCH_WASM64 || ARCH_WASM32)
   // Swap the window 
@@ -298,7 +318,7 @@ int main(void) {
 #endif // !(ARCH_WASM64 || ARCH_WASM32)
 
     /////////////////////////////////////////////////////
-    // 2.7 EOF Timing stuff (dt/sleep/timecalc)
+    // 3.6 EOF Timing stuff (dt/sleep/timecalc)
     /////////////////////////////////////////////////////
     input_end_frame(&gs.input);
     u64 frame_end = platform_read_cpu_timer();
@@ -319,7 +339,7 @@ int main(void) {
   }
 
   /////////////////////////////////////////////////////
-  // 3. Print profiler info + cleanup (optional)
+  // 4. Print profiler info + cleanup (optional)
   /////////////////////////////////////////////////////
   profiler_end_and_print();
   RGFW_window_close(win);

@@ -1,6 +1,7 @@
 #include "game.h"
 
-// TWEEN POSITION TWEEN POSITION TWEEN POSITION
+// HACK
+extern void platform_play_sound(const char *sound);
 
 typedef enum {
   ENTITY_KIND_HERO,
@@ -205,12 +206,14 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
               if ( !v3_eq(e->target_coords, next_tile_coords) && entity_is_still(e)) {
                 e->start_coords = e->target_coords;
                 if ( target_tile->kind != ENTITY_KIND_WALL) {
+                  platform_play_sound("data/walk.mp3");
                   e->bump_timer_duration = 0.0f;
                   e->bump_timer_elapsed= 0.0f;
                   e->move_timer_elapsed = 0.0f;
                   e->move_timer_duration = 0.1f;
                   e->target_coords = next_tile_coords;
                 } else {
+                  platform_play_sound("data/bump.mp3");
                   e->move_timer_duration = 0.0f;
                   e->move_timer_elapsed= 0.0f;
                   e->bump_timer_elapsed = 0.0f;

@@ -4,3 +4,6 @@
 [submodule "ext/RGFW"]
 	path = ext/RGFW
 	url = https://github.com/ColleagueRiley/RGFW.git
+[submodule "ext/miniaudio"]
+	path = ext/miniaudio
+	url = https://github.com/mackron/miniaudio

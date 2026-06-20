@@ -6,6 +6,8 @@
 #include "gui2/g2.h"
 #include "entity.h"
 
+extern void platform_play_sound(const char *sound);
+
 const char* entity_map= R"(@@@@@@@@@@
 @$#######@
 @##$$####@
@@ -45,11 +47,10 @@ void game_update(Game_State *gs, float dt) {
 
 
 void game_render(Game_State *gs, float dt) {
-
   entity_store_update_render(gs, dt);
   // Perform a reload if reset button is clicked
   g2_begin(gs->game_viewport);
-  if (g2_button(MAKE_STR("Reset[p]"), v2m(20,20))) {
+  if (g2_button(MAKE_STR("Reset[p]"), v2m(10,10))) {
     gs->request_reload = true;
   }
   g2_end();

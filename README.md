@@ -15,14 +15,13 @@ git clone --recursive https://github.com/eliasvas/prototype
 ```bash
 ./build.sh
 ```
-### Linux (inside vim)
+### Linux (with vim/makeprg)
 ```
-# add these to your .vimrc
-nnoremap <F7> :!./build/ceng&<CR>
-nnoremap <F7> :!./build.sh<CR>
-nnoremap <F6> :!gf2<CR>
-nnoremap <F5> :!bash -c 'source ./build.sh && ./build/ceng'<CR>
-
+" add this to your .vimrc
+set makeprg=./build.sh
+set errorformat=%f:%l:%c:\ %trror:\ %m,%f:%l:%c:\ %tarning:\ %m,%f:%l:%c:\ %m,%-G%.%#
+nnoremap <silent> <C-k> :cnext<CR>zz
+nnoremap <silent> <C-j> :cprev<CR>zz
 ```
 ### Web (From Linux)
 first install and activate [emscripten](https://emscripten.org/docs/getting_started/downloads.html)
