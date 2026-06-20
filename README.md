@@ -26,9 +26,9 @@ nnoremap <silent> <C-j> :cprev<CR>zz
 ### Web (From Linux)
 first install and activate [emscripten](https://emscripten.org/docs/getting_started/downloads.html)
 ```bash
+source path/to/emsdk_env.sh
 ./build_web.sh
-cd build
-python -m http.server
+emrun build/index.html
 ->localhost:8000 in your browser
 ```
 

@@ -29,7 +29,7 @@ static void arena_destroy(Arena *arena) {
 static void* arena_push_nz(Arena *arena, u64 size_in_bytes) {
   // Check if current allocation fits inside whole arena, return nullptr, TODO: we should do the linked list of arenas here sometime
   u64 remaining_reserved_bytes = arena->reserved - arena->current;
-  assert(size_in_bytes < remaining_reserved_bytes && "Allocation exceeding Arena reserved space");
+  assert(size_in_bytes <= remaining_reserved_bytes && "Allocation exceeding Arena reserved space");
 
   // First align forward to ensure allocation will be aligned
   arena_align_forward(arena);

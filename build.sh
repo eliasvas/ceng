@@ -47,6 +47,7 @@ fi
 GAME_DIR="$(realpath "$GAME_DIR")"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
 ENGINE_DIR="$(realpath "$ENGINE_DIR")"
+EXT_DIR="./ext"
 
 # -----------------------------
 # Prepare output directory
@@ -65,7 +66,6 @@ mkdir -p "$OUTPUT_DIR"
 # -----------------------------
 # Build the game shared library
 # -----------------------------
-echo "Building game..."
 
 CFLAGS="${CFLAGS:-} -std=gnu23"
 #@TODO: remove -lgame we NEED the reload ok?! only for release builds this bullshit
@@ -75,30 +75,41 @@ DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
 INCLUDE_DIRS="-Iext -I$ENGINE_DIR/frz -I$ENGINE_DIR/src -I$GAME_DIR"
 
+
+start=$(date +%s.%3N)
+echo "Building gamelib.."
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
 "$ENGINE_DIR"/src/gui/*.c \
 "$ENGINE_DIR"/src/gui2/*.c \
 -o "$OUTPUT_DIR/libgame.so"
+elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
+[ $? -eq 0 ] && echo "done in ($elapsed) ✅" || { echo "failed ❌"; exit 1; }
 
-[ $? -eq 0 ] && echo "Game Build succeeded. ✅" || { echo "Game Build failed. ❌"; exit 1; }
+# -----------------------------
+# Build miniaudio
+# -----------------------------
+start=$(date +%s.%3N)
+echo "Building miniaudio.."
+$CC $DEBUG_FLAGS $INCLUDE_DIRS "$EXT_DIR/miniaudio/miniaudio.c" -shared -fPIC -lm -o "$OUTPUT_DIR/ma.o"
+elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
+[ $? -eq 0 ] && echo "done in ($elapsed) ✅" || { echo "failed ❌"; exit 1; }
 
 # -----------------------------
 # Build the engine executable
 # -----------------------------
+start=$(date +%s.%3N)
 echo "Building engine..."
-
 pushd "$ENGINE_DIR" > /dev/null
-
 $CC $CFLAGS $DEBUG_FLAGS \
     -Iext -Isrc -I$GAME_DIR \
     -L"$OUTPUT_DIR" \
     src/core/*.c \
     src/platform/platform_rgfw.c \
+    "$OUTPUT_DIR/ma.o" \
     -o "$OUTPUT_DIR/ceng" \
     $CLIBS \
     -Wl,-rpath,'$ORIGIN'
-
 popd > /dev/null
-
-[ $? -eq 0 ] && echo "Core Build succeeded. ✅" || { echo "Core Build failed. ❌"; exit 1; }
+elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
+[ $? -eq 0 ] && echo "done in ($elapsed) ✅" || { echo "failed ❌"; exit 1; }

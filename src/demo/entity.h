@@ -1,4 +1,4 @@
-#include "game.h"
+//#include "game.h"
 
 // HACK
 extern void platform_play_sound(const char *sound);
@@ -200,6 +200,7 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
               if (input_key_down(&gs->input, KEY_SCANCODE_LEFT)) { next_tile_coords.x-=1; }
               if (input_key_down(&gs->input, KEY_SCANCODE_UP)) { next_tile_coords.y+=1; }
               if (input_key_down(&gs->input, KEY_SCANCODE_DOWN)) { next_tile_coords.y-=1; }
+              //next_tile_coords.x+=1;
 
               Entity * target_tile = entity_store_find(gs, next_tile_coords);
               // If the next_tile_coords have advanced and object static

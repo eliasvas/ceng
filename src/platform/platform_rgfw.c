@@ -25,8 +25,14 @@
 #define INPUT_IMPLEMENTATION
 #include "core/input.h"
 
+// DESKTOP: Because miniaudio has TOO MANY warnings when building
+// I have opted to put it in its own SILENT compilation unit (no -Wall)
+#if (ARCH_WASM64 || ARCH_WASM32)
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio/miniaudio.h"
+#else
+#include "miniaudio/miniaudio.h"
+#endif
 
 #include "game.h"
 
@@ -144,7 +150,8 @@ int main(void) {
   if (result != MA_SUCCESS) {
       return result;
   }
-  ma_engine_set_volume(&ma_eng, 0.05);
+  //ma_engine_set_volume(&ma_eng, 0.05);
+  printf("miniaudio engine OK\n");
 
   /////////////////////////////////////////////////////
   // 2. Game_State initialization
@@ -164,12 +171,10 @@ int main(void) {
   gs.atlas_sprites_per_dim = v2m(16,10);
   gs.font = bfont_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
   stbi_image_free(image.data);
-#ifdef SOFT_REND
-  gs.g_backbuffer = ogl_tex_make(nullptr,0,0,OGL_TEX_FORMAT_RGBA8U,(Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
-#endif
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;
   game_api.init(&gs);
+
 
   /////////////////////////////////////////////////////
   // 3. Game Loop

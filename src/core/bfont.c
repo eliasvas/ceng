@@ -1,5 +1,6 @@
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
+#define STBTT_assert(x)
 #include <stb/stb_truetype.h>
 
 #include "bfont.h"
@@ -18,7 +19,7 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
 
   font.first_codepoint = 32; // ' ' 
   font.last_codepoint = 127; // '~'
-  font.glyph_count = font.last_codepoint - font.first_codepoint; 
+  font.glyph_count = font.last_codepoint - font.first_codepoint+1; 
   font.glyph_height_in_px = glyph_height_in_px;
 
   u8 *font_bitmap = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height);
@@ -28,8 +29,12 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
   // Pack all the needed glyphs to the bitmap and get their metrics (packedchar / aligned_quad)
   stbtt_pack_context pctx = {};
   stbtt_PackBegin(&pctx, font_bitmap, atlas_width, atlas_height, 0, 1, nullptr);
+  // Why does this call break WASM huh???? maybe unaligned arena? or..
+#if !(ARCH_WASM64 || ARCH_WASM32)
   stbtt_PackFontRange(&pctx, default_font_data, 0, glyph_height_in_px, font.first_codepoint, font.glyph_count, packed_chars);
+#endif
   stbtt_PackEnd(&pctx);
+
 
   for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
     f32 trash_x, trash_y;

@@ -1,6 +1,5 @@
 #ifndef GUI2_H__
 #define GUI2_H__
-#include "base/base_inc.h"
 #include "core/core_inc.h"
 
 typedef u64 g2ID;
