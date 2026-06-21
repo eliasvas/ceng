@@ -150,7 +150,7 @@ int main(void) {
   if (result != MA_SUCCESS) {
       return result;
   }
-  //ma_engine_set_volume(&ma_eng, 0.05);
+  ma_engine_set_volume(&ma_eng, 0.05);
   printf("miniaudio engine OK\n");
 
   /////////////////////////////////////////////////////

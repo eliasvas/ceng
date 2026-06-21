@@ -29,10 +29,7 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
   // Pack all the needed glyphs to the bitmap and get their metrics (packedchar / aligned_quad)
   stbtt_pack_context pctx = {};
   stbtt_PackBegin(&pctx, font_bitmap, atlas_width, atlas_height, 0, 1, nullptr);
-  // Why does this call break WASM huh???? maybe unaligned arena? or..
-#if !(ARCH_WASM64 || ARCH_WASM32)
   stbtt_PackFontRange(&pctx, default_font_data, 0, glyph_height_in_px, font.first_codepoint, font.glyph_count, packed_chars);
-#endif
   stbtt_PackEnd(&pctx);
 
 
