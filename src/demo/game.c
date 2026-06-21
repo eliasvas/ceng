@@ -36,11 +36,6 @@ void game_init(Game_State *gs) {
 }
 
 void game_update(Game_State *gs, float dt) {
-  static bool gui_initialized = false;
-  if (!gui_initialized) {
-    //gui_context_init(gs->frame_arena, &gs->font);
-    gui_initialized = true;
-  }
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
 }
 

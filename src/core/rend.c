@@ -20,11 +20,13 @@ layout(location=3) in vec4 color;
 layout (std140) uniform BatchUbo { mat4 view_proj; };
 
 out vec4 f_color;
+out vec3 f_norm;
 out vec2 f_tc;
 
 void main() { 
 	gl_Position = view_proj * vec4(pos, 1.0);
   f_color = color;
+  f_norm = norm;
   f_tc = tc;
 }
 )";
@@ -35,6 +37,7 @@ layout(location = 0) out vec4 out_color;
 
 in vec2 f_tc;
 in vec4 f_color;
+in vec3 f_norm;
 uniform sampler2D u_tex;
 
 void main() {
@@ -175,7 +178,7 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
 
   if (tri_bundle.sp.impl_state == 0) {
     tri_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(batch_vs, batch_fs),
+      .sp = ogl_shader_make(tri_vs, tri_fs),
       .vbos = {
         [0] = {
           // the vertex buffer for this should probably be made after r_end has been called
@@ -277,6 +280,36 @@ RN_Pass *rn_pass_back() {
 // FIXME FIXME FIXME FIXME
 void rn_push_quad(RN_Pass *pass, R_Quad q) {
   pass->cmds[pass->cmd_count++] = q; 
+}
+
+
+void rn_imm_tri(rect viewport, v3 p0, v3 p1, v3 p2, f32 rot) {
+  Tri_Vertex verts[3] = {
+    [0] = (Tri_Vertex){.pos = p0, .color = v4m(0,1,1,1)},
+    [1] = (Tri_Vertex){.pos = p1, .color = v4m(0,1,1,1)},
+    [2] = (Tri_Vertex){.pos = p2, .color = v4m(0,1,1,1)},
+  };
+
+  u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
+  buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
+  tri_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = white_tex,};
+
+  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*array_count(verts));
+  tri_bundle.vbos[0].buffer = vbo;
+
+  m4 proj = m4_persp(45.0, 800.0/600.0, 0.1, 100);
+  m4 view = m4_view(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
+  m4 model = m4_mult(m4_translate(v3m(0,0,-3)), m4_rotate(rot, v3m(0,1,0)));
+  m4 m = m4_mult(proj, m4_mult(view, model));
+  // Apply a test model matrix
+  ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
+
+  // Set dynamically before drawcall currently
+  tri_bundle.dyn_state.viewport = viewport;
+  tri_bundle.dyn_state.scissor = viewport;
+
+  ogl_render_bundle_draw(&tri_bundle, OGL_PRIM_TYPE_TRIANGLE_STRIP, 3, 1);
+  arena_reset_to_pos(__frame_arena, arena_prev_pos);
 }
 
 
