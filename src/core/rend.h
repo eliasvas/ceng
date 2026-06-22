@@ -5,6 +5,7 @@
 // TODO: Look at the batch fragment shader todos.. BEWARE!!
 
 #include "base/base_inc.h"
+#include "frz/frz.h"
 #include "core/ogl.h"
 
 #define REND_MAX_INSTANCES 512
@@ -17,12 +18,8 @@ typedef struct {
   f32 rot_rad;
 } Batch_Vertex;
 
-typedef struct {
-  v3 pos;
-  v3 norm;
-  v2 tc;
-  v4 color;
-} Tri_Vertex;
+
+typedef FRZ_Vertex Tri_Vertex;
 
 typedef struct {
   rect src_rect, dst_rect;
@@ -96,6 +93,6 @@ RN_Pass *rn_pass_back();
 void rn_flush_all();
 RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport);
 void rn_push_quad(RN_Pass *pass, R_Quad q);
-void rn_imm_tri(rect viewport, v3 p0, v3 p1, v3 p2, f32 rot);
+void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
 
 #endif

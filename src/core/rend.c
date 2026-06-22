@@ -186,7 +186,7 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
           .vattribs = {
             [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, pos), .stride = sizeof(Tri_Vertex), .instanced = false, },
             [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, norm), .stride = sizeof(Tri_Vertex), .instanced = false,  },
-            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2,  .offset = offsetof(Tri_Vertex, tc),    .stride = sizeof(Tri_Vertex), .instanced = false,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2,  .offset = offsetof(Tri_Vertex, uv),    .stride = sizeof(Tri_Vertex), .instanced = false,  },
             [3] = { .location = 3, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Tri_Vertex, color),  .stride = sizeof(Tri_Vertex), .instanced = false,  },
           },
         },
@@ -283,23 +283,17 @@ void rn_push_quad(RN_Pass *pass, R_Quad q) {
 }
 
 
-void rn_imm_tri(rect viewport, v3 p0, v3 p1, v3 p2, f32 rot) {
-  Tri_Vertex verts[3] = {
-    [0] = (Tri_Vertex){.pos = p0, .color = v4m(0,1,1,1)},
-    [1] = (Tri_Vertex){.pos = p1, .color = v4m(0,1,1,1)},
-    [2] = (Tri_Vertex){.pos = p2, .color = v4m(0,1,1,1)},
-  };
+void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
 
   u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
   buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
   tri_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = white_tex,};
 
-  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*array_count(verts));
+  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
   tri_bundle.vbos[0].buffer = vbo;
 
-  m4 proj = m4_persp(45.0, 800.0/600.0, 0.1, 100);
+  m4 proj = m4_persp(45.0, viewport.w/(f32)viewport.h, 0.1, 100);
   m4 view = m4_view(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
-  m4 model = m4_mult(m4_translate(v3m(0,0,-3)), m4_rotate(rot, v3m(0,1,0)));
   m4 m = m4_mult(proj, m4_mult(view, model));
   // Apply a test model matrix
   ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
@@ -308,8 +302,6 @@ void rn_imm_tri(rect viewport, v3 p0, v3 p1, v3 p2, f32 rot) {
   tri_bundle.dyn_state.viewport = viewport;
   tri_bundle.dyn_state.scissor = viewport;
 
-  ogl_render_bundle_draw(&tri_bundle, OGL_PRIM_TYPE_TRIANGLE_STRIP, 3, 1);
+  ogl_render_bundle_draw(&tri_bundle, prim, vert_count, 1);
   arena_reset_to_pos(__frame_arena, arena_prev_pos);
 }
-
-

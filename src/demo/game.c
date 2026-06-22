@@ -41,7 +41,31 @@ void game_update(Game_State *gs, float dt) {
 
 
 void game_render(Game_State *gs, float dt) {
+#if 0
   entity_store_update_render(gs, dt);
+#else
+  //rn_imm_tri(gs->game_viewport, v3m(-1,+1,0), v3m(-1,-1,0), v3m(+1,-1,0), gs->time_sec*3.14);
+  //rn_imm_tri(gs->game_viewport, v3m(+1,-1,0), v3m(+1,+1,0), v3m(-1,+1,0),  gs->time_sec*3.14);
+  m4 model = m4_mult(m4_translate(v3m(0,0,-10)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
+
+  Tri_Vertex my_verts[] = {
+    (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,1,1)}, 
+    (Tri_Vertex) {.pos = v3m(-1,-1,0), .color = v4m(1,1,0,1)}, 
+    (Tri_Vertex) {.pos = v3m(+1,-1,0), .color = v4m(0,1,1,1)}, 
+    (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(0,0,1,1)}, 
+  };
+  rn_imm_tri(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, model);
+
+  Tri_Vertex my_verts2[] = {
+    (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,0,1)}, 
+    (Tri_Vertex) {.pos = v3m(-1,-1,0), .color = v4m(1,0,0,1)}, 
+    (Tri_Vertex) {.pos = v3m(+1,-1,0), .color = v4m(1,0,0,1)}, 
+    (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(1,0,0,1)}, 
+    (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,0,1)}, 
+  };
+  rn_imm_tri(gs->game_viewport, my_verts2, array_count(my_verts2), OGL_PRIM_TYPE_LINE_STRIP, model);
+
+#endif
   // Perform a reload if reset button is clicked
   g2_begin(gs->game_viewport);
   if (g2_button(MAKE_STR("Reset[p]"), v2m(10,10))) {
