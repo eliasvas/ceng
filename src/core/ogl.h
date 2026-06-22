@@ -1,15 +1,125 @@
+/* 
+ogl - a minimal OpenGL abstraction layer - eliasvas
+
+This is a single-file library that provides a more sane
+API (no state cache) than OpenGL but maintains OpenGL compatibility.
+
+Make sure OGL_IMPLEMENTATION is on exactly one .c file where you do:
+  #define OGL_IMPLEMENTATION
+  #include "ogl.h"
+
+DESCRIPTION
+The whole idea behind this utility is that we bind everything up-front
+just before rendering. This means that we don't need to use the OpenGL 
+state machine. This makes the code slower theoretically, but GL drivers
+have gotten crazy good at this sort of thing, so it doesn't really matter.
+If you want performance OpenGL isn't the correct API either way.
+
+GL-VERSION-COMPATIBILITY
+As can be seen on the sample, all shaders should start with #version 300 es.
+This is intentional, as OpenGLES shaders are the most compatible (Desktop + Web).
+Generally you should make GL4_3COMPAT context for Desktop and ES3_0 for Emscripten.
+
+HOW-TO
+The API resolves around a structure called Ogl_Render_Bundle.
+This is a big bundle of state, holding the shader program, 
+vbos, ubos, viewport, scissor, depth state, EVERYTHING.
+Only thing the user needs is to provide the correct attachments to this
+bundle before rendering, typically via ogl_render_bundle_draw(..) call.
+Also don't forget to call ogl_init() before using the API.
+
+SAMPLE (w/ freeglut on Linux)
+  -Dependencies: sudo dnf install freeglut freeglut-devel -y
+  -CompileRun: gcc -std=gnu23 main.c -lglut -lGL -lGLU -o main && ./main
+#if 0
+#define GL_GLEXT_PROTOTYPES
+#include <GL/freeglut.h>
+#define OGL_IMPLEMENTATION
+#include "ogl.h"
+void display() {
+  ogl_clear();
+  Ogl_Render_Bundle rbundle = (Ogl_Render_Bundle){
+    .sp = ogl_shader_make( R"(#version 300 es
+      precision highp float;
+      layout (location = 0) in vec3 v_pos;
+      layout (location = 1) in vec3 v_col;
+      layout (location = 2) in vec2 v_tc;
+      out vec3 f_color;
+      out vec2 f_tc;
+      layout (std140) uniform UboExample { vec4 ubo_color_mult; };
+      void main() { gl_Position = vec4(v_pos, 1.0f); f_color = v_col; f_tc = v_tc; }
+      )", R"(#version 300 es
+      precision highp float;
+      layout(location = 0) out vec4 out_color;
+      in vec3 f_color;
+      in vec2 f_tc;
+      uniform sampler2D tex;
+      layout (std140) uniform UboExample { vec4 ubo_color_mult; };
+      void main() { out_color = vec4(f_color, 1.0) * ubo_color_mult * texture2D(tex, f_tc); }
+      )"),
+    .vbos = {
+      [0] = {
+        .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, (float[]) {
+              -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f,   // top left
+              -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
+               0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+               0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
+            }, 4, 8*sizeof(float)),
+        .vattribs = {
+          [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3, .offset = 0*sizeof(float) },
+          [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3, .offset = 3*sizeof(float) },
+          [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2, .offset = 6*sizeof(float) },
+        },
+      },
+    },
+    .ubos = {
+      [0] = { .name = "UboExample", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (float[]) { 1,1,1,1 }, 1, sizeof(float)*4), .start_offset = 0, .size = sizeof(float)*4 },
+    },
+    .textures = {
+      [0] = { .name = "tex", .tex = ogl_tex_make((uint8_t[]){200,40,40,255}, 1,1, OGL_TEX_FORMAT_R8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+    },
+    .depth_state = (Ogl_Depth_State) {
+      .dwrite = OGL_DEPTH_WRITE_ENABLED,
+      .dfunc  = OGL_DFUNC_GEQUAL,
+    },
+    .dyn_state = (Ogl_Dyn_State){
+      .viewport = {0,0,800,600},
+    }
+  };
+  // You can set whatever state you want dynamically e.g viewport
+  rbundle.dyn_state.viewport = (Ogl_rect){0,0,800,600};
+  ogl_render_bundle_draw(&rbundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+  glutSwapBuffers();
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitContextVersion(4, 3);
+    glutInitContextProfile(GLUT_COMPATIBILITY_PROFILE);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowSize(800, 600);
+    glutCreateWindow("ogl window");
+
+    ogl_init();
+    
+    glutDisplayFunc(display);
+    glutMainLoop();
+    return 0;
+}
+#endif
+*/
+
 #ifndef OGL_H__
 #define OGL_H__
 
-// To debug OpenGL error on the fly
-//GLuint e; for (e = glGetError(); e != GL_NO_ERROR; e = glGetError()) { printf("Error: %d\n", e); }
-// https://www.3dgep.com/forward-plus/
+#include <stdio.h>
+#include <stdint.h>
+#include <assert.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdio.h>
+  
 
 typedef enum {
   OGL_PRIM_TYPE_POINT,
@@ -101,11 +211,11 @@ typedef enum {
 } Ogl_Tex_Format;
 
 typedef struct {
-  u32 width;
-  u32 height;
+  uint32_t width;
+  uint32_t height;
   Ogl_Tex_Format format;
   Ogl_Tex_Params params;
-  u64 impl_state;
+  uint64_t impl_state;
 } Ogl_Tex;
 
 typedef enum {
@@ -134,18 +244,23 @@ typedef struct {
   Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
 
   uint64_t impl_state;
-}Ogl_Shader;
+} Ogl_Shader;
 
 typedef enum { 
   OGL_DYN_STATE_FLAG_SCISSOR    = (0x1 << 0),
   OGL_DYN_STATE_FLAG_BLEND      = (0x1 << 2),
 } Ogl_Dyn_State_Flags;
 
+typedef union {
+  struct { float x,y,w,h; };
+  float raw[4];
+} Ogl_rect;
+
 typedef struct {
-  rect viewport;
-  rect scissor;
+  Ogl_rect viewport;
+  Ogl_rect scissor;
   uint64_t flags;
-}Ogl_Dyn_State;
+} Ogl_Dyn_State;
 
 typedef struct {
   const char *name;
@@ -168,9 +283,9 @@ typedef struct {
   Ogl_Tex attachments[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
   Ogl_Tex depth_attachment;
 
-  u32 width; 
-  u32 height;
-  u64 impl_state;
+  uint32_t width; 
+  uint32_t height;
+  uint64_t impl_state;
 } Ogl_Render_Target;
 
 
@@ -194,7 +309,7 @@ typedef struct {
 #ifndef OGL_IMPLEMENTATION
 
   void ogl_init();
-  void ogl_clear(color c);
+  void ogl_clear();
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
   bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
@@ -205,16 +320,16 @@ typedef struct {
   Ogl_Shader ogl_shader_make(const char* vertex_source, const char* fragment_source);
   void ogl_shader_deinit(Ogl_Shader *shader);
 
-  bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
-  void ogl_tex_update(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
-  Ogl_Tex ogl_tex_make(u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  bool ogl_tex_init(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  void ogl_tex_update(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  Ogl_Tex ogl_tex_make(uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params);
   void ogl_tex_deinit(Ogl_Tex *tex);
 
   void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count);
   void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
 
-  void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth);
-  Ogl_Render_Target ogl_render_target_make(u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth);
+  void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth);
+  Ogl_Render_Target ogl_render_target_make(uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth);
   void ogl_render_target_deinit(Ogl_Render_Target *rt);
 
 #else
@@ -226,10 +341,11 @@ void ogl_init() {
   glBindVertexArray(vao);
 }
 
-void ogl_clear(color c) {
+void ogl_clear() {
   glDisable(GL_SCISSOR_TEST);
-  glClearColor(c.r, c.g, c.b, c.a);
+  glClearColor(0,0,0,0);
   glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_DEPTH_BUFFER_BIT);
 }
  
 static int64_t ogl_buf_count_bytes(Ogl_Buf *buf) {
@@ -244,7 +360,6 @@ static GLuint ogl_to_gl_buf_hint(Ogl_Buf_Hint hint) {
     default: break;
   }
   return 0; // I dont like this
-
 }
 
 static GLuint ogl_to_gl_buf_kind(Ogl_Buf_Kind kind) {
@@ -484,7 +599,7 @@ static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
 }
 
 
-void ogl_tex_update(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
+void ogl_tex_update(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   tex->format = format;
   tex->width = w;
   tex->height= w;
@@ -521,7 +636,7 @@ void ogl_tex_update(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format,
   }
 }
 
-bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
+bool ogl_tex_init(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   tex->params = params;
   tex->width = w;
   tex->height = h;
@@ -545,7 +660,7 @@ bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, O
 }
 
 // Is this really needed? I don't really need it :|
-Ogl_Tex ogl_tex_make(u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
+Ogl_Tex ogl_tex_make(uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   Ogl_Tex tex = {};
   ogl_tex_init(&tex, data, w, h, format, params);
   return tex;
@@ -556,7 +671,7 @@ void ogl_tex_deinit(Ogl_Tex *tex) {
   tex->impl_state = 0;
 }
 
-void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth) {
+void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth) {
   assert(attachment_count <= OGL_MAX_RENDER_TARGET_ATTACHMENTS);
 
   rt->width = w;
@@ -568,7 +683,7 @@ void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_
   assert(rt->impl_state);
   glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
 
-  for (u32 attachment_idx = 0; attachment_idx < attachment_count; ++attachment_idx) {
+  for (uint32_t attachment_idx = 0; attachment_idx < attachment_count; ++attachment_idx) {
     rt->attachments[attachment_idx] = ogl_tex_make(NULL, rt->width, rt->height, format, (Ogl_Tex_Params){});
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachment_idx, GL_TEXTURE_2D, rt->attachments[attachment_idx].impl_state, 0);
   }
@@ -579,7 +694,7 @@ void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_
   }
 
   GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
-  for (u32 attachment_idx = 0; attachment_idx < attachment_count; ++attachment_idx) {
+  for (uint32_t attachment_idx = 0; attachment_idx < attachment_count; ++attachment_idx) {
     draw_buffers[attachment_idx] = GL_COLOR_ATTACHMENT0 + attachment_idx;
   }
   glDrawBuffers(attachment_count, draw_buffers);
@@ -589,7 +704,7 @@ void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-Ogl_Render_Target ogl_render_target_make(u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth) {
+Ogl_Render_Target ogl_render_target_make(uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth) {
   Ogl_Render_Target rt = {};
   ogl_render_target_init(&rt, w, h, attachment_count, format, add_depth);
   return rt;
@@ -644,7 +759,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the uniform buffer(s)
-  for (s64 slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
     Ogl_Uniform_Buffer_Slot *ubo = &bundle->ubos[slot_idx];
     if (ogl_buf_count_bytes(&ubo->buffer) > 0) {
       GLuint ubo_block_idx = glGetUniformBlockIndex(bundle->sp.impl_state, ubo->name);
@@ -653,7 +768,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the texture(s)
-  for (s64 slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
     if (tex->tex.impl_state) {
       glActiveTexture(GL_TEXTURE0+slot_idx);
@@ -674,11 +789,11 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   }
 
   // Set the dynamic state
-  rect viewport = bundle->dyn_state.viewport;
+  Ogl_rect viewport = bundle->dyn_state.viewport;
   glViewport(viewport.x, viewport.y, viewport.w, viewport.h);
   if (bundle->dyn_state.flags & OGL_DYN_STATE_FLAG_SCISSOR) {
     glEnable(GL_SCISSOR_TEST);
-    rect scissor = bundle->dyn_state.scissor;
+    Ogl_rect scissor = bundle->dyn_state.scissor;
     glScissor(scissor.x, scissor.y, scissor.w, scissor.h);
   } else {
     glDisable(GL_SCISSOR_TEST);
@@ -704,125 +819,6 @@ void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint3
 }
 
 #endif
-
-
-/* Example usage of a Render Bundle: (So I don't Forget)
-  const char* vs_source = R"(#version 300 es
-  precision highp float;
-  layout (location = 0) in vec3 v_pos;
-  layout (location = 1) in vec3 v_col;
-  layout (location = 2) in vec2 v_tc;
-  out vec3 f_color;
-  out vec2 f_tc;
-  void main() { gl_Position = vec4(v_pos, 1.0f); f_color = v_col; f_tc = v_tc; }
-  )";
-
-  const char* fs_source = R"(#version 300 es
-  precision highp float;
-  layout(location = 0) out vec4 out_color;
-  layout(location = 1) out vec4 out_color2;
-  in vec3 f_color;
-  in vec2 f_tc;
-  layout (std140) uniform UboExample { vec4 ubo_tc; };
-
-
-
-  rbundle = (Ogl_Render_Bundle){
-    .sp = ogl_shader_make(vs_source, fs_source),
-    .vbos = {
-      [0] = {
-        .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, (f32[]) {
-              -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f,    // top left
-              -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
-               0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
-               0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
-            }, 4, 8*sizeof(f32)),
-        .vattribs = {
-          [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3, .offset = 0 },
-          [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3, .offset = 3*sizeof(f32) },
-          [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2, .offset = 6*sizeof(f32) },
-        },
-      },
-    },
-    .ubos = {
-      [0] = { .name = "UboExample", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (f32[]) { 0.9, 0,0,0 }, 1, sizeof(f32)*4), .start_offset = 0, .size = sizeof(float)*4 },
-    },
-    .textures = {
-      [0] = { .name = "tex", .tex = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT}),},
-      [1] = { .name = "tex2", .tex = ogl_tex_make((u8[]){200,40,40,255}, 1,1, OGL_TEX_FORMAT_R8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
-    },
-    //.rt = ogl_render_target_make(gs->screen_dim.x, gs->screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
-    .dyn_state = (Ogl_Dyn_State){
-      .viewport = {0,0,gs->screen_dim.x,gs->screen_dim.y},
-    }
-  };
-
-  rbundle.dyn_state.viewport = (rect){0,0,gs->screen_dim.x,gs->screen_dim.y};
-  ogl_render_bundle_draw(&rbundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
-*/
-
-
-/*
- * ogl example so I don't forget! (you can paste this in platform.c and will probably work..)
-  const char* vs_source = R"(#version 300 es
-  precision highp float;
-  layout (location = 0) in vec3 v_pos;
-  layout (location = 1) in vec3 v_col;
-  layout (location = 2) in vec2 v_tc;
-  out vec3 f_color;
-  out vec2 f_tc;
-  layout (std140) uniform UboExample { vec4 ubo_tc; };
-  void main() { gl_Position = vec4(v_pos, 1.0f); f_color = v_col; f_tc = v_tc; }
-  )";
-
-  const char* fs_source = R"(#version 300 es
-  precision highp float;
-  layout(location = 0) out vec4 out_color;
-  in vec3 f_color;
-  in vec2 f_tc;
-  uniform sampler2D tex;
-  layout (std140) uniform UboExample { vec4 ubo_tc; };
-  void main() { out_color = vec4(f_color, 1.0) * texture2D(tex, f_tc); }
-  )";
-
-
-  Ogl_Render_Bundle rbundle = (Ogl_Render_Bundle){
-    .sp = ogl_shader_make(vs_source, fs_source),
-    .vbos = {
-      [0] = {
-        .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, (f32[]) {
-              -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f,    // top left
-              -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
-               0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
-               0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
-            }, 4, 8*sizeof(f32)),
-        .vattribs = {
-          [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3, .offset = 0 },
-          [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3, .offset = 3*sizeof(f32) },
-          [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2, .offset = 6*sizeof(f32) },
-        },
-      },
-    },
-    .ubos = {
-      [0] = { .name = "UboExample", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (f32[]) { 0.9, 0,0,0 }, 1, sizeof(f32)*4), .start_offset = 0, .size = sizeof(float)*4 },
-    },
-    .textures = {
-      [0] = { .name = "tex", .tex = ogl_tex_make((u8[]){200,40,40,255}, 1,1, OGL_TEX_FORMAT_R8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
-      //[1] = { .name = "tex2", .tex = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT}),},
-    },
-    //.rt = ogl_render_target_make(gs->screen_dim.x, gs->screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
-    .depth_state = (Ogl_Depth_State) {
-      .dwrite = OGL_DEPTH_WRITE_ENABLED,
-      .dfunc  = OGL_DFUNC_GEQUAL,
-    },
-    .dyn_state = (Ogl_Dyn_State){
-      .viewport = {0,0,gs.wdim.x,gs.wdim.y},
-    }
-  };
-
-  rbundle.dyn_state.viewport = (rect){0,0,800,600};
-  ogl_render_bundle_draw(&rbundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
-*/
 
 #ifdef __cplusplus
 }

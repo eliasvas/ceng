@@ -241,8 +241,8 @@ void rn_flush_all() {
         ogl_buf_update(&batch_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
 
         // Set dynamically before drawcall currently
-      batch_bundle.dyn_state.viewport = pass->viewport;
-      batch_bundle.dyn_state.scissor = pass->viewport;
+      batch_bundle.dyn_state.viewport = *(Ogl_rect *)&pass->viewport;
+      batch_bundle.dyn_state.scissor = *(Ogl_rect *)&pass->viewport;
 
         ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, vertex_idx);
         arena_reset_to_pos(__frame_arena, arena_prev_pos);
@@ -299,8 +299,8 @@ void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type 
   ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
 
   // Set dynamically before drawcall currently
-  tri_bundle.dyn_state.viewport = viewport;
-  tri_bundle.dyn_state.scissor = viewport;
+  tri_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
+  tri_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
 
   ogl_render_bundle_draw(&tri_bundle, prim, vert_count, 1);
   arena_reset_to_pos(__frame_arena, arena_prev_pos);

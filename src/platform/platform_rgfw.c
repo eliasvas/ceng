@@ -183,7 +183,7 @@ int main(void) {
     frame_count+=1;
     u64 frame_start = platform_read_cpu_timer();
 #if !(ARCH_WASM64 || ARCH_WASM32)
-    ogl_clear(col(0,0,0.0,1.0));
+    ogl_clear();
 #endif // !(ARCH_WASM64 || ARCH_WASM32)
     arena_clear(gs.frame_arena);
 
