@@ -31,7 +31,7 @@ void game_init(Game_State *gs) {
 
   hero->layer = 1;
 
-  g2_init(gs->frame_arena, &gs->font, &gs->input);
+  gui_init(gs->frame_arena, &gs->font, &gs->input);
 
 }
 
@@ -67,11 +67,17 @@ void game_render(Game_State *gs, float dt) {
 
 #endif
   // Perform a reload if reset button is clicked
-  g2_begin(gs->game_viewport);
-  if (g2_button(MAKE_STR("Reset[p]"), v2m(10,10))) {
+  gui_begin(gs->game_viewport);
+
+  Gui_Layout_Params params = (Gui_Layout_Params) {
+    .flags = (G2_BOX_FLAG_FIXED_X | G2_BOX_FLAG_FIXED_Y),
+    .fixed_x = 100,
+    .fixed_y = 100,
+  };
+  if (gui_button(MAKE_STR("Reset[p]"), params)) {
     gs->request_reload = true;
   }
-  g2_end();
+  gui_end();
 }
 
 void game_shutdown(Game_State *gs) {
