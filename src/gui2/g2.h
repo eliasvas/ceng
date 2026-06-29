@@ -4,6 +4,11 @@
 
 typedef u64 Gui_ID;
 
+#define GUI_AXIS_COUNT 2
+typedef enum {
+  GUI_AXIS_X,
+  GUI_AXIS_Y,
+} Gui_Axis;
 
 typedef enum {
   G2_BOX_FLAG_CLICKABLE = (0x1 << 0),
@@ -24,15 +29,15 @@ struct Gui_Box {
   Gui_Box *hash_prev;
 
   // TODO: Maybe add anim_coords????
-#define G2_AXIS_COUNT 2
-  f32 local_coords[G2_AXIS_COUNT];
-  f32 coords[G2_AXIS_COUNT];
+  f32 local_coords[GUI_AXIS_COUNT];
+  f32 coords[GUI_AXIS_COUNT];
 
   // misc
   Gui_ID id;
   buf label;
   Gui_Box_Flags flags;
-  s64 frame_idx;
+
+  s64 last_frame_used;
   f32 color_mod;
 };
 

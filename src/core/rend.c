@@ -279,9 +279,10 @@ RN_Pass *rn_pass_back() {
 
 // FIXME FIXME FIXME FIXME
 void rn_push_quad(RN_Pass *pass, R_Quad q) {
+  if (q.tex.impl_state == 0) q.tex = white_tex;
+  assert(pass->cmd_count < RN_MAX_CMD && "Didn't I say FIXME FIXME, make this static array a chunklist or some shit");
   pass->cmds[pass->cmd_count++] = q; 
 }
-
 
 void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
 

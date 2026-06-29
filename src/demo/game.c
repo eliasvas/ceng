@@ -74,9 +74,23 @@ void game_render(Game_State *gs, float dt) {
     .fixed_x = 100,
     .fixed_y = 100,
   };
-  if (gui_button(MAKE_STR("Reset[p]"), params)) {
-    gs->request_reload = true;
+
+
+  // Small GUI test (mainly for Box reuse test right now)
+  static bool other_enabled = false;
+  if (gui_button(MAKE_STR("Click Secret"), params)) {
+    other_enabled = !other_enabled;
+    printf("Reset");
   }
+
+  if (other_enabled) {
+    params.fixed_y += 100;
+    if (gui_button(MAKE_STR("WOW"), params)) {
+      printf("WOW\n");
+    }
+    //gs->request_reload = true;
+  }
+
   gui_end();
 }
 
