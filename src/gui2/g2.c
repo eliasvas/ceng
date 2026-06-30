@@ -59,8 +59,7 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
     box->id = id;
     box->label = label;
     box->flags = flags;
-    box->local_coords[GUI_AXIS_X] = 0;
-    box->local_coords[GUI_AXIS_Y] = 0;
+    box->local_rect = rec(0,0,0,0);
     box->first = box->last = box->next = box->prev = box->parent = nullptr;
     box->color_mod = 1.0;
     box->last_frame_used = ctx.frame_idx;
@@ -68,27 +67,22 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
   return box;
 }
 
+// TODO: This should probably be a signal_return and step 3 with button logic should become generic-er
 b32 gui_button(buf label, Gui_Layout_Params params) {
   // 0. allocate/reuse/retain box pointer
   Gui_ID id = djb2_buf(label);
   Gui_Box *box = gui_box_make(label, id, params.flags);
   // 1. Fill the (immediate) params
   {
-    box->color_mod = 1.0;
-    if (box->flags & G2_BOX_FLAG_FIXED_X) {
-      box->local_coords[GUI_AXIS_Y] = params.fixed_x;
-    }
-    if (box->flags & G2_BOX_FLAG_FIXED_Y) {
-      box->local_coords[GUI_AXIS_Y] = params.fixed_y;
-    }
     box->parent = (params.parent) ? params.parent : ctx.root;
+    box->major_layout_axis = params.major_layout_axis;
   }
   // 2. Hook into the layout structure
   Gui_Box *parent = box->parent;
   dll_push_back(parent->first, parent->last, box);
 
-  // 3. Button/Box logic (using previous frame's coords, AKA box->coords!)
-  rect r = bfont_calc_text_rect(ctx.font, label, v2m(box->coords[GUI_AXIS_X], box->coords[GUI_AXIS_Y]), ctx.g_scale);
+  // 3. Button/Box logic (using previous frame's final_rect.p.raw, AKA box->final_rect.p.raw!)
+  rect r = bfont_calc_text_rect(ctx.font, label, v2m(box->final_rect.p.raw[GUI_AXIS_X], box->final_rect.p.raw[GUI_AXIS_Y]), ctx.g_scale);
   v2 bl_mp = input_get_mouse_pos(ctx.input);
   bl_mp.y = (ctx.viewport.h - bl_mp.y);
   b32 collides = rect_isect_point(r, bl_mp);
@@ -143,28 +137,73 @@ void gui_begin(rect viewport) {
   // Initialize a root box
   buf root_label = MAKE_STR("ROOTBOX");
   Gui_ID root_id = djb2_buf(root_label);
-  ctx.root = gui_box_make(root_label, root_id, G2_BOX_FLAG_FIXED_X | G2_BOX_FLAG_FIXED_Y);
-  ctx.root->local_coords[0] = 300;
-  ctx.root->local_coords[1] = 300;
+  ctx.root = gui_box_make(root_label, root_id, 
+    GUI_BOX_FLAG_FIXED_X | GUI_BOX_FLAG_FIXED_Y | 
+    GUI_BOX_FLAG_FIXED_WIDTH | GUI_BOX_FLAG_FIXED_HEIGHT | 
+    GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT
+  );
+  f32 pad_px = 100;
+  ctx.root->local_rect = rec(
+      ctx.viewport.x + pad_px/2,
+      ctx.viewport.y + pad_px/2,
+      ctx.viewport.w - pad_px,
+      ctx.viewport.h - pad_px
+  );
+  ctx.root->major_layout_axis = GUI_AXIS_X;
 }
 
-void gui_layout(Gui_Box *root) {
-  for (s32 layout_axis = GUI_AXIS_X; layout_axis <= GUI_AXIS_Y; layout_axis+=1) {
-    root->coords[layout_axis] = root->local_coords[layout_axis] + ((root->parent) ? root->parent->coords[layout_axis] : 0);
+void gui_layout_axis(Gui_Box *root, Gui_Axis axis) {
+  // FIXME: To NOT have this ternary operator we could make a self referential struct instead for nullptr in our lists 
+  f32 prev_box_layout_pos = (root->prev) ? root->prev->final_rect.p.raw[axis] : ((root->parent) ? root->parent->final_rect.p.raw[axis] : 0);
+  f32 prev_box_layout_dim = (root->prev) ? root->prev->final_rect.dim.raw[axis] : (0);
+  Gui_Axis parent_layout_axis = (root->parent) ? (root->parent->major_layout_axis) : (GUI_AXIS_X);
+  root->final_rect.p.raw[axis] = root->local_rect.p.raw[axis] + prev_box_layout_pos + ((parent_layout_axis == axis) ? prev_box_layout_dim : 0);
+
+  if ( root->flags & (GUI_BOX_FLAG_FIXED_WIDTH << axis) ) {
+    root->final_rect.dim.raw[axis] = root->local_rect.dim.raw[axis];
+  } else if (root->label.count > 0) { // FIXME: Currently only other way to get width is via text length
+    rect text_rect = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
+    root->final_rect.dim.raw[axis] = text_rect.dim.raw[axis];
+  } else {
+    printf("HUHUHUHUUHUHUHUUHHHH?!\n");
   }
+
   for (Gui_Box *child = root->first; child != nullptr; child = child->next) {
-    gui_layout(child);
+    gui_layout_axis(child, axis);
   }
 }
 
 void gui_render(Gui_Box *root) {
-  //printf("rendering box [%s] at %f %f\n", root->label.data, root->coords[0], root->coords[1]);
-  bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, v2m(root->coords[0], root->coords[1]), ctx.g_scale, col(root->color_mod, root->color_mod, root->color_mod,1), true);
+  // 0. Draw the Regular box
+  if (root->flags & GUI_BOX_FLAG_DRAW_BOX) {
+    R_Quad quad = (R_Quad) {
+        .dst_rect = root->final_rect,
+        .c = col(0.2,0.2,0.2,0.95),
+    };
+    rn_push_quad(rn_pass_front(), quad);
+  }
+
+  // 1. Draw the text
+  // FIXME: If the box is fixed (meaning layout not based on text for now), put the label in the middle of the container
+  if (root->flags & GUI_BOX_FLAG_DRAW_TEXT) {
+    if (root->flags & GUI_BOX_FLAG_FIXED_WIDTH || root->flags & GUI_BOX_FLAG_FIXED_HEIGHT) {
+      rect r = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
+      bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, 
+          v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), 
+            (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0)),
+          ctx.g_scale, col(root->color_mod, root->color_mod, root->color_mod,1), false
+      );
+    } else {
+      bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, v2m(root->final_rect.p.raw[0], root->final_rect.p.raw[1]), ctx.g_scale, col(root->color_mod, root->color_mod, root->color_mod,1), false);
+    }
+  }
+  
+
+  // 2. Proceed to render the remaining hierarch (back-to-front)
   for (Gui_Box *child = root->first; child != nullptr; child = child->next) {
     gui_render(child);
   }
 }
-
 
 void gui_prune_unused_boxes() {
   for (s32 slot_idx = 0; slot_idx < ctx.slot_count; slot_idx +=1) {
@@ -184,7 +223,8 @@ void gui_prune_unused_boxes() {
 void gui_end() {
   // Just to check for leaks
   //printf("GUI arena pos: %lu\n", arena_get_current_pos(ctx.arena));
-  gui_layout(ctx.root);
+  gui_layout_axis(ctx.root, GUI_AXIS_X);
+  gui_layout_axis(ctx.root, GUI_AXIS_Y);
   gui_prune_unused_boxes();
   gui_render(ctx.root);
   ctx.hot_id = 0;

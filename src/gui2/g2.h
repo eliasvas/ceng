@@ -11,9 +11,13 @@ typedef enum {
 } Gui_Axis;
 
 typedef enum {
-  G2_BOX_FLAG_CLICKABLE = (0x1 << 0),
-  G2_BOX_FLAG_FIXED_X = (0x1 << 1),
-  G2_BOX_FLAG_FIXED_Y = (0x1 << 2),
+  GUI_BOX_FLAG_CLICKABLE    = (0x1 << 0),
+  GUI_BOX_FLAG_FIXED_X      = (0x1 << 1),
+  GUI_BOX_FLAG_FIXED_Y      = (0x1 << 2),
+  GUI_BOX_FLAG_FIXED_WIDTH  = (0x1 << 3),
+  GUI_BOX_FLAG_FIXED_HEIGHT = (0x1 << 4),
+  GUI_BOX_FLAG_DRAW_BOX     = (0x1 << 5),
+  GUI_BOX_FLAG_DRAW_TEXT    = (0x1 << 6),
 } Gui_Box_Flags;
 
 typedef struct Gui_Box Gui_Box;
@@ -29,13 +33,14 @@ struct Gui_Box {
   Gui_Box *hash_prev;
 
   // TODO: Maybe add anim_coords????
-  f32 local_coords[GUI_AXIS_COUNT];
-  f32 coords[GUI_AXIS_COUNT];
+  rect local_rect;
+  rect final_rect;
 
   // misc
   Gui_ID id;
   buf label;
   Gui_Box_Flags flags;
+  Gui_Axis major_layout_axis;
 
   s64 last_frame_used;
   f32 color_mod;
@@ -55,8 +60,7 @@ struct Gui_Box_Hash_Slot {
 typedef struct {
   Gui_Box *parent;
 
-  f32 fixed_x;
-  f32 fixed_y;
+  Gui_Axis major_layout_axis;
   Gui_Box_Flags flags;
 } Gui_Layout_Params;
 

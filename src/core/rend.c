@@ -204,7 +204,7 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
 
 void rn_flush_all() {
   for (RN_Pass *pass = __render_passes.last; pass != nullptr; pass = pass->prev) {
-    R_Quad_Array quads =  (R_Quad_Array) {
+    R_Quad_Array quads = (R_Quad_Array) {
       pass->cmds,
       pass->cmd_count,
     };

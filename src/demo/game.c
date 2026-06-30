@@ -44,8 +44,6 @@ void game_render(Game_State *gs, float dt) {
 #if 0
   entity_store_update_render(gs, dt);
 #else
-  //rn_imm_tri(gs->game_viewport, v3m(-1,+1,0), v3m(-1,-1,0), v3m(+1,-1,0), gs->time_sec*3.14);
-  //rn_imm_tri(gs->game_viewport, v3m(+1,-1,0), v3m(+1,+1,0), v3m(-1,+1,0),  gs->time_sec*3.14);
   m4 model = m4_mult(m4_translate(v3m(0,0,-10)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
 
   Tri_Vertex my_verts[] = {
@@ -70,21 +68,18 @@ void game_render(Game_State *gs, float dt) {
   gui_begin(gs->game_viewport);
 
   Gui_Layout_Params params = (Gui_Layout_Params) {
-    .flags = (G2_BOX_FLAG_FIXED_X | G2_BOX_FLAG_FIXED_Y),
-    .fixed_x = 100,
-    .fixed_y = 100,
+    .flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT),
+    .major_layout_axis = GUI_AXIS_X,
   };
-
 
   // Small GUI test (mainly for Box reuse test right now)
   static bool other_enabled = false;
   if (gui_button(MAKE_STR("Click Secret"), params)) {
     other_enabled = !other_enabled;
-    printf("Reset");
+    printf("Reset\n");
   }
 
   if (other_enabled) {
-    params.fixed_y += 100;
     if (gui_button(MAKE_STR("WOW"), params)) {
       printf("WOW\n");
     }

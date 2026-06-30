@@ -309,7 +309,7 @@ INLINE m4 m4_inv(m4 m) {
 
 typedef union {
   struct { f32 x,y,w,h; };
-  struct { v2 p0,dim; };
+  struct { v2 p,dim; };
   f32 raw[4];
 }rect;
 
