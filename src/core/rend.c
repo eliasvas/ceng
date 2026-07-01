@@ -124,6 +124,45 @@ void main() {
 )";
 
 /////////////////////
+// Quad chunk list implementation
+/////////////////////
+void r_quad_chunk_list_add_quad(Arena *arena, R_Quad_Chunk_List *list, R_Quad quad) {
+  // 0. If we don't have empty node in the list, allocate a new one and append to list
+  if (list->first == nullptr || (list->last->count >= list->last->cap)) {
+    s32 quads_per_chunk = 256;
+    R_Quad_Chunk_Node *node = arena_push_array(arena, R_Quad_Chunk_Node, 1);
+    node->cap = quads_per_chunk;
+    node->count = 0;
+    node->quads = arena_push_array(arena, R_Quad, quads_per_chunk);
+    dll_push_back(list->first, list->last, node);
+    list->node_count += 1;
+  } 
+  // 1. Regular insertion logic
+  R_Quad_Chunk_Node *node = list->last;
+  node->quads[node->count++] = quad;
+  list->quad_count += 1;
+}
+
+R_Quad_Array r_quad_chunk_list_to_array(Arena *arena, R_Quad_Chunk_List *list) {
+  R_Quad_Array qa = (R_Quad_Array) {
+    .count = list->quad_count,
+    .cap = list->quad_count,
+  };
+
+  s32 array_idx = 0;
+  qa.quads = arena_push_array(arena, R_Quad, qa.cap);
+  for (R_Quad_Chunk_Node *chunk_node = list->first; chunk_node != nullptr; chunk_node = chunk_node->next) {
+    for (s32 quad_idx = 0; quad_idx < chunk_node->count; quad_idx+=1) {
+      qa.quads[array_idx++] = chunk_node->quads[quad_idx];
+    }
+  }
+  assert(array_idx == list->quad_count);
+
+  return qa;
+}
+
+
+/////////////////////
 // Actual Implementation
 /////////////////////
 
@@ -204,15 +243,12 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
 
 void rn_flush_all() {
   for (RN_Pass *pass = __render_passes.last; pass != nullptr; pass = pass->prev) {
-    R_Quad_Array quads = (R_Quad_Array) {
-      pass->cmds,
-      pass->cmd_count,
-    };
+    R_Quad_Array quads = r_quad_chunk_list_to_array(__frame_arena, &pass->quads);
     Batch_Vertex *batch_vertices = arena_push_array(__frame_arena, Batch_Vertex,REND_MAX_INSTANCES);
 
     s64 vertex_idx  = 0;
     for (s64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
-      R_Quad *q = &quads.arr[quad_idx];
+      R_Quad *q = &quads.quads[quad_idx];
 
       Batch_Vertex v = (Batch_Vertex){
         .src_rect = *(v4*)&q->src_rect,
@@ -224,7 +260,7 @@ void rn_flush_all() {
       batch_vertices[vertex_idx] = v;
       vertex_idx+=1;
 
-      if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || quads.arr[quad_idx+1].tex.impl_state != q->tex.impl_state) {
+      if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || quads.quads[quad_idx+1].tex.impl_state != q->tex.impl_state) {
 
         u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
         buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
@@ -280,8 +316,7 @@ RN_Pass *rn_pass_back() {
 // FIXME FIXME FIXME FIXME
 void rn_push_quad(RN_Pass *pass, R_Quad q) {
   if (q.tex.impl_state == 0) q.tex = white_tex;
-  assert(pass->cmd_count < RN_MAX_CMD && "Didn't I say FIXME FIXME, make this static array a chunklist or some shit");
-  pass->cmds[pass->cmd_count++] = q; 
+  r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 
 void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {

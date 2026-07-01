@@ -31,12 +31,6 @@ typedef struct {
   Ogl_Tex tex;
 } R_Quad;
 
-typedef struct R_Quad_Array R_Quad_Array;
-struct R_Quad_Array {
-  R_Quad *arr;
-  s64 count;
-};
-
 typedef enum {
   R_CAM_MODE_2D = 0,
   R_CAM_MODE_3D = 1,
@@ -60,6 +54,28 @@ typedef struct {
   f32 zoom;
 } R_C3D;
 
+// Quad chunked list (optional but useful for big batches)
+typedef struct R_Quad_Chunk_Node R_Quad_Chunk_Node;
+struct R_Quad_Chunk_Node {
+  R_Quad *quads;
+  s64 count;
+  s64 cap;
+
+  R_Quad_Chunk_Node *next;
+  R_Quad_Chunk_Node *prev;
+};
+typedef R_Quad_Chunk_Node R_Quad_Array;
+
+typedef struct {
+  R_Quad_Chunk_Node *first;
+  R_Quad_Chunk_Node *last;
+
+  s64 node_count;
+  s64 quad_count;
+} R_Quad_Chunk_List ;
+
+
+
 typedef enum {
   RN_PASS_KIND_2D,
   RN_PASS_KIND_3D, // TBA
@@ -69,7 +85,7 @@ typedef struct RN_Pass RN_Pass;
 struct RN_Pass {
 #define RN_MAX_CMD 256
   // TODO: Chunked array as well right?
-  R_Quad cmds[RN_MAX_CMD];
+  R_Quad_Chunk_List quads;
   s32 cmd_count;
   RN_Pass_Kind kind;
 
@@ -94,5 +110,7 @@ void rn_flush_all();
 RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport);
 void rn_push_quad(RN_Pass *pass, R_Quad q);
 void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
+
+
 
 #endif
