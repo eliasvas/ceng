@@ -54,32 +54,35 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
     (Tri_Vertex) {.pos = v3m(1,0,0), .color = c1}, 
     (Tri_Vertex) {.pos = v3m(1,0,1), .color = c1}, 
   };
-  Tri_Vertex check_verts[4] = { };
 
+  // Regular grid
   for (s32 z_coord = - cell_count/2; z_coord < cell_count/2; z_coord += 1) {
     for (s32 x_coord = - cell_count/2; x_coord < cell_count/2; x_coord += 1) {
 
-      // This is just for some indication on what the origin is
-      for (s32 check_idx = 0;check_idx<(s32)array_count(quad_verts); check_idx+=1){
-        check_verts[check_idx] = quad_verts[check_idx];
-        if ((z_coord+(s32)quad_verts[check_idx].pos.z) == 0 ) {
-          check_verts[check_idx].color = c2;
-        }
-        if( (x_coord+(s32)quad_verts[check_idx].pos.x) == 0) {
-          check_verts[check_idx].color = c3;
-        }
-      } 
-
       // This is the logic..
       m4 model = m4_translate(v3m(x_coord,0,z_coord));
-      rn_imm_verts(gs->game_viewport, check_verts, array_count(quad_verts), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, model);
+      rn_imm_verts(gs->game_viewport, quad_verts, array_count(quad_verts), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, model);
     }
   } 
+
+  // X-axis red highlight
+  Tri_Vertex line_x[4] = {
+    (Tri_Vertex) {.pos = v3m(-cell_count/2,0,0), .color = c2}, 
+    (Tri_Vertex) {.pos = v3m(cell_count/2,0,0), .color = c2}, 
+  };
+  rn_imm_verts(gs->game_viewport, line_x, array_count(line_x), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, m4d(1.0));
+
+  // Z-axis green highlight
+  Tri_Vertex line_z[4] = {
+    (Tri_Vertex) {.pos = v3m(0,0,-cell_count/2), .color = c3}, 
+    (Tri_Vertex) {.pos = v3m(0,0,cell_count/2), .color = c3}, 
+  };
+  rn_imm_verts(gs->game_viewport, line_z, array_count(line_z), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, m4d(1.0));
 
 }
 
 void game_render(Game_State *gs, float dt) {
-#if 1
+#if 0
   entity_store_update_render(gs, dt);
 #else
   m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
@@ -105,7 +108,7 @@ void game_render(Game_State *gs, float dt) {
 
 
   // Gui Test
-#if 1
+#if 0
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 

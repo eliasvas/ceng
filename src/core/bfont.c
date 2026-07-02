@@ -102,8 +102,7 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
   // This is a HACK
   font.tex_dim = v2m(atlas_width, atlas_height);
   font.tex_id = am_load_from_data(MAKE_STR("fa.png"), (buf){});
-  *(Ogl_Tex*)am_get(font.tex_id) = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, 
-        OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
+  *((Ogl_Tex*)am_get(font.tex_id)) = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
 
   return font;
 }

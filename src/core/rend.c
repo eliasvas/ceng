@@ -195,7 +195,7 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
       .sp = ogl_shader_make(batch_vs, batch_fs),
       .vbos = {
         [0] = {
-          .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC,nullptr, REND_MAX_INSTANCES, sizeof(Batch_Vertex)),
+          .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Batch_Vertex)),
           .vattribs = {
             [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect), .stride = sizeof(Batch_Vertex), .instanced = true, },
             [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect), .stride = sizeof(Batch_Vertex),.instanced = true,  },
@@ -217,6 +217,8 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
   if (tri_bundle.sp.impl_state == 0) {
     tri_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(tri_vs, tri_fs),
+
+      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *(Ogl_Tex*)am_get(asset_id_from_path(MAKE_STR("white.png")))},
       .vbos = {
         [0] = {
           // the vertex buffer for this should probably be made after r_end has been called
@@ -324,8 +326,7 @@ void rn_push_quad(RN_Pass *pass, R_Quad q) {
 
 void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 view, m4 model) {
   u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
-  buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
-  tri_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data,};
+  //buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
   tri_bundle.vbos[0].buffer = vbo;
