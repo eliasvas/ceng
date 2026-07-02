@@ -26,9 +26,7 @@ typedef struct {
   color c;
   f32 rot_deg;
 
-  // TODO: Maybe this isn't the best way to conduct business.. Ogl_Tex is just a view
-  // TODO: Maybe should be (void*) ? This could be a primitive Asset type thing, just a (void*)
-  Ogl_Tex tex;
+  Ogl_Tex *tex;
 } R_Quad;
 
 typedef enum {

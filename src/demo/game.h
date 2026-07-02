@@ -36,9 +36,8 @@ typedef struct {
 #endif
 
   // Loaded Asset resources (TODO: Asset system)
-  Ogl_Tex atlas;
+  Asset_Id atlas;
   v2 atlas_sprites_per_dim;
-  Ogl_Tex red;
   Font_Info font;
 
   // 3D scene stuff should be here or no?

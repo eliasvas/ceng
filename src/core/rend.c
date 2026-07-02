@@ -1,10 +1,10 @@
 #include "rend.h"
+#include "core/asset_mgr.h"
 
 // HMMMMMMM
 // Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle batch_bundle = {};
 static Ogl_Render_Bundle tri_bundle = {};
-static Ogl_Tex white_tex = {};
 
 ////////////////////////////////////////////////
 // Triangle Shaders
@@ -212,7 +212,6 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
         .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
       }
     };
-    white_tex = ogl_tex_make((u8[]){255,255,255,255}, 1,1, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   }
 
   if (tri_bundle.sp.impl_state == 0) {
@@ -264,11 +263,11 @@ void rn_flush_all() {
       batch_vertices[vertex_idx] = v;
       vertex_idx+=1;
 
-      if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || quads.quads[quad_idx+1].tex.impl_state != q->tex.impl_state) {
+      if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || quads.quads[quad_idx+1].tex->impl_state != q->tex->impl_state) {
 
         u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
         buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
-        batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = q->tex,};
+        batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = *(q->tex),};
 
         // set vertex buffer
         // @BEWARE only for 2D rendering, for 3D we gotta branch
@@ -317,16 +316,16 @@ RN_Pass *rn_pass_back() {
   return __render_passes.last;
 }
 
-// FIXME FIXME FIXME FIXME
 void rn_push_quad(RN_Pass *pass, R_Quad q) {
-  if (q.tex.impl_state == 0) q.tex = white_tex;
+  // white.png is just an invalid png name, which means that the default texture will be mapped (white)
+  if (q.tex == nullptr) q.tex = ((Ogl_Tex*)am_get(asset_id_from_path(MAKE_STR("white.png"))));
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 
 void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 view, m4 model) {
   u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
   buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
-  tri_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = white_tex,};
+  tri_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data,};
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
   tri_bundle.vbos[0].buffer = vbo;

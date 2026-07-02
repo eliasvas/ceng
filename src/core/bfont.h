@@ -1,6 +1,7 @@
 #ifndef BFONT_H__
 #define BFONT_H__
 #include "base/base_inc.h"
+#include "core/asset_mgr.h"
 #include "rend.h"
 
 // TODO: LOD stuff and our own lookup data structure (Glyph_Cache?)
@@ -26,7 +27,8 @@ typedef struct {
   f32 descent_px; // distance from baseline to lowest glyph extent
   f32 line_gap_px; // extra spacing between lines
 
-  Ogl_Tex atlas;
+  Asset_Id tex_id;
+  v2 tex_dim;
 }Font_Info;
 
 Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height);

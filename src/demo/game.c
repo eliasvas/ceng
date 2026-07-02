@@ -5,6 +5,9 @@
 #include "gui2/g2.h"
 #include "entity.h"
 
+#define ASSET_MGR_IMPLEMENTATION
+#include "core/asset_mgr.h"
+
 extern void platform_play_sound(const char *sound);
 
 const char* entity_map= R"(@@@@@@@@@@
@@ -76,7 +79,7 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
 }
 
 void game_render(Game_State *gs, float dt) {
-#if 0
+#if 1
   entity_store_update_render(gs, dt);
 #else
   m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
@@ -98,18 +101,11 @@ void game_render(Game_State *gs, float dt) {
   };
   rn_imm_verts(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, gs->view_mat, model);
 
-
-
-#if 1
-
-#endif
-
-
 #endif
 
 
   // Gui Test
-#if 0
+#if 1
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 

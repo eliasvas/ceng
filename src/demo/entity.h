@@ -239,7 +239,7 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
               .src_rect = en->e.tex_coords,
               .dst_rect = rec(anim_coords.x * tile_w_px, anim_coords.y * tile_w_px, tile_w_px, tile_w_px),
               .c = col(1,1,1,1),
-              .tex = gs->atlas,
+              .tex = (Ogl_Tex*)am_get(gs->atlas),
               .rot_deg = 0,
           };
 

@@ -14,6 +14,7 @@ static const u8 default_font_data[] = {
 #embed "../../data/ProggyClean.ttf"
 };
 
+
 Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
   Font_Info font = {};
 
@@ -96,7 +97,13 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
   }
 
   // Finally make the texture
-  font.atlas = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
+  //font.atlas = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
+
+  // This is a HACK
+  font.tex_dim = v2m(atlas_width, atlas_height);
+  font.tex_id = am_load_from_data(MAKE_STR("fa.png"), (buf){});
+  *(Ogl_Tex*)am_get(font.tex_id) = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, 
+        OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
 
   return font;
 }
@@ -163,11 +170,12 @@ s64 bfont_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f3
 
 void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 pos, f32 scale, color col, bool draw_bounding_box) {
   rect tr = bfont_calc_text_rect(font_info, text, pos, scale);
+  Ogl_Tex *font_tex = (Ogl_Tex*)am_get(font_info->tex_id);
+
   if (draw_bounding_box) {
     R_Quad quad = (R_Quad) {
         .dst_rect = tr,
         .c = col(0.9,0.4,0.4,1.0),
-        .tex = {0},
     };
     rn_push_quad(rn_pass_front(), quad);
   }
@@ -177,7 +185,7 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
   for (s32 i = 0; i < text.count; i+=1) {
     u8 c = text.data[i];
     Glyph_Info metrics = font_info->glyphs[c - font_info->first_codepoint];
-    f32 atlas_height = font_info->atlas.height;
+    f32 atlas_height = font_info->tex_dim.y;
     R_Quad quad = (R_Quad) {
         .dst_rect = rec(baseline_pos.x + ((i==0)?0:metrics.off.x*scale),
                         baseline_pos.y - (metrics.off.y*scale + metrics.r.h*scale),//+metrics.off.y*scale, 
@@ -190,7 +198,7 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
             metrics.r.h
         ),
         .c = col,
-        .tex = font_info->atlas,
+        .tex = font_tex,
     };
     rn_push_quad(rn_pass_front(), quad);
     baseline_pos.x += metrics.xadvance*scale;

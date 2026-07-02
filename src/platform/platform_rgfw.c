@@ -10,9 +10,6 @@
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
-
 #if (ARCH_WASM64 || ARCH_WASM32)
 #include <GLES3/gl3.h>
 #else
@@ -24,6 +21,9 @@
 
 #define INPUT_IMPLEMENTATION
 #include "core/input.h"
+
+#define ASSET_MGR_IMPLEMENTATION
+#include "core/asset_mgr.h"
 
 // DESKTOP: Because miniaudio has TOO MANY warnings when building
 // I have opted to put it in its own SILENT compilation unit (no -Wall)
@@ -61,27 +61,6 @@ u64 platform_read_cpu_freq() {
 
 f64 platform_get_time() {
   return (f64)get_time_ns() / (f64)get_nano_freq();
-}
-
-typedef struct {
-  u8 *data;
-  u64 width;
-  u64 height;
-} Platform_Image_Data;
-Platform_Image_Data platform_load_image_bytes_as_rgba(const char *filepath);
-
-Platform_Image_Data platform_load_image_bytes_as_rgba(const char *filepath) {
-  Platform_Image_Data img_data = {};
-
-  stbi_set_flip_vertically_on_load(true);
-  int width, height, nrChannels;
-  u8 *px_data = stbi_load(filepath, &width, &height, &nrChannels, STBI_rgb_alpha);
-
-  img_data.width = width;
-  img_data.height = height;
-  img_data.data = px_data;
-
-  return img_data;
 }
 
 int main(void) {
@@ -153,6 +132,8 @@ int main(void) {
   ma_engine_set_volume(&ma_eng, 0.05);
   printf("miniaudio engine OK\n");
 
+
+
   /////////////////////////////////////////////////////
   // 2. Game_State initialization
   /////////////////////////////////////////////////////
@@ -161,20 +142,21 @@ int main(void) {
   gs.wdim = v2m(800, 600);
 
   ogl_init(); // To create the bullshit empty VAO opengl side, nothing else
-  gs.red = ogl_tex_make((u8[]){250,90,72,255}, 1,1, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
-  Platform_Image_Data image = platform_load_image_bytes_as_rgba("data/microgue.png");
-  assert(image.width > 0);
-  assert(image.height > 0);
-  assert(image.data != nullptr);
-  //gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
-  gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
+
+  // Asset loading stuff
+  am_init(gs.persistent_arena, gs.frame_arena);
+
+  static const u8 atlas_data[] = {
+#embed "../../data/microgue.png"
+  };
+  gs.atlas = am_load_from_data(MAKE_STR("atlas.png"), (buf){(char*)atlas_data, sizeof(atlas_data)});
   gs.atlas_sprites_per_dim = v2m(16,10);
   gs.font = bfont_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
-  stbi_image_free(image.data);
+
+
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;
   game_api.init(&gs);
-
 
   /////////////////////////////////////////////////////
   // 3. Game Loop

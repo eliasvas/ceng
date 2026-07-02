@@ -5,6 +5,7 @@
 #include "ogl.h"
 #include "rend.h"
 #include "input.h"
+#include "asset_mgr.h"
 #include "bfont.h"
 #include "json_util.h"
 
