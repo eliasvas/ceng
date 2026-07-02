@@ -125,6 +125,7 @@ typedef enum {
   OGL_PRIM_TYPE_POINT,
   OGL_PRIM_TYPE_LINE,
   OGL_PRIM_TYPE_LINE_STRIP,
+  OGL_PRIM_TYPE_LINE_LOOP,
   OGL_PRIM_TYPE_TRIANGLE,
   OGL_PRIM_TYPE_TRIANGLE_STRIP,
   OGL_PRIM_TYPE_TRIANGLE_FAN,
@@ -445,6 +446,7 @@ static GLuint ogl_prim_type_to_gl_type(Ogl_Prim_Type prim) {
     case OGL_PRIM_TYPE_POINT:          return GL_POINTS;
     case OGL_PRIM_TYPE_LINE:           return GL_LINES;
     case OGL_PRIM_TYPE_LINE_STRIP:     return GL_LINE_STRIP;
+    case OGL_PRIM_TYPE_LINE_LOOP:      return GL_LINE_LOOP;
     case OGL_PRIM_TYPE_TRIANGLE:       return GL_TRIANGLES;
     case OGL_PRIM_TYPE_TRIANGLE_STRIP: return GL_TRIANGLE_STRIP;
     case OGL_PRIM_TYPE_TRIANGLE_FAN:   return GL_TRIANGLE_FAN;

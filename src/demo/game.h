@@ -41,6 +41,9 @@ typedef struct {
   Ogl_Tex red;
   Font_Info font;
 
+  // 3D scene stuff should be here or no?
+  m4 view_mat;
+
 } Game_State;
 
 void game_init(Game_State *gs);

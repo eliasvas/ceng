@@ -236,7 +236,11 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
 //        .viewport = viewport,
 //        .scissor  = scissor,
         .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
-      }
+      },
+      .depth_state = (Ogl_Depth_State) {
+        .dwrite = OGL_DEPTH_WRITE_ENABLED,
+        .dfunc  = OGL_DFUNC_LEQUAL,
+      },
     };
   }
 }
@@ -319,8 +323,7 @@ void rn_push_quad(RN_Pass *pass, R_Quad q) {
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 
-void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
-
+void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 view, m4 model) {
   u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
   buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
   tri_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = white_tex,};
@@ -329,7 +332,11 @@ void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type 
   tri_bundle.vbos[0].buffer = vbo;
 
   m4 proj = m4_persp(45.0, viewport.w/(f32)viewport.h, 0.1, 100);
-  m4 view = m4_view(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
+  //m4 view = m4_view(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
+
+  //if (input_key_pressed(&sdl_state->gs.input, KEY_SCANCODE_R) || game_api.last_modified != pinfo.modify_time) {
+
+  //m4 view = m4_view(v3m(0,0,40), v3m(0,0,0), v3m(0,1,0));
   m4 m = m4_mult(proj, m4_mult(view, model));
   // Apply a test model matrix
   ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
@@ -341,3 +348,47 @@ void rn_imm_tri(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type 
   ogl_render_bundle_draw(&tri_bundle, prim, vert_count, 1);
   arena_reset_to_pos(__frame_arena, arena_prev_pos);
 }
+
+  void rn_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 view, m4 model, color c) {
+    Tri_Vertex cube_verts[36] = {
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
+    };
+    rn_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, view, model);
+
+  }
+
