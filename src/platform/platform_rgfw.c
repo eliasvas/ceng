@@ -151,7 +151,7 @@ int main(void) {
   };
   gs.atlas = am_load_from_data(MAKE_STR("atlas.png"), (buf){(char*)atlas_data, sizeof(atlas_data)});
   gs.atlas_sprites_per_dim = v2m(16,10);
-  gs.font = bfont_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
+  gs.font = bfont_load_default_atlas(gs.persistent_arena, gs.frame_arena, 64, 1024, 1024);
 
 
   f64 dt = 1.0/60.0;

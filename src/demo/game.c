@@ -90,7 +90,7 @@ void game_render(Game_State *gs, float dt) {
 
 
   // Gui Test
-#if 0
+#if 1
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 

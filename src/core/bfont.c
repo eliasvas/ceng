@@ -1,7 +1,11 @@
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
-#define STBTT_assert(x)
 #include <stb/stb_truetype.h>
+
+// int stbi_write_png_compression_level = 0;
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb/stb_image_write.h>
+
 
 #include "bfont.h"
 
@@ -14,8 +18,14 @@ static const u8 default_font_data[] = {
 #embed "../../data/ProggyClean.ttf"
 };
 
+void png_stbi_write_func(void *context, void *data, int size) {
+  buf *pinfo = (buf*)context;
+  memcpy(pinfo->data+pinfo->count, data, size);
+  pinfo->count += size;
+}
 
-Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
+// FIXME: persistent arena can be used for temporary allocations you know!
+Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
   Font_Info font = {};
 
   font.first_codepoint = 32; // ' ' 
@@ -84,37 +94,25 @@ Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atl
   font.descent_px = (f32)descent*scale;
   font.line_gap_px = (f32)line_gap*scale;
 
-  // Transform to OpenGL-style texture (mainly by convention, I like the upright view on renderdoc) + make the actual texture
-  bfont_flip_bitmap(font_bitmap, atlas_width, atlas_height);
-
   // Transform to RGBA
-  u8 *font_bitmap_rgba = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height*4);
-  for (u32 i = 0; i < atlas_width*atlas_height; ++i) {
-    font_bitmap_rgba[4*i + 0] = font_bitmap[i + 0];
-    font_bitmap_rgba[4*i + 1] = font_bitmap[i + 0];
-    font_bitmap_rgba[4*i + 2] = font_bitmap[i + 0];
-    font_bitmap_rgba[4*i + 3] = font_bitmap[i + 0];
-  }
-
-  // Finally make the texture
-  //font.atlas = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
-
-  // This is a HACK
-  font.tex_dim = v2m(atlas_width, atlas_height);
-  font.tex_id = am_load_from_data(MAKE_STR("fa.png"), (buf){});
-  *((Ogl_Tex*)am_get(font.tex_id)) = ogl_tex_make(font_bitmap_rgba, atlas_width, atlas_height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
-
-  return font;
-}
-
-void bfont_flip_bitmap(u8 *bitmap, s32 width, s32 height) {
-  for (s32 y = 0; y < height/2; ++y) {
-    for (s32 x = 0; x < width; ++x) {
-      u8 temp = bitmap[x + y * width];
-      bitmap[x+y*width] = bitmap[x+(height-y)*width];
-      bitmap[x+(height-y)*width] = temp;
+  u64 temp_arena_pos_start = arena_get_current_pos(temp_arena);
+  u8 *font_bitmap_rgba = (u8*)arena_push_array(temp_arena, u8, sizeof(u8)*atlas_width*atlas_height*4);
+  for (u32 i = 0; i < atlas_width*atlas_height; i+=1) {
+    for (u32 j = 0; j < 4; j+=1) {
+      font_bitmap_rgba[4*i + j] = font_bitmap[i];
     }
   }
+
+  buf ctx = (buf) {
+    .data = arena_push_array(temp_arena, u8, sizeof(u32)*atlas_width *atlas_height + 1024),
+    .count = 0,
+  };
+  stbi_write_png_to_func(png_stbi_write_func, &ctx, atlas_width, atlas_height, 4, font_bitmap_rgba, atlas_width*sizeof(u32));
+  font.tex_dim = v2m(atlas_width, atlas_height);
+  font.tex_id = am_load_from_data(MAKE_STR("fa.png"), (buf){ctx.data, ctx.count});
+  arena_reset_to_pos(temp_arena, temp_arena_pos_start);
+
+  return font;
 }
 
 rect bfont_calc_text_rect(Font_Info *font_info, buf text, v2 pos, f32 scale) {
