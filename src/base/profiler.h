@@ -2,9 +2,6 @@
 #define PROFILER_H__
 #include "helper.h"
 
-// FIXME: remove this, NO stdlib!!!
-#include <stdio.h>
-
 /* Overview:
   - Regions are the actual profiling regions (e.g My_Calculation_Region_Of_Code), there we put inclusive/exclusive timings in cycles.
   - Blocks just mark the execution of one begin_block(..) end_block(..) pair, they contribute to final region timings.

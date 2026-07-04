@@ -117,6 +117,16 @@ typedef enum {
     KEY_SCANCODE_LEFT = 80,
     KEY_SCANCODE_DOWN = 81,
     KEY_SCANCODE_UP = 82,
+
+    KEY_SCANCODE_LCTRL = 224,
+    KEY_SCANCODE_LSHIFT = 225,
+    KEY_SCANCODE_LALT = 226,
+    KEY_SCANCODE_LGUI = 227,
+    KEY_SCANCODE_RCTRL = 228,
+    KEY_SCANCODE_RSHIFT = 229,
+    KEY_SCANCODE_RALT = 230,
+    KEY_SCANCODE_RGUI = 231,
+
     KEY_SCANCODE_COUNT,
 } Key_Scancode;
 
@@ -154,6 +164,7 @@ typedef struct {
   u64 transition_count;
 }Input_Key_State;
 
+// FIXME: probably should be allocated on the Heap!
 typedef struct {
     Input_Key_State keeb_state[KEY_SCANCODE_COUNT];
     Input_Key_State mouse_state[INPUT_MOUSE_COUNT];

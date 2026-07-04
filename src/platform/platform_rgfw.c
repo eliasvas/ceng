@@ -245,6 +245,14 @@ int main(void) {
           else if (value == RGFW_keyDown) scancode = KEY_SCANCODE_DOWN;
           else if (value == RGFW_keyLeft) scancode = KEY_SCANCODE_LEFT;
           else if (value == RGFW_keyRight) scancode = KEY_SCANCODE_RIGHT;
+          else if (value == RGFW_keyTab) scancode = KEY_SCANCODE_TAB;
+          else if (value == RGFW_keyShiftL) scancode = KEY_SCANCODE_LSHIFT;
+          else if (value == RGFW_keyShiftR) scancode = KEY_SCANCODE_LSHIFT;
+          else if (value == RGFW_keyControlL) scancode = KEY_SCANCODE_LCTRL;
+          else if (value == RGFW_keyControlR) scancode = KEY_SCANCODE_RCTRL;
+          else if (value == RGFW_keyAltL) scancode = KEY_SCANCODE_LALT;
+          else if (value == RGFW_keyAltR) scancode = KEY_SCANCODE_RALT;
+          else if (value == RGFW_keySpace) scancode = KEY_SCANCODE_SPACE;
 
           input_event.evt = (Input_Event){
             .data.ke = (Input_Keeb_Event) {

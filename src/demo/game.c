@@ -10,38 +10,22 @@
 
 extern void platform_play_sound(const char *sound);
 
-const char* entity_map= R"(@@@@@@@@@@
-@$#######@
-@##$$####@
-@##$#####@
-@##$$####@
-@#$####$$@
-@@@@@@@@@@
-)";
-
 void game_init(Game_State *gs) {
   entity_store_init();
-  // Add the map
-  entity_store_add_map(entity_map);
+
   // Make the hero
   Entity *hero = entity_store_add();
   hero->kind = ENTITY_KIND_HERO;
-  hero->tex_coords = rec(4*8,9*8,8,8);
-
-  hero->start_coords = v3m(1,1,0);
-  hero->target_coords = v3m(1,1,0);
-  entity_set_coords_imm(hero, v3m(1,1,0));
-
-  hero->layer = 1;
+  hero->pos = v3m(1,0,1);
+  hero->dynamic = true;
+  hero->size = v3m(1,1,1);
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
-
 }
 
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
 }
-
 
 void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   assert(cell_count%2 == 0 && "Cell count has to be divisible by 2 because its centered to origin dummy");
@@ -58,6 +42,7 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   // Regular grid
   for (s32 z_coord = - cell_count/2; z_coord < cell_count/2; z_coord += 1) {
     for (s32 x_coord = - cell_count/2; x_coord < cell_count/2; x_coord += 1) {
+      if (z_coord == 0 && x_coord == 0) continue;
 
       // This is the logic..
       m4 model = m4_translate(v3m(x_coord,0,z_coord));
@@ -82,9 +67,7 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
 }
 
 void game_render(Game_State *gs, float dt) {
-#if 0
-  entity_store_update_render(gs, dt);
-#else
+
   m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
   gs->view_mat = m4_view(v3m(0,8,10), v3m(0,0,0), v3m(0,1,0));
 
@@ -103,8 +86,7 @@ void game_render(Game_State *gs, float dt) {
     (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(0,0,1,0.5)}, 
   };
   rn_imm_verts(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, gs->view_mat, model);
-
-#endif
+  entity_store_update_render(gs, dt);
 
 
   // Gui Test
