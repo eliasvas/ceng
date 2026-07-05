@@ -16,9 +16,27 @@ void game_init(Game_State *gs) {
   // Make the hero
   Entity *hero = entity_store_add();
   hero->kind = ENTITY_KIND_HERO;
-  hero->pos = v3m(1,0,1);
   hero->dynamic = true;
-  hero->size = v3m(1,1,1);
+  hero->box = (Phys_Box) {
+    .pos = v3m(1,0,1),
+    .off = v3m(0,0,0),
+    .hdim = v3m(0.5,0.5,0.5),
+  };
+  hero->col = v4m(0.9,0.4,0.3,1.0);
+
+
+  // Make a test
+  for (s32 height = 0; height < 3; height +=1) {
+    Entity *test = entity_store_add();
+    test->dynamic = false;
+    test->box = (Phys_Box) {
+      .pos = v3m(-4,height,1),
+      .off = v3m(0,0,0),
+      .hdim = v3m(0.5,0.5,0.5),
+    };
+    test->col = v4m(0.2,0.4,0.9,1.0);
+  }
+
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
 }
@@ -90,7 +108,7 @@ void game_render(Game_State *gs, float dt) {
 
 
   // Gui Test
-#if 1
+#if 0
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 
