@@ -18,21 +18,20 @@ void game_init(Game_State *gs) {
   hero->kind = ENTITY_KIND_HERO;
   hero->dynamic = true;
   hero->box = (Phys_Box) {
-    .pos = v3m(1,0,1),
-    .off = v3m(0,0,0),
-    .hdim = v3m(0.5,0.5,0.5),
+    .pos = HMM_V3(1,0,1),
+    .off = HMM_V3(0,0,0),
+    .hdim = HMM_V3(0.5,0.5,0.5),
   };
   hero->col = v4m(0.9,0.4,0.3,1.0);
-
 
   // Make a test
   for (s32 height = 0; height < 3; height +=1) {
     Entity *test = entity_store_add();
     test->dynamic = false;
     test->box = (Phys_Box) {
-      .pos = v3m(-4,height,1),
-      .off = v3m(0,0,0),
-      .hdim = v3m(0.5,0.5,0.5),
+      .pos = HMM_V3(-4,height,1),
+      .off = HMM_V3(0,0,0),
+      .hdim = HMM_V3(0.5,0.5,0.5),
     };
     test->col = v4m(0.2,0.4,0.9,1.0);
   }
@@ -63,47 +62,52 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
       if (z_coord == 0 && x_coord == 0) continue;
 
       // This is the logic..
-      m4 model = m4_translate(v3m(x_coord,0,z_coord));
-      rn_imm_verts(gs->game_viewport, quad_verts, array_count(quad_verts), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, model);
+      HMM_Mat4 model = HMM_Translate(HMM_V3(x_coord, 0, z_coord));
+      HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model);
+
+      rn_imm_verts(gs->game_viewport, quad_verts, array_count(quad_verts), OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp);
     }
   } 
+
+  HMM_Mat4 mv = HMM_Mul(gs->proj, gs->view);
 
   // X-axis red highlight
   Tri_Vertex line_x[4] = {
     (Tri_Vertex) {.pos = v3m(-cell_count/2,0,0), .color = c2}, 
     (Tri_Vertex) {.pos = v3m(cell_count/2,0,0), .color = c2}, 
   };
-  rn_imm_verts(gs->game_viewport, line_x, array_count(line_x), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, m4d(1.0));
+  rn_imm_verts(gs->game_viewport, line_x, array_count(line_x), OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mv);
 
   // Z-axis green highlight
   Tri_Vertex line_z[4] = {
     (Tri_Vertex) {.pos = v3m(0,0,-cell_count/2), .color = c3}, 
     (Tri_Vertex) {.pos = v3m(0,0,cell_count/2), .color = c3}, 
   };
-  rn_imm_verts(gs->game_viewport, line_z, array_count(line_z), OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, m4d(1.0));
+  rn_imm_verts(gs->game_viewport, line_z, array_count(line_z), OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mv);
 
 }
 
 void game_render(Game_State *gs, float dt) {
 
-  m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
-  gs->view_mat = m4_view(v3m(0,8,10), v3m(0,0,0), v3m(0,1,0));
+  //m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
+
+  HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), HMM_PI * gs->time_sec);
+  gs->proj = HMM_Perspective_RH_NO(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+  gs->view = HMM_LookAt_RH(HMM_V3(0,8,10), HMM_V3(0,0,0), HMM_V3(0,1,0));
+
+  HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), HMM_QToM4(rot_q));
 
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
 
-  // 2. Draw the cube
-  rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, gs->view_mat, m4d(1.0), v4m(1,0.3,0.3,1));
-  rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, gs->view_mat, m4d(1.0), v4m(0,0,0,1));
-
   // 3. Draw a spinning quad
   Tri_Vertex my_verts[] = {
-    (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,1,0.5)}, 
-    (Tri_Vertex) {.pos = v3m(-1,-1,0), .color = v4m(1,1,0,0.5)}, 
-    (Tri_Vertex) {.pos = v3m(+1,-1,0), .color = v4m(0,1,1,0.5)}, 
-    (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(0,0,1,0.5)}, 
+    (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,1,0.9)}, 
+    (Tri_Vertex) {.pos = v3m(-1,-1,0), .color = v4m(1,1,0,0.9)}, 
+    (Tri_Vertex) {.pos = v3m(+1,-1,0), .color = v4m(0,1,1,0.9)}, 
+    (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(0,0,1,0.9)}, 
   };
-  rn_imm_verts(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, gs->view_mat, model);
+  rn_imm_verts(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, (m4*)&mvp);
   entity_store_update_render(gs, dt);
 
 

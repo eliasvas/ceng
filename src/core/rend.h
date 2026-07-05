@@ -107,9 +107,9 @@ RN_Pass *rn_pass_back();
 void rn_flush_all();
 RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport);
 void rn_push_quad(RN_Pass *pass, R_Quad q);
-void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 view, m4 model);
 
-void rn_imm_cube(rect viewport, Ogl_Prim_Type, m4 view, m4 model, color c);
+void rn_imm_cube(rect viewport, Ogl_Prim_Type, m4 *mvp, color c);
+void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp);
 
 
 

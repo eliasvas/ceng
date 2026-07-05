@@ -324,22 +324,17 @@ void rn_push_quad(RN_Pass *pass, R_Quad q) {
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 
-void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 view, m4 model) {
+void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp) {
   u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
   //buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
   tri_bundle.vbos[0].buffer = vbo;
 
-  m4 proj = m4_persp(45.0, viewport.w/(f32)viewport.h, 0.1, 100);
+  //m4 proj = m4_persp(45.0, viewport.w/(f32)viewport.h, 0.1, 100);
   //m4 view = m4_view(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
 
-  //if (input_key_pressed(&sdl_state->gs.input, KEY_SCANCODE_R) || game_api.last_modified != pinfo.modify_time) {
-
-  //m4 view = m4_view(v3m(0,0,40), v3m(0,0,0), v3m(0,1,0));
-  m4 m = m4_mult(proj, m4_mult(view, model));
-  // Apply a test model matrix
-  ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
+  ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, mvp, 1, sizeof(m4));
 
   // Set dynamically before drawcall currently
   tri_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
@@ -349,7 +344,7 @@ void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Typ
   arena_reset_to_pos(__frame_arena, arena_prev_pos);
 }
 
-  void rn_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 view, m4 model, color c) {
+  void rn_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
     Tri_Vertex cube_verts[36] = {
       (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
       (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
@@ -388,7 +383,6 @@ void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Typ
       (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
       (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
     };
-    rn_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, view, model);
-
+    rn_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
   }
 

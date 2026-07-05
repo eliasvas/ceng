@@ -41,7 +41,8 @@ typedef struct {
   Font_Info font;
 
   // 3D scene stuff should be here or no?
-  m4 view_mat;
+  HMM_Mat4 view;
+  HMM_Mat4 proj;
 
 } Game_State;
 
