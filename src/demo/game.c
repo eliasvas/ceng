@@ -18,12 +18,12 @@ void game_init(Game_State *gs) {
   hero->kind = ENTITY_KIND_HERO;
   hero->dynamic = true;
   hero->box = (Phys_Box) {
-    .pos = HMM_V3(1,0,1),
+    .pos = HMM_V3(1,4,1),
     .off = HMM_V3(0,0,0),
     .hdim = HMM_V3(0.5,0.5,0.5),
   };
   hero->col = v4m(0.9,0.4,0.3,1.0);
-
+  
   // Make a test
   for (s32 height = 0; height < 3; height +=1) {
     Entity *test = entity_store_add();
@@ -36,12 +36,35 @@ void game_init(Game_State *gs) {
     test->col = v4m(0.2,0.4,0.9,1.0);
   }
 
+  Entity *ground = entity_store_add();
+  ground->dynamic = false;
+  ground->box = (Phys_Box) {
+    .pos = HMM_V3(0,-1.01,0),
+    .off = HMM_V3(0,0,0),
+    .hdim = HMM_V3(4,1,4),
+  };
+  ground->col = v4m(0.4,0.4,0.4,1.0);
+
+
+  gs->proj = HMM_Perspective_RH_NO(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+  gs->view = HMM_LookAt_RH(HMM_V3(0,8,10), HMM_V3(0,0,0), HMM_V3(0,1,0));
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
 }
 
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
+
+  // Camera stuff (This is wrong because we post-multiply.. FIXME)
+  v2 mouse_delta = input_get_mouse_delta(&gs->input);
+  if (input_mkey_down(&gs->input, INPUT_MOUSE_MMB)) { 
+    HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), mouse_delta.x*dt);
+    gs->view = HMM_Mul(gs->view, HMM_QToM4(rot_q));
+  }
+  if (input_mkey_down(&gs->input, INPUT_MOUSE_MMB)) { 
+    HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(1,0,0), mouse_delta.y*dt);
+    gs->view = HMM_Mul(gs->view, HMM_QToM4(rot_q));
+  }
 }
 
 void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
@@ -91,16 +114,14 @@ void game_render(Game_State *gs, float dt) {
 
   //m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
 
-  HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), HMM_PI * gs->time_sec);
-  gs->proj = HMM_Perspective_RH_NO(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
-  gs->view = HMM_LookAt_RH(HMM_V3(0,8,10), HMM_V3(0,0,0), HMM_V3(0,1,0));
-
-  HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), HMM_QToM4(rot_q));
 
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
 
+#if 0
+  HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), HMM_QToM4(rot_q));
   // 3. Draw a spinning quad
+  HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), HMM_PI * gs->time_sec);
   Tri_Vertex my_verts[] = {
     (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,1,0.9)}, 
     (Tri_Vertex) {.pos = v3m(-1,-1,0), .color = v4m(1,1,0,0.9)}, 
@@ -108,11 +129,12 @@ void game_render(Game_State *gs, float dt) {
     (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(0,0,1,0.9)}, 
   };
   rn_imm_verts(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, (m4*)&mvp);
+#endif
   entity_store_update_render(gs, dt);
 
 
   // Gui Test
-#if 0
+#if 1
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 

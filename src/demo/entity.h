@@ -143,7 +143,7 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
         if (input_key_down(&gs->input, KEY_SCANCODE_LEFT)) { move_dir.X-=1; }
         if (input_key_down(&gs->input, KEY_SCANCODE_UP)) { move_dir.Z-=1; }
         if (input_key_down(&gs->input, KEY_SCANCODE_DOWN)) { move_dir.Z+=1; }
-        move_dir = HMM_Norm(move_dir);
+        //move_dir = HMM_Norm(move_dir);
         f32 speed = 5.0;
         e->box.vel.X = move_dir.X * speed;
         e->box.vel.Z = move_dir.Z * speed;
@@ -168,34 +168,26 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
         {
           // Jump logic
           f32 jump_scale = 5;
-          if (e->grounded && input_key_pressed(&gs->input, KEY_SCANCODE_SPACE)) { 
+          if (input_key_pressed(&gs->input, KEY_SCANCODE_SPACE)) { 
             e->box.vel.Y = jump_scale;
-            e->grounded = false;
           }
-
-          if (!e->grounded && e->box.pos.Y >= 0) {
-            f32 le_G = 9.8;
-            e->box.vel.Y -= le_G * dt;
-            e->grounded = false;
-          } else {
-            e->grounded = true;
-            e->box.pos.Y = 0;
-            e->box.vel.Y = 0;
-          }
-        }
-
-
-        HMM_Vec3 candidate_pos = HMM_Add(e->box.pos, HMM_Mul(e->box.vel, dt));
-        b32 collides = entity_collides(gs, e->id, candidate_pos);
-        if (!collides) {
-          // Calc final added position (needed also for collision checks right now
-          e->box.pos = candidate_pos;
+          f32 le_G = -9.8;
+          e->box.vel.Y = lerp(e->box.vel.Y, le_G, dt);
         }
       }
 
-      // Render
-      //m4 model = m4_mult(m4_translate(e->box.pos), m4_translate(v3m(0.5, 0.5, 0.5)));
-      HMM_Mat4 model = HMM_MulM4(HMM_Translate(e->box.pos), HMM_Translate(HMM_V3(0.5, 0.5, 0.5)));
+      // Simple axis separated movement
+      for (s32 axis = 0; axis < 3; axis += 1) {
+        // TODO: Also check direction of collision ok?????
+
+        HMM_Vec3 candidate_pos_axis = e->box.pos;
+        candidate_pos_axis.Elements[axis] += e->box.vel.Elements[axis] * dt;
+        b32 collides_axis = entity_collides(gs, e->id, candidate_pos_axis);
+        if (!collides_axis) e->box.pos = candidate_pos_axis;
+      }
+
+      // Render le cube
+      HMM_Mat4 model = HMM_MulM4(HMM_Translate(e->box.pos),HMM_Scale(HMM_Mul(e->box.hdim, 2.0f)));
       HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model);
 
       rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, e->col);
