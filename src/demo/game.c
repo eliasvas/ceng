@@ -45,8 +45,6 @@ void game_init(Game_State *gs) {
   };
   ground->col = v4m(0.4,0.4,0.4,1.0);
 
-
-  gs->proj = HMM_Perspective_RH_NO(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
   gs->view = HMM_LookAt_RH(HMM_V3(0,8,10), HMM_V3(0,0,0), HMM_V3(0,1,0));
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
@@ -54,6 +52,8 @@ void game_init(Game_State *gs) {
 
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
+  gs->proj = HMM_Perspective_RH_NO(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+
 
   // Camera stuff (This is wrong because we post-multiply.. FIXME)
   v2 mouse_delta = input_get_mouse_delta(&gs->input);
@@ -134,7 +134,7 @@ void game_render(Game_State *gs, float dt) {
 
 
   // Gui Test
-#if 1
+#if 0
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 

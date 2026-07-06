@@ -6,7 +6,6 @@
 #define BRAND_IMPLEMENTATION
 #define PROFILER_IMPLEMENTATION
 #include "base/base_inc.h"
-
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
 
@@ -63,30 +62,67 @@ f64 platform_get_time() {
   return (f64)get_time_ns() / (f64)get_nano_freq();
 }
 
+void platform_try_reload_gamelib(Game_State *gs, Game_Api *game_api, b32 call_init) {
+  struct stat glib_stat;
+  if (stat("build/libgame.so", &glib_stat) == -1) {
+    printf("couldn't stat libgame.so - loading statically (no action needed)\n");
+    game_api->init     = game_init;
+    game_api->update   = game_update;
+    game_api->render   = game_render;
+    game_api->shutdown = game_shutdown;
+  } else {
+    buf gamelib_path = MAKE_STR("build/libgame.so");
+    s64 mod_time = glib_stat.st_mtim.tv_nsec;
+
+    // If its a reload (not first time, copy the dll to another file first
+    static int reload_count = 0;
+    if (reload_count > 0) {
+      if (mod_time != game_api->last_modified) {
+        if (game_api->lib) {
+          dlclose(game_api->lib);
+        }            
+#if OS_WINDOWS
+        buf cp_cmd = arena_sprintf(gs->frame_arena, "copy build/libgame.so build/libgame_%d.so", reload_count);
+#else
+        buf cp_cmd = arena_sprintf(gs->frame_arena, "cp build/libgame.so build/libgame_%d.so", reload_count);
+#endif
+        system(cp_cmd.data);
+        game_api->last_modified = mod_time;
+        gamelib_path = arena_sprintf(gs->frame_arena, "build/libgame_%d.so", reload_count);
+      } else {
+        return;
+      }
+    }
+
+    // Then load the function pointers as necessary
+    void *game_lib = dlopen(gamelib_path.data, RTLD_LAZY | RTLD_DEEPBIND);
+    assert(game_lib);
+    game_api->init = (game_init_fn)dlsym(game_lib, "game_init");
+    assert(game_api->init);
+    game_api->update = (game_update_fn)dlsym(game_lib, "game_update");
+    assert(game_api->update);
+    game_api->render = (game_render_fn)dlsym(game_lib, "game_render");
+    assert(game_api->render);
+    game_api->shutdown = (game_shutdown_fn)dlsym(game_lib, "game_shutdown");
+    assert(game_api->shutdown);
+    game_api->lib = game_lib;
+    assert(game_api->lib);
+    game_api->last_modified = mod_time;
+
+    reload_count+=1;
+  }
+  if (call_init) {
+    game_api->init(gs);
+  }
+}
+
 int main(void) {
   profiler_begin();
   BRAND_SEED(time(0));
 
   Game_State gs = {};
 
-  // TODO: Try to do the reload thingy
-#if (ARCH_WASM64 || ARCH_WASM32 || 1)
-  Game_Api game_api = (Game_Api){
-    .init     = game_init,
-    .update   = game_update,
-    .render   = game_render,
-    .shutdown = game_shutdown,
-  };
-#else
   Game_Api game_api = {};
-  void *game_lib = dlopen("./build/libgame.so", RTLD_LAZY | RTLD_DEEPBIND);
-  assert(game_lib);
-  game_api.lib = game_lib;
-  game_api.init = (game_init_fn)dlsym(game_lib, "game_init");
-  game_api.update = (game_update_fn)dlsym(game_lib, "game_update");
-  game_api.render = (game_render_fn)dlsym(game_lib, "game_render");
-  game_api.shutdown = (game_shutdown_fn)dlsym(game_lib, "game_shutdown");
-#endif // (ARCH_WASM64 || ARCH_WASM32 || 1)
 
   /////////////////////////////////////////////////////
   // 0. RGFW initialization (window + OpenGL)
@@ -132,8 +168,6 @@ int main(void) {
   ma_engine_set_volume(&ma_eng, 0.05);
   printf("miniaudio engine OK\n");
 
-
-
   /////////////////////////////////////////////////////
   // 2. Game_State initialization
   /////////////////////////////////////////////////////
@@ -156,7 +190,7 @@ int main(void) {
 
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;
-  game_api.init(&gs);
+  platform_try_reload_gamelib(&gs, &game_api, true);
 
   /////////////////////////////////////////////////////
   // 3. Game Loop
@@ -169,48 +203,12 @@ int main(void) {
 #endif // !(ARCH_WASM64 || ARCH_WASM32)
     arena_clear(gs.frame_arena);
 
-
     /////////////////////////////////////////////////////
     // 3.1 Reloading logic (happens once every second/target_frames)
     /////////////////////////////////////////////////////
-#if !(ARCH_WASM64 || ARCH_WASM32) 
     if (frame_count % 60 == 0) {
-      struct stat glib_stat;
-      if (stat("build/libgame.so", &glib_stat) == -1) {
-        printf("couldn't stat libgame.so\n");
-      } else {
-        s64 mod_time = glib_stat.st_mtim.tv_nsec;
-        if (game_api.last_modified != mod_time || gs.request_reload) {
-          gs.request_reload = false;
-          static int reload_count = 0;
-          reload_count+=1;
-          // This is ugly as hell
-#if OS_WINDOWS
-          buf cp_cmd = arena_sprintf(gs.frame_arena, "copy build/libgame.so build/libgame_%d.so", reload_count);
-#else
-          buf cp_cmd = arena_sprintf(gs.frame_arena, "cp build/libgame.so build/libgame_%d.so", reload_count);
-#endif
-          system(cp_cmd.data);
-          buf glib_newpath = arena_sprintf(gs.frame_arena, "build/libgame_%d.so", reload_count);
-          if (game_api.lib) {
-            dlclose(game_api.lib);
-          }            
-          void *game_lib = dlopen(glib_newpath.data, RTLD_LAZY | RTLD_DEEPBIND);
-          assert(game_lib);
-          game_api.init = (game_init_fn)dlsym(game_lib, "game_init");
-          game_api.update = (game_update_fn)dlsym(game_lib, "game_update");
-          game_api.render = (game_render_fn)dlsym(game_lib, "game_render");
-          game_api.shutdown = (game_shutdown_fn)dlsym(game_lib, "game_shutdown");
-          game_api.lib = game_lib;
-          game_api.last_modified = mod_time;
-          printf("reload mod time: %ld\n", mod_time);
-          // Should we actually do this? I don't think so!
-          game_api.init(&gs);
-          //---------------------------------------------
-        }
-      }
+      platform_try_reload_gamelib(&gs, &game_api, true);
     }
-#endif // !(ARCH_WASM64 || ARCH_WASM32) 
 
     /////////////////////////////////////////////////////
     // 3.2 Handling incoming events for the frame
