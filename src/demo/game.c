@@ -144,12 +144,19 @@ void game_render(Game_State *gs, float dt) {
     .major_layout_axis = GUI_AXIS_X,
   };
 
+  gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
+  gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   // Small GUI test (mainly for Box reuse test right now)
   static bool other_enabled = false;
   if (gui_button(MAKE_STR("Click Secret"), params)) {
     other_enabled = !other_enabled;
     printf("Reset\n");
   }
+
+  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 100.0, 1.0});
+
+  // FIXME pref_width (the major axis) doesn't work for some reason
+  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PIXELS, 100.0, 1.0});
 
   if (other_enabled) {
     if (gui_button(MAKE_STR("WOW"), params)) {

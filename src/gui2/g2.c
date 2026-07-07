@@ -1,4 +1,11 @@
 #include "g2.h"
+
+#define GUI_STACKS_IMPLEMENTATION
+#include "gui_stacks.h"
+
+// Should this be here??
+Gui_Ctx ctx;
+
 static Gui_Box g_nil_box __attribute__((section(".rodata"))) = {
   .first = &g_nil_box,
   .last = &g_nil_box,
@@ -7,29 +14,7 @@ static Gui_Box g_nil_box __attribute__((section(".rodata"))) = {
   .parent = &g_nil_box,
 };
 
-typedef struct {
-  rect viewport;
-  f32 g_scale;
 
-  Arena *arena;
-  Arena *temp_arena;
-
-  Font_Info *font;
-  Input *input;
-
-  Gui_ID hot_id;
-  Gui_ID active_id;
-
-  Gui_Box_Hash_Slot *slots;
-  s32 slot_count;
-  Gui_Box *box_freelist;
-
-  Gui_Box *root;
-  s64 frame_idx;
-
-} Gui_Ctx;
-
-static Gui_Ctx ctx;
 
 Gui_Box *gui_nil_box() {
   return (&g_nil_box);
@@ -80,10 +65,10 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
 
     // FIXME FIXME FIXME: Implement stacks for this scenario
     if (!(box->flags & GUI_BOX_FLAG_FIXED_WIDTH)) {
-      box->pref_size[GUI_AXIS_X] = (Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0};
+      box->pref_size[GUI_AXIS_X] = gui_top_pref_width();
     }
     if (!(box->flags & GUI_BOX_FLAG_FIXED_HEIGHT)) {
-      box->pref_size[GUI_AXIS_Y] = (Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0};
+      box->pref_size[GUI_AXIS_Y] = gui_top_pref_height();
     }
 
     // TODO: Here we should check wether the fixed_size stacks have values,
@@ -100,7 +85,7 @@ b32 gui_button(buf label, Gui_Layout_Params params) {
   Gui_Box *box = gui_box_make(label, id, params.flags);
   // 1. Fill the (immediate) params
   {
-    box->parent = (params.parent) ? params.parent : ctx.root;
+    box->parent = gui_top_parent();
     box->major_layout_axis = params.major_layout_axis;
   }
 
@@ -110,7 +95,7 @@ b32 gui_button(buf label, Gui_Layout_Params params) {
   dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
 
   // 3. Button/Box logic (using previous frame's final_rect.p.raw, AKA box->final_rect.p.raw!)
-  rect r = bfont_calc_text_rect(ctx.font, label, v2m(box->final_rect.p.raw[GUI_AXIS_X], box->final_rect.p.raw[GUI_AXIS_Y]), ctx.g_scale);
+  rect r = box->final_rect;
   v2 bl_mp = input_get_mouse_pos(ctx.input);
   bl_mp.y = (ctx.viewport.h - bl_mp.y);
   b32 collides = rect_isect_point(r, bl_mp);
@@ -157,8 +142,11 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input) {
   ctx.slots = arena_push_array(ctx.arena, Gui_Box_Hash_Slot, ctx.slot_count);
 }
 
+void gui_init_stacks();
+
 void gui_begin(rect viewport) {
   // Advance frame index (used for box pruning)
+  gui_init_stacks();
   ctx.frame_idx+=1;
 
   ctx.viewport = viewport;
@@ -175,8 +163,8 @@ void gui_begin(rect viewport) {
   ctx.root->fixed_pos.raw[GUI_AXIS_Y]  = ctx.viewport.y + pad_px/2;
   ctx.root->fixed_size.raw[GUI_AXIS_X] = ctx.viewport.w - pad_px;
   ctx.root->fixed_size.raw[GUI_AXIS_Y] = ctx.viewport.h - pad_px;
-
   ctx.root->major_layout_axis = GUI_AXIS_X;
+  gui_push_parent(ctx.root);
 }
 
 void gui_layout_fixed_sizes(Gui_Box *node, Gui_Axis axis) {

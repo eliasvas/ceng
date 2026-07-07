@@ -5,6 +5,12 @@
 typedef u64 Gui_ID;
 
 typedef enum {
+  GUI_TEXT_ALIGNMENT_LEFT,
+  GUI_TEXT_ALIGNMENT_RIGHT,
+  GUI_TEXT_ALIGNMENT_CENTER,
+} Gui_Text_Alignment;
+
+typedef enum {
   GUI_SIZEKIND_NONE,
   GUI_SIZEKIND_PIXELS,
   GUI_SIZEKIND_TEXT_CONTENT,
@@ -88,9 +94,74 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
 void gui_init(Arena *tarena, Font_Info *font, Input *input);
 
 
+Gui_Box *gui_nil_box();
 b32 gui_button(buf label, Gui_Layout_Params params);
  
 void gui_begin(rect viewport);
 void gui_end();
+
+
+typedef struct Gui_Parent_Node Gui_Parent_Node; struct Gui_Parent_Node{Gui_Parent_Node *next; Gui_Box *v; };
+typedef struct Gui_Pref_Width_Node Gui_Pref_Width_Node; struct Gui_Pref_Width_Node {Gui_Pref_Width_Node *next; Gui_Size v;};
+typedef struct Gui_Pref_Height_Node Gui_Pref_Height_Node; struct Gui_Pref_Height_Node {Gui_Pref_Height_Node *next; Gui_Size v;};
+typedef struct Gui_Fixed_X_Node Gui_Fixed_X_Node; struct Gui_Fixed_X_Node {Gui_Fixed_X_Node *next; f32 v;};
+typedef struct Gui_Fixed_Y_Node Gui_Fixed_Y_Node; struct Gui_Fixed_Y_Node {Gui_Fixed_Y_Node *next; f32 v;};
+typedef struct Gui_Fixed_Width_Node Gui_Fixed_Width_Node; struct Gui_Fixed_Width_Node {Gui_Fixed_Width_Node *next; f32 v;};
+typedef struct Gui_Fixed_Height_Node Gui_Fixed_Height_Node; struct Gui_Fixed_Height_Node {Gui_Fixed_Height_Node *next; f32 v;};
+typedef struct Gui_Bg_Color_Node Gui_Bg_Color_Node; struct Gui_Bg_Color_Node {Gui_Bg_Color_Node *next; v4 v;};
+typedef struct Gui_Text_Color_Node Gui_Text_Color_Node; struct Gui_Text_Color_Node {Gui_Text_Color_Node *next; v4 v;};
+typedef struct Gui_Text_Alignment_Node Gui_Text_Alignment_Node; struct Gui_Text_Alignment_Node {Gui_Text_Alignment_Node *next; Gui_Text_Alignment v;};
+typedef struct Gui_Font_Scale_Node Gui_Font_Scale_Node; struct Gui_Font_Scale_Node {Gui_Font_Scale_Node *next; f32 v;};
+typedef struct Gui_Child_Layout_Axis_Node Gui_Child_Layout_Axis_Node; struct Gui_Child_Layout_Axis_Node {Gui_Child_Layout_Axis_Node *next; Gui_Axis v;};
+#include "gui_stacks.h"
+
+typedef struct {
+  rect viewport;
+  f32 g_scale;
+
+  Arena *arena;
+  Arena *temp_arena;
+
+  Font_Info *font;
+  Input *input;
+
+  Gui_ID hot_id;
+  Gui_ID active_id;
+
+  Gui_Box_Hash_Slot *slots;
+  s32 slot_count;
+  Gui_Box *box_freelist;
+
+  Gui_Box *root;
+  s64 frame_idx;
+
+
+  Gui_Parent_Node parent_nil_stack_top;
+  struct { Gui_Parent_Node *top; Gui_Box * bottom_val; Gui_Parent_Node *free; b32 auto_pop; } parent_stack;
+  Gui_Fixed_X_Node fixed_x_nil_stack_top;
+  struct { Gui_Fixed_X_Node *top; f32 bottom_val; Gui_Fixed_X_Node *free; b32 auto_pop; } fixed_x_stack;
+  Gui_Fixed_Y_Node fixed_y_nil_stack_top;
+  struct { Gui_Fixed_Y_Node *top; f32 bottom_val; Gui_Fixed_Y_Node *free; b32 auto_pop; } fixed_y_stack;
+  Gui_Fixed_Width_Node fixed_width_nil_stack_top;
+  struct { Gui_Fixed_Width_Node *top; f32 bottom_val; Gui_Fixed_Width_Node *free; b32 auto_pop; } fixed_width_stack;
+  Gui_Fixed_Height_Node fixed_height_nil_stack_top;
+  struct { Gui_Fixed_Height_Node *top; f32 bottom_val; Gui_Fixed_Height_Node *free; b32 auto_pop; } fixed_height_stack;
+  Gui_Pref_Width_Node pref_width_nil_stack_top;
+  struct { Gui_Pref_Width_Node *top; Gui_Size bottom_val; Gui_Pref_Width_Node *free; b32 auto_pop; } pref_width_stack;
+  Gui_Pref_Height_Node pref_height_nil_stack_top;
+  struct { Gui_Pref_Height_Node *top; Gui_Size bottom_val; Gui_Pref_Height_Node *free; b32 auto_pop; } pref_height_stack;
+  Gui_Bg_Color_Node bg_color_nil_stack_top;
+  struct { Gui_Bg_Color_Node *top; v4 bottom_val; Gui_Bg_Color_Node *free; b32 auto_pop; } bg_color_stack;
+  Gui_Text_Color_Node text_color_nil_stack_top;
+  struct { Gui_Text_Color_Node *top; v4 bottom_val; Gui_Text_Color_Node *free; b32 auto_pop; } text_color_stack;
+  Gui_Font_Scale_Node font_scale_nil_stack_top;
+  struct { Gui_Font_Scale_Node *top; f32 bottom_val; Gui_Font_Scale_Node *free; b32 auto_pop; } font_scale_stack;
+  Gui_Text_Alignment_Node text_alignment_nil_stack_top;
+  struct { Gui_Text_Alignment_Node *top; Gui_Text_Alignment bottom_val; Gui_Text_Alignment_Node *free; b32 auto_pop; } text_alignment_stack;
+  Gui_Child_Layout_Axis_Node child_layout_axis_nil_stack_top;
+  struct { Gui_Child_Layout_Axis_Node *top; Gui_Axis bottom_val; Gui_Child_Layout_Axis_Node *free; b32 auto_pop; } child_layout_axis_stack;
+
+} Gui_Ctx;
+
 
 #endif
