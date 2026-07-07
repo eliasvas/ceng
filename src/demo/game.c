@@ -134,10 +134,11 @@ void game_render(Game_State *gs, float dt) {
 
 
   // Gui Test
-#if 0
+#if 1
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport);
 
+#if 1
   Gui_Layout_Params params = (Gui_Layout_Params) {
     .flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT),
     .major_layout_axis = GUI_AXIS_X,
@@ -156,6 +157,8 @@ void game_render(Game_State *gs, float dt) {
     }
     //gs->request_reload = true;
   }
+#endif
+
   gui_end();
 #endif
 

@@ -4,6 +4,20 @@
 
 typedef u64 Gui_ID;
 
+typedef enum {
+  GUI_SIZEKIND_NONE,
+  GUI_SIZEKIND_PIXELS,
+  GUI_SIZEKIND_TEXT_CONTENT,
+  GUI_SIZEKIND_PERCENT_OF_PARENT,
+  GUI_SIZEKIND_SUM_OF_CHILDREN,
+} Gui_SizeKind;
+
+typedef struct {
+  Gui_SizeKind kind;
+  f32 value; // can encode multiple stuff (e.g perc_of_parent or pixels or padding)
+  f32 strictness; // How big percentage box is willing to give up
+} Gui_Size;
+
 #define GUI_AXIS_COUNT 2
 typedef enum {
   GUI_AXIS_X,
@@ -33,8 +47,12 @@ struct Gui_Box {
   Gui_Box *hash_prev;
 
   // TODO: Maybe add anim_coords????
-  rect local_rect;
+  //rect local_rect;
   rect final_rect;
+
+  v2 fixed_pos;
+  v2 fixed_size;
+  Gui_Size pref_size[2];
 
   // misc
   Gui_ID id;

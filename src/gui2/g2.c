@@ -67,13 +67,28 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
 
   // Clear some stuff (document this better)
   {
-    box->id = id;
-    box->label = label;
-    box->flags = flags;
-    box->local_rect = rec(0,0,0,0);
+    box->fixed_pos.raw[GUI_AXIS_X]  = 0;
+    box->fixed_pos.raw[GUI_AXIS_Y]  = 0;
+    box->fixed_size.raw[GUI_AXIS_X] = 0;
+    box->fixed_size.raw[GUI_AXIS_Y] = 0;
     box->first = box->last = box->next = box->prev = box->parent = gui_nil_box();
     box->color_mod = 1.0;
     box->last_frame_used = ctx.frame_idx;
+    box->id = id;
+    box->label = label;
+    box->flags = flags;
+
+    // FIXME FIXME FIXME: Implement stacks for this scenario
+    if (!(box->flags & GUI_BOX_FLAG_FIXED_WIDTH)) {
+      box->pref_size[GUI_AXIS_X] = (Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0};
+    }
+    if (!(box->flags & GUI_BOX_FLAG_FIXED_HEIGHT)) {
+      box->pref_size[GUI_AXIS_Y] = (Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0};
+    }
+
+    // TODO: Here we should check wether the fixed_size stacks have values,
+    // boxes should NOT be made with FIXED flags
+    //if (box->flags & GUI_BOX_FLAGS_FIXED_WIDTH) { box->fixed_size.x = params.fixed_width;}
   }
   return box;
 }
@@ -156,35 +171,57 @@ void gui_begin(rect viewport) {
     GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT
   );
   f32 pad_px = 100;
-  ctx.root->local_rect = rec(
-      ctx.viewport.x + pad_px/2,
-      ctx.viewport.y + pad_px/2,
-      ctx.viewport.w - pad_px,
-      ctx.viewport.h - pad_px
-  );
+  ctx.root->fixed_pos.raw[GUI_AXIS_X]  = ctx.viewport.x + pad_px/2;
+  ctx.root->fixed_pos.raw[GUI_AXIS_Y]  = ctx.viewport.y + pad_px/2;
+  ctx.root->fixed_size.raw[GUI_AXIS_X] = ctx.viewport.w - pad_px;
+  ctx.root->fixed_size.raw[GUI_AXIS_Y] = ctx.viewport.h - pad_px;
+
   ctx.root->major_layout_axis = GUI_AXIS_X;
 }
 
-void gui_layout_axis(Gui_Box *root, Gui_Axis axis) {
-  // FIXME: To NOT have this ternary operator we could make a self referential struct instead for nullptr in our lists 
-  f32 prev_box_layout_pos = (!gui_box_is_nil(root->prev)) ? root->prev->final_rect.p.raw[axis] : root->parent->final_rect.p.raw[axis];
-  f32 prev_box_layout_dim = root->prev->final_rect.dim.raw[axis];
-  Gui_Axis parent_layout_axis = root->parent->major_layout_axis;
-  root->final_rect.p.raw[axis] = root->local_rect.p.raw[axis] + prev_box_layout_pos + ((parent_layout_axis == axis) ? prev_box_layout_dim : 0);
-
-  if ( root->flags & (GUI_BOX_FLAG_FIXED_WIDTH << axis) ) {
-    root->final_rect.dim.raw[axis] = root->local_rect.dim.raw[axis];
-  } else if (root->label.count > 0) { // FIXME: Currently only other way to get width is via text length
-    rect text_rect = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
-    root->final_rect.dim.raw[axis] = text_rect.dim.raw[axis];
-  } else {
-    printf("HUHUHUHUUHUHUHUUHHHH?!\n");
+void gui_layout_fixed_sizes(Gui_Box *node, Gui_Axis axis) {
+  switch (node->pref_size[axis].kind) {
+    case GUI_SIZEKIND_PIXELS:
+      node->fixed_size.raw[axis] = node->pref_size[axis].value;
+      break;
+    case GUI_SIZEKIND_TEXT_CONTENT:
+      f32 padding = node->pref_size[axis].value;
+      rect text_rect = bfont_calc_text_rect(ctx.font, node->label, v2m(0,0), ctx.g_scale);
+      node->fixed_size.raw[axis] = text_rect.dim.raw[axis] + padding;
+      break;
+    default:
+      break;
   }
 
-  for (Gui_Box *child = root->first; !gui_box_is_nil(child); child = child->next) {
-    gui_layout_axis(child, axis);
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    gui_layout_fixed_sizes(child, axis);
   }
 }
+
+
+void gui_layout_calc_fixed_pos_and_final_rects(Gui_Box *node, Gui_Axis axis) {
+  f32 node_pos = node->fixed_pos.raw[axis];
+  f32 layout_pos = 0;
+
+  // Calculate final rect for the box
+  node->final_rect.p.raw[axis] = node->fixed_pos.raw[axis];
+  node->final_rect.dim.raw[axis] = node->fixed_size.raw[axis];
+
+  // Calculate this box's children fixed positions
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    child->fixed_pos.raw[axis] = node_pos + layout_pos;
+
+    if (axis == node->major_layout_axis) {
+      layout_pos += child->fixed_size.raw[axis];
+    }
+  }
+
+  // Recurse
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    gui_layout_calc_fixed_pos_and_final_rects(child, axis);
+  }
+}
+
 
 void gui_render(Gui_Box *root) {
   // 0. Draw the Regular box
@@ -236,8 +273,10 @@ void gui_prune_unused_boxes() {
 void gui_end() {
   // Just to check for leaks
   //printf("GUI arena pos: %lu\n", arena_get_current_pos(ctx.arena));
-  gui_layout_axis(ctx.root, GUI_AXIS_X);
-  gui_layout_axis(ctx.root, GUI_AXIS_Y);
+  for (s32 axis = GUI_AXIS_X; axis <= GUI_AXIS_Y; axis+=1) {
+    gui_layout_fixed_sizes(ctx.root, axis);
+    gui_layout_calc_fixed_pos_and_final_rects(ctx.root, axis);
+  }
   gui_prune_unused_boxes();
   gui_render(ctx.root);
   ctx.hot_id = 0;

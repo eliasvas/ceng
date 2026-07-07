@@ -54,7 +54,7 @@ typedef struct {
   u64 next_id;
 
   // We need two maps one for id->entity and another for coords->entity
-	Entity_Hash_Slot *slots;
+  Entity_Hash_Slot *slots;
   u32 slot_count;
 
   // More stuff

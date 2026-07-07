@@ -174,6 +174,8 @@ Asset_Id am_load_from_data(buf asset_path, buf asset_data) {
   }
 }
 
+// TODO am_load(...) via _Generic
+
 #endif
 
 

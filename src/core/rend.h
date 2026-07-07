@@ -18,7 +18,6 @@ typedef struct {
   f32 rot_rad;
 } Batch_Vertex;
 
-
 typedef FRZ_Vertex Tri_Vertex;
 
 typedef struct {
@@ -72,8 +71,6 @@ typedef struct {
   s64 quad_count;
 } R_Quad_Chunk_List ;
 
-
-
 typedef enum {
   RN_PASS_KIND_2D,
   RN_PASS_KIND_3D, // TBA
@@ -82,7 +79,6 @@ typedef enum {
 typedef struct RN_Pass RN_Pass;
 struct RN_Pass {
 #define RN_MAX_CMD 256
-  // TODO: Chunked array as well right?
   R_Quad_Chunk_List quads;
   s32 cmd_count;
   RN_Pass_Kind kind;
