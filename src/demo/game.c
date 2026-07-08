@@ -132,11 +132,11 @@ void game_render(Game_State *gs, float dt) {
 #endif
   entity_store_update_render(gs, dt);
 
-
   // Gui Test
 #if 1
   // Perform a reload if reset button is clicked
-  gui_begin(gs->game_viewport);
+  gui_begin(gs->game_viewport, dt);
+  gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);
 
 #if 1
   Gui_Layout_Params params = (Gui_Layout_Params) {
@@ -144,20 +144,21 @@ void game_render(Game_State *gs, float dt) {
     .major_layout_axis = GUI_AXIS_X,
   };
 
+  // Small GUI test (mainly for Box reuse test right now)
+
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
-  // Small GUI test (mainly for Box reuse test right now)
+  gui_set_next_bg_color(v4m(0.7,0.5,0.3,0.85));
   static bool other_enabled = false;
   if (gui_button(MAKE_STR("Click Secret"), params)) {
     other_enabled = !other_enabled;
     printf("Reset\n");
   }
 
-  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 100.0, 1.0});
-
-  // FIXME pref_width (the major axis) doesn't work for some reason
-  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PIXELS, 100.0, 1.0});
-
+  gui_set_next_bg_color(v4m(0.5,0.5,0.5,0.85));
+  gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
+  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 1.0});
+  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 1.0});
   if (other_enabled) {
     if (gui_button(MAKE_STR("WOW"), params)) {
       printf("WOW\n");

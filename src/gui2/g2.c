@@ -57,16 +57,18 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
     box->fixed_size.raw[GUI_AXIS_X] = 0;
     box->fixed_size.raw[GUI_AXIS_Y] = 0;
     box->first = box->last = box->next = box->prev = box->parent = gui_nil_box();
-    box->color_mod = 1.0;
     box->last_frame_used = ctx.frame_idx;
     box->id = id;
     box->label = label;
     box->flags = flags;
 
-    // FIXME FIXME FIXME: Implement stacks for this scenario
+    box->text_align = gui_top_text_alignment();
+    box->bg_color = gui_top_bg_color();
+    box->text_color = gui_top_text_color();
     if (!(box->flags & GUI_BOX_FLAG_FIXED_WIDTH)) {
       box->pref_size[GUI_AXIS_X] = gui_top_pref_width();
     }
+
     if (!(box->flags & GUI_BOX_FLAG_FIXED_HEIGHT)) {
       box->pref_size[GUI_AXIS_Y] = gui_top_pref_height();
     }
@@ -116,14 +118,12 @@ b32 gui_button(buf label, Gui_Layout_Params params) {
     ctx.active_id = 0;
   }
 
+  // FIXME: these should happen at gui_end, not every time a 'signal' is made
+  f32 anim_rate = 1.0 - pow_f32(2.0, (-20.0f * ctx.dt));
   b32 is_hot = (ctx.hot_id == id);
+  box->hot_t += ((f32)is_hot - box->hot_t) * anim_rate;
   b32 is_active = (ctx.active_id == id);
-
-  // Some color modulation to see in which state we are in
-  f32 color_mod = 1.0;
-  if (is_hot) color_mod = 0.3;
-  if (is_active) color_mod = 0.1;
-  box->color_mod = color_mod;
+  box->active_t += ((f32)is_active - box->active_t) * anim_rate;
 
   return res;
 }
@@ -144,11 +144,13 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input) {
 
 void gui_init_stacks();
 
-void gui_begin(rect viewport) {
+void gui_begin(rect viewport, f32 dt) {
   // Advance frame index (used for box pruning)
   gui_init_stacks();
   ctx.frame_idx+=1;
+  ctx.dt = dt;
 
+  gui_push_bg_color(v4m(0.4,0.4,0.4,0.9));
   ctx.viewport = viewport;
   // Initialize a root box
   buf root_label = MAKE_STR("ROOTBOX");
@@ -168,17 +170,12 @@ void gui_begin(rect viewport) {
 }
 
 void gui_layout_fixed_sizes(Gui_Box *node, Gui_Axis axis) {
-  switch (node->pref_size[axis].kind) {
-    case GUI_SIZEKIND_PIXELS:
+  if (node->pref_size[axis].kind == GUI_SIZEKIND_PIXELS) {
       node->fixed_size.raw[axis] = node->pref_size[axis].value;
-      break;
-    case GUI_SIZEKIND_TEXT_CONTENT:
+  } else if (node->pref_size[axis].kind == GUI_SIZEKIND_TEXT_CONTENT) {
       f32 padding = node->pref_size[axis].value;
       rect text_rect = bfont_calc_text_rect(ctx.font, node->label, v2m(0,0), ctx.g_scale);
       node->fixed_size.raw[axis] = text_rect.dim.raw[axis] + padding;
-      break;
-    default:
-      break;
   }
 
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
@@ -216,28 +213,29 @@ void gui_render(Gui_Box *root) {
   if (root->flags & GUI_BOX_FLAG_DRAW_BOX) {
     R_Quad quad = (R_Quad) {
         .dst_rect = root->final_rect,
-        .c = col(0.2,0.2,0.2,0.95),
+        .c = v4_add(root->bg_color, v4m(0.2 * root->hot_t, 0.2*root->active_t,0,0)),
     };
     rn_push_quad(rn_pass_front(), quad);
   }
 
   // 1. Draw the text
-  // FIXME: If the box is fixed (meaning layout not based on text for now), put the label in the middle of the container
-  if (root->flags & GUI_BOX_FLAG_DRAW_TEXT) {
-    if (root->flags & GUI_BOX_FLAG_FIXED_WIDTH || root->flags & GUI_BOX_FLAG_FIXED_HEIGHT) {
-      rect r = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
-      bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, 
-          v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), 
-            (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0)),
-          ctx.g_scale, col(root->color_mod, root->color_mod, root->color_mod,1), false
-      );
-    } else {
-      bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, v2m(root->final_rect.p.raw[0], root->final_rect.p.raw[1]), ctx.g_scale, col(root->color_mod, root->color_mod, root->color_mod,1), false);
-    }
+  // FIXME: should LEFT/RIGHT alignment be moved to box center for y-dimension?
+  rect r = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
+  v2 text_draw_pos = {};
+  switch(root->text_align) {
+    case GUI_TEXT_ALIGNMENT_LEFT:
+      text_draw_pos = v2m(root->final_rect.p.raw[0], (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
+      break;
+    case GUI_TEXT_ALIGNMENT_RIGHT:
+      text_draw_pos = v2m(root->final_rect.p.raw[0] + root->final_rect.dim.raw[0] - r.dim.raw[0], (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
+      break;
+    case GUI_TEXT_ALIGNMENT_CENTER:
+      text_draw_pos = v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
+      break;
   }
-  
+  bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
 
-  // 2. Proceed to render the remaining hierarch (back-to-front)
+  // 2. Proceed to render the remaining hierarchy (back-to-front)
   for (Gui_Box *child = root->first; !gui_box_is_nil(child); child = child->next) {
     gui_render(child);
   }

@@ -65,9 +65,14 @@ struct Gui_Box {
   buf label;
   Gui_Box_Flags flags;
   Gui_Axis major_layout_axis;
+  Gui_Text_Alignment text_align;
+  v4 bg_color;
+  v4 text_color;
+
+  f32 hot_t;
+  f32 active_t;
 
   s64 last_frame_used;
-  f32 color_mod;
 };
 
 typedef struct Gui_Box_Hash_Slot Gui_Box_Hash_Slot;
@@ -97,7 +102,7 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input);
 Gui_Box *gui_nil_box();
 b32 gui_button(buf label, Gui_Layout_Params params);
  
-void gui_begin(rect viewport);
+void gui_begin(rect viewport, f32 dt);
 void gui_end();
 
 
@@ -134,6 +139,7 @@ typedef struct {
 
   Gui_Box *root;
   s64 frame_idx;
+  f32 dt;
 
 
   Gui_Parent_Node parent_nil_stack_top;
