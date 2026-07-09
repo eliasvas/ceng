@@ -25,15 +25,17 @@ void game_init(Game_State *gs) {
   hero->col = v4m(0.9,0.4,0.3,1.0);
   
   // Make a test
-  for (s32 height = 0; height < 3; height +=1) {
-    Entity *test = entity_store_add();
-    test->dynamic = false;
-    test->box = (Phys_Box) {
-      .pos = HMM_V3(-4,height,1),
-      .off = HMM_V3(0,0,0),
-      .hdim = HMM_V3(0.5,0.5,0.5),
-    };
-    test->col = v4m(0.2,0.4,0.9,1.0);
+  for (s32 width = -3; width <= 3; width+=6) {
+    for (s32 height = 0; height < 3; height +=1) {
+      Entity *test = entity_store_add();
+      test->dynamic = false;
+      test->box = (Phys_Box) {
+        .pos = HMM_V3(width,height,1),
+        .off = HMM_V3(0,0,0),
+        .hdim = HMM_V3(0.5,0.5,0.5),
+      };
+      test->col = v4m(0.2,0.4,0.9,1.0);
+    }
   }
 
   Entity *ground = entity_store_add();
@@ -139,32 +141,46 @@ void game_render(Game_State *gs, float dt) {
   gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);
 
 #if 1
-  Gui_Layout_Params params = (Gui_Layout_Params) {
-    .flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT),
-    .major_layout_axis = GUI_AXIS_X,
-  };
-
   // Small GUI test (mainly for Box reuse test right now)
+  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_SUM_OF_CHILDREN, 1.0, 1.0});
+  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PERCENT_OF_PARENT, 0.8, 1.0});
+  gui_set_next_bg_color(v4m(0.3,0.3,0.9,0.85));
+  Gui_Signal panel = gui_panel(MAKE_STR("Panel"));
+  gui_push_parent(panel.box);
 
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_set_next_bg_color(v4m(0.7,0.5,0.3,0.85));
   static bool other_enabled = false;
-  if (gui_button(MAKE_STR("Click Secret"), params)) {
+  if (gui_button(MAKE_STR("Click Secret")).pressed) {
     other_enabled = !other_enabled;
     printf("Reset\n");
   }
 
+  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 100, 1.0});
+  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PIXELS, 100, 0.0});
+  gui_set_next_bg_color(v4m(0.1,0.4,0.6,0.85));
+  Gui_Signal panel2 = gui_panel(MAKE_STR("Panel2"));
+  gui_push_parent(panel2.box);
+
+  gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
+  gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
+  gui_set_next_bg_color(v4m(0.3,0.5,0.3,0.85));
+  gui_button(MAKE_STR("Hey"));
+
   gui_set_next_bg_color(v4m(0.5,0.5,0.5,0.85));
   gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
-  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 1.0});
-  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 1.0});
+  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 200, 0.0});
+  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 0.0});
   if (other_enabled) {
-    if (gui_button(MAKE_STR("WOW"), params)) {
+    if (gui_button(MAKE_STR("WOW")).pressed) {
       printf("WOW\n");
     }
     //gs->request_reload = true;
   }
+  gui_pop_parent(); // Panel2
+
+  gui_pop_parent(); // Panel
 #endif
 
   gui_end();

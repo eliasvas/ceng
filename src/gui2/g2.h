@@ -2,6 +2,7 @@
 #define GUI2_H_
 #include "core/core_inc.h"
 
+
 typedef u64 Gui_ID;
 
 typedef enum {
@@ -31,13 +32,15 @@ typedef enum {
 } Gui_Axis;
 
 typedef enum {
-  GUI_BOX_FLAG_CLICKABLE    = (0x1 << 0),
-  GUI_BOX_FLAG_FIXED_X      = (0x1 << 1),
-  GUI_BOX_FLAG_FIXED_Y      = (0x1 << 2),
-  GUI_BOX_FLAG_FIXED_WIDTH  = (0x1 << 3),
-  GUI_BOX_FLAG_FIXED_HEIGHT = (0x1 << 4),
-  GUI_BOX_FLAG_DRAW_BOX     = (0x1 << 5),
-  GUI_BOX_FLAG_DRAW_TEXT    = (0x1 << 6),
+  GUI_BOX_FLAG_CLICKABLE        = (0x1 << 0),
+  GUI_BOX_FLAG_FIXED_X          = (0x1 << 1),
+  GUI_BOX_FLAG_FIXED_Y          = (0x1 << 2),
+  GUI_BOX_FLAG_FIXED_WIDTH      = (0x1 << 3),
+  GUI_BOX_FLAG_FIXED_HEIGHT     = (0x1 << 4),
+  GUI_BOX_FLAG_ALLOW_OVERFLOW_X = (0x1 << 5),
+  GUI_BOX_FLAG_ALLOW_OVERFLOW_Y = (0x1 << 6),
+  GUI_BOX_FLAG_DRAW_BOX         = (0x1 << 7),
+  GUI_BOX_FLAG_DRAW_TEXT        = (0x1 << 8),
 } Gui_Box_Flags;
 
 typedef struct Gui_Box Gui_Box;
@@ -48,6 +51,7 @@ struct Gui_Box {
   Gui_Box *next;
   Gui_Box *prev;
   Gui_Box *parent;
+  s32 child_count;
   // For hashmap 
   Gui_Box *hash_next;
   Gui_Box *hash_prev;
@@ -84,14 +88,16 @@ struct Gui_Box_Hash_Slot {
   Gui_Box *hash_last;
 };
 
-
-// TODO: We should implement style stacks, this is temporary..
 typedef struct {
-  Gui_Box *parent;
+  // TODO: Add more stuff here
+  b32 pressed;
+  // ..
+  // ..
+  // ..
 
-  Gui_Axis major_layout_axis;
-  Gui_Box_Flags flags;
-} Gui_Layout_Params;
+  Gui_Box *box;
+}Gui_Signal;
+
 
 // Interface that we should provide (for now)
 void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
@@ -100,8 +106,9 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input);
 
 
 Gui_Box *gui_nil_box();
-b32 gui_button(buf label, Gui_Layout_Params params);
- 
+Gui_Signal gui_button(buf label);
+Gui_Signal gui_panel(buf label);
+
 void gui_begin(rect viewport, f32 dt);
 void gui_end();
 

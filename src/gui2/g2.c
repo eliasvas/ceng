@@ -58,6 +58,7 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
     box->fixed_size.raw[GUI_AXIS_Y] = 0;
     box->first = box->last = box->next = box->prev = box->parent = gui_nil_box();
     box->last_frame_used = ctx.frame_idx;
+    box->child_count = 0;
     box->id = id;
     box->label = label;
     box->flags = flags;
@@ -81,20 +82,24 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
 }
 
 // TODO: This should probably be a signal_return and step 3 with button logic should become generic-er
-b32 gui_button(buf label, Gui_Layout_Params params) {
+Gui_Signal gui_button(buf label) {
   // 0. allocate/reuse/retain box pointer
   Gui_ID id = djb2_buf(label);
-  Gui_Box *box = gui_box_make(label, id, params.flags);
+  u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+  Gui_Box *box = gui_box_make(label, id, flags);
   // 1. Fill the (immediate) params
   {
     box->parent = gui_top_parent();
-    box->major_layout_axis = params.major_layout_axis;
+    box->major_layout_axis = gui_top_child_layout_axis(); 
   }
 
   // FIXME: Should this happen along with push to persistent hashmap (why is it done here)
   // 2. Hook into the layout structure
   Gui_Box *parent = box->parent;
   dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
+  if (parent != gui_nil_box()) {
+    parent->child_count+=1;
+  }
 
   // 3. Button/Box logic (using previous frame's final_rect.p.raw, AKA box->final_rect.p.raw!)
   rect r = box->final_rect;
@@ -125,7 +130,27 @@ b32 gui_button(buf label, Gui_Layout_Params params) {
   b32 is_active = (ctx.active_id == id);
   box->active_t += ((f32)is_active - box->active_t) * anim_rate;
 
-  return res;
+  return (Gui_Signal){res, box};
+}
+
+
+Gui_Signal gui_panel(buf label) {
+  // 0. allocate/reuse/retain box pointer
+  Gui_ID id = djb2_buf(label);
+  u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX);
+  Gui_Box *box = gui_box_make(label, id, flags);
+  // 1. Fill the (immediate) params
+  {
+    box->parent = gui_top_parent();
+    box->major_layout_axis = gui_top_child_layout_axis(); 
+  }
+
+  // FIXME: Should this happen along with push to persistent hashmap (why is it done here)
+  // 2. Hook into the layout structure
+  Gui_Box *parent = box->parent;
+  dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
+
+  return (Gui_Signal){false, box};
 }
 
 void gui_init(Arena *tarena, Font_Info *font, Input *input) {
@@ -150,6 +175,7 @@ void gui_begin(rect viewport, f32 dt) {
   ctx.frame_idx+=1;
   ctx.dt = dt;
 
+  gui_set_next_child_layout_axis(GUI_AXIS_X);
   gui_push_bg_color(v4m(0.4,0.4,0.4,0.9));
   ctx.viewport = viewport;
   // Initialize a root box
@@ -165,21 +191,139 @@ void gui_begin(rect viewport, f32 dt) {
   ctx.root->fixed_pos.raw[GUI_AXIS_Y]  = ctx.viewport.y + pad_px/2;
   ctx.root->fixed_size.raw[GUI_AXIS_X] = ctx.viewport.w - pad_px;
   ctx.root->fixed_size.raw[GUI_AXIS_Y] = ctx.viewport.h - pad_px;
-  ctx.root->major_layout_axis = GUI_AXIS_X;
   gui_push_parent(ctx.root);
 }
 
-void gui_layout_fixed_sizes(Gui_Box *node, Gui_Axis axis) {
+void gui_layout_constant_sizes(Gui_Box *node, Gui_Axis axis) {
+  // 0. for SIZEKIND_PIXELS, fixed_size is just the value
   if (node->pref_size[axis].kind == GUI_SIZEKIND_PIXELS) {
       node->fixed_size.raw[axis] = node->pref_size[axis].value;
-  } else if (node->pref_size[axis].kind == GUI_SIZEKIND_TEXT_CONTENT) {
+  }
+  // 1. for SIZEKIND_TEXT_CONTENT, fixed_size is the size of label text + padding (value)
+  else if (node->pref_size[axis].kind == GUI_SIZEKIND_TEXT_CONTENT) {
       f32 padding = node->pref_size[axis].value;
       rect text_rect = bfont_calc_text_rect(ctx.font, node->label, v2m(0,0), ctx.g_scale);
       node->fixed_size.raw[axis] = text_rect.dim.raw[axis] + padding;
   }
 
+  // 2. Recurse
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
-    gui_layout_fixed_sizes(child, axis);
+    gui_layout_constant_sizes(child, axis);
+  }
+}
+
+void gui_layout_upward_dependent_sizes(Gui_Box *node, Gui_Axis axis) {
+  if (node->pref_size[axis].kind == GUI_SIZEKIND_PERCENT_OF_PARENT) {
+    // 0. Find nearest parent with fixed size 
+    f32 parent_size = 0;
+    for (Gui_Box *parent = node->parent; !gui_box_is_nil(parent); parent = parent->parent) {
+      if (parent->pref_size[axis].kind != GUI_SIZEKIND_SUM_OF_CHILDREN) {
+        parent_size = parent->fixed_size.raw[axis];
+        break;
+      }
+    }
+    // 1. Final fixed size is a percent (value) of that
+    node->fixed_size.raw[axis] = parent_size * node->pref_size[axis].value;
+  }
+
+  // 3. Recurse
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    gui_layout_upward_dependent_sizes(child, axis);
+  }
+}
+
+void gui_layout_downward_dependent_sizes(Gui_Box *node, Gui_Axis axis) {
+  // 0. Recurse
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    gui_layout_downward_dependent_sizes(child, axis);
+  }
+
+  if (node->pref_size[axis].kind == GUI_SIZEKIND_SUM_OF_CHILDREN) {
+    // 1. If along box's layout axis, calculate the fixed size as sum of children
+    if (axis == node->major_layout_axis) {
+      f32 child_sum_size = 0;
+      for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+        child_sum_size += child->fixed_size.raw[axis];
+      }
+      node->fixed_size.raw[axis] = child_sum_size;
+    } 
+    // 2. If along non-major axis, fixed size is the largest box (max) along axis
+    else {
+      f32 max_size = 0;
+      for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+        max_size = maximum(max_size, child->fixed_size.raw[axis]);
+      }
+      node->fixed_size.raw[axis] = max_size;
+    }
+  }
+}
+
+void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
+  // 0. Calculate fixed size of this node (named parent) and all its children 
+  b32 overflow_allowed = (node->flags & (GUI_BOX_FLAG_ALLOW_OVERFLOW_X<<axis));
+  f32 parent_size = node->fixed_size.raw[axis];
+  f32 children_size = 0;
+  f32 children_max_size = 0;
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    children_size += child->fixed_size.raw[axis];
+    children_max_size = maximum(children_max_size, child->fixed_size.raw[axis]);
+  }
+
+  // 1.1 For major axis we have to substract an amount for each box
+  if (axis == node->major_layout_axis && !overflow_allowed) {
+    // 1.2 If we have an overflow for this axis, calculate how much size every child is willing to lose + overall size
+    if (children_size > parent_size) {
+      f32 needed_size = children_size - parent_size;
+      u64 arena_pos = arena_get_current_pos(ctx.temp_arena);
+      f32 *available_sizes = arena_push_array(ctx.temp_arena, f32, node->child_count);
+
+      f32 available_size_sum = 0;
+      s32 child_idx = 0;
+      for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+        f32 willing_to_lose = (1.0 - child->pref_size[axis].strictness) * child->fixed_size.raw[axis];
+        available_sizes[child_idx] = willing_to_lose;
+        available_size_sum += willing_to_lose;
+        child_idx+=1;
+      }
+      // 1.3 Change the size of all children so that they fit the parent fixed_size by taking a proportion of their available size
+
+      child_idx = 0;
+      for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+        child->fixed_size.raw[axis] -= needed_size * (available_sizes[child_idx] / available_size_sum);
+        child_idx+=1;
+      }
+      arena_reset_to_pos(ctx.temp_arena, arena_pos);
+    }
+  } 
+
+  // 2.1 For non-major axis just scale children that are not fully strict
+  if (axis != node->major_layout_axis && !overflow_allowed) {
+    if (children_max_size > parent_size) {
+      for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+        f32 willing_to_lose = (1.0 - child->pref_size[axis].strictness) * child->fixed_size.raw[axis];
+        f32 child_fixed_size = child->fixed_size.raw[axis];
+        if (child_fixed_size > parent_size && willing_to_lose > 0) {
+          child->fixed_size.raw[axis] = parent_size;
+        }
+      }
+    }
+  }
+
+  // 3. If node is children-sum and a child is percent-of-parent the child fixed size
+  // is calculated wrt a fixed rect from up the hierarchy if the children-sum node allows overflow,
+  // its fixed size is known so it has to propagate to children with percent-of-parent 
+  if (overflow_allowed) {
+    for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+      if (child->pref_size[axis].kind == GUI_SIZEKIND_PERCENT_OF_PARENT) {
+        child->fixed_size.raw[axis] = child->pref_size[axis].value * node->fixed_size.raw[axis];
+      }
+    }
+  }
+
+  
+  // 1. Recurse
+  for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
+    gui_layout_enforce_size_constraints(child, axis);
   }
 }
 
@@ -219,21 +363,22 @@ void gui_render(Gui_Box *root) {
   }
 
   // 1. Draw the text
-  // FIXME: should LEFT/RIGHT alignment be moved to box center for y-dimension?
-  rect r = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
-  v2 text_draw_pos = {};
-  switch(root->text_align) {
-    case GUI_TEXT_ALIGNMENT_LEFT:
-      text_draw_pos = v2m(root->final_rect.p.raw[0], (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
-      break;
-    case GUI_TEXT_ALIGNMENT_RIGHT:
-      text_draw_pos = v2m(root->final_rect.p.raw[0] + root->final_rect.dim.raw[0] - r.dim.raw[0], (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
-      break;
-    case GUI_TEXT_ALIGNMENT_CENTER:
-      text_draw_pos = v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
-      break;
+  if (root->flags & GUI_BOX_FLAG_DRAW_TEXT) {
+    rect r = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
+    v2 text_draw_pos = {};
+    switch(root->text_align) {
+      case GUI_TEXT_ALIGNMENT_LEFT:
+        text_draw_pos = v2m(root->final_rect.p.raw[0], (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
+        break;
+      case GUI_TEXT_ALIGNMENT_RIGHT:
+        text_draw_pos = v2m(root->final_rect.p.raw[0] + root->final_rect.dim.raw[0] - r.dim.raw[0], (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
+        break;
+      case GUI_TEXT_ALIGNMENT_CENTER:
+        text_draw_pos = v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
+        break;
+    }
+    bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
   }
-  bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
 
   // 2. Proceed to render the remaining hierarchy (back-to-front)
   for (Gui_Box *child = root->first; !gui_box_is_nil(child); child = child->next) {
@@ -260,7 +405,10 @@ void gui_end() {
   // Just to check for leaks
   //printf("GUI arena pos: %lu\n", arena_get_current_pos(ctx.arena));
   for (s32 axis = GUI_AXIS_X; axis <= GUI_AXIS_Y; axis+=1) {
-    gui_layout_fixed_sizes(ctx.root, axis);
+    gui_layout_constant_sizes(ctx.root, axis);
+    gui_layout_upward_dependent_sizes(ctx.root, axis);
+    gui_layout_downward_dependent_sizes(ctx.root, axis);
+    gui_layout_enforce_size_constraints(ctx.root, axis);
     gui_layout_calc_fixed_pos_and_final_rects(ctx.root, axis);
   }
   gui_prune_unused_boxes();
