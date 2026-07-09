@@ -1,5 +1,13 @@
 #include "g2.h"
 
+/*
+FIXME FIXME FIXME
+The  number of drawcalls explodes (one per rectangle/string of text) because:
+- We do hardware clipping (We need to flush before continuing to apply the scissor rect)
+- We use 2 different textures for 'white' and text (and probably non-ASCII glyphs as well)
+We Should do the clipping on the fragment shader somehow (probably via discard) + combine our textures to one (or clamp to white??).
+*/
+
 #define GUI_STACKS_IMPLEMENTATION
 #include "gui_stacks.h"
 
@@ -66,13 +74,30 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
     box->text_align = gui_top_text_alignment();
     box->bg_color = gui_top_bg_color();
     box->text_color = gui_top_text_color();
-    if (!(box->flags & GUI_BOX_FLAG_FIXED_WIDTH)) {
+
+    if (ctx.fixed_width_stack.top != &ctx.fixed_width_nil_stack_top) {
+      box->flags |= GUI_BOX_FLAG_FIXED_WIDTH;
+      box->fixed_size.raw[GUI_AXIS_X] = gui_top_fixed_width();
+    } else {
       box->pref_size[GUI_AXIS_X] = gui_top_pref_width();
     }
 
-    if (!(box->flags & GUI_BOX_FLAG_FIXED_HEIGHT)) {
+    if (ctx.fixed_height_stack.top != &ctx.fixed_height_nil_stack_top) {
+      box->flags |= GUI_BOX_FLAG_FIXED_HEIGHT;
+      box->fixed_size.raw[GUI_AXIS_Y] = gui_top_fixed_height();
+    } else {
       box->pref_size[GUI_AXIS_Y] = gui_top_pref_height();
     }
+
+    if (ctx.fixed_x_stack.top != &ctx.fixed_x_nil_stack_top) {
+      box->flags |= GUI_BOX_FLAG_FIXED_X;
+      box->fixed_pos.raw[GUI_AXIS_X] = gui_top_fixed_x();
+    }
+    if (ctx.fixed_y_stack.top != &ctx.fixed_y_nil_stack_top) {
+      box->flags |= GUI_BOX_FLAG_FIXED_Y;
+      box->fixed_pos.raw[GUI_AXIS_Y] = gui_top_fixed_y();
+    }
+    gui_autopop_all_stacks();
 
     // TODO: Here we should check wether the fixed_size stacks have values,
     // boxes should NOT be made with FIXED flags
@@ -149,6 +174,9 @@ Gui_Signal gui_panel(buf label) {
   // 2. Hook into the layout structure
   Gui_Box *parent = box->parent;
   dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
+  if (parent != gui_nil_box()) {
+    parent->child_count+=1;
+  }
 
   return (Gui_Signal){false, box};
 }
@@ -181,16 +209,14 @@ void gui_begin(rect viewport, f32 dt) {
   // Initialize a root box
   buf root_label = MAKE_STR("ROOTBOX");
   Gui_ID root_id = djb2_buf(root_label);
-  ctx.root = gui_box_make(root_label, root_id, 
-    GUI_BOX_FLAG_FIXED_X | GUI_BOX_FLAG_FIXED_Y | 
-    GUI_BOX_FLAG_FIXED_WIDTH | GUI_BOX_FLAG_FIXED_HEIGHT | 
-    GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT
-  );
   f32 pad_px = 100;
-  ctx.root->fixed_pos.raw[GUI_AXIS_X]  = ctx.viewport.x + pad_px/2;
-  ctx.root->fixed_pos.raw[GUI_AXIS_Y]  = ctx.viewport.y + pad_px/2;
-  ctx.root->fixed_size.raw[GUI_AXIS_X] = ctx.viewport.w - pad_px;
-  ctx.root->fixed_size.raw[GUI_AXIS_Y] = ctx.viewport.h - pad_px;
+  gui_set_next_fixed_x(ctx.viewport.x + pad_px/2);
+  gui_set_next_fixed_y(ctx.viewport.y + pad_px/2);
+  gui_set_next_fixed_width(ctx.viewport.w - pad_px);
+  gui_set_next_fixed_height(ctx.viewport.h - pad_px);
+
+  ctx.root = gui_box_make(root_label, root_id, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+
   gui_push_parent(ctx.root);
 }
 
@@ -265,8 +291,10 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
   f32 children_size = 0;
   f32 children_max_size = 0;
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
-    children_size += child->fixed_size.raw[axis];
-    children_max_size = maximum(children_max_size, child->fixed_size.raw[axis]);
+    if (!(child->flags & GUI_BOX_FLAG_FIXED_X<<axis)) {
+      children_size += child->fixed_size.raw[axis];
+      children_max_size = maximum(children_max_size, child->fixed_size.raw[axis]);
+    }
   }
 
   // 1.1 For major axis we have to substract an amount for each box
@@ -280,10 +308,12 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
       f32 available_size_sum = 0;
       s32 child_idx = 0;
       for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
-        f32 willing_to_lose = (1.0 - child->pref_size[axis].strictness) * child->fixed_size.raw[axis];
-        available_sizes[child_idx] = willing_to_lose;
-        available_size_sum += willing_to_lose;
-        child_idx+=1;
+        if (!(child->flags & GUI_BOX_FLAG_FIXED_X<<axis)) {
+          f32 willing_to_lose = (1.0 - child->pref_size[axis].strictness) * child->fixed_size.raw[axis];
+          available_sizes[child_idx] = willing_to_lose;
+          available_size_sum += willing_to_lose;
+          child_idx+=1;
+        }
       }
       // 1.3 Change the size of all children so that they fit the parent fixed_size by taking a proportion of their available size
 
@@ -300,10 +330,12 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
   if (axis != node->major_layout_axis && !overflow_allowed) {
     if (children_max_size > parent_size) {
       for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
-        f32 willing_to_lose = (1.0 - child->pref_size[axis].strictness) * child->fixed_size.raw[axis];
-        f32 child_fixed_size = child->fixed_size.raw[axis];
-        if (child_fixed_size > parent_size && willing_to_lose > 0) {
-          child->fixed_size.raw[axis] = parent_size;
+        if (!(child->flags & GUI_BOX_FLAG_FIXED_X<<axis)) {
+          f32 willing_to_lose = (1.0 - child->pref_size[axis].strictness) * child->fixed_size.raw[axis];
+          f32 child_fixed_size = child->fixed_size.raw[axis];
+          if (child_fixed_size > parent_size && willing_to_lose > 0) {
+            child->fixed_size.raw[axis] = parent_size;
+          }
         }
       }
     }
@@ -338,10 +370,12 @@ void gui_layout_calc_fixed_pos_and_final_rects(Gui_Box *node, Gui_Axis axis) {
 
   // Calculate this box's children fixed positions
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
-    child->fixed_pos.raw[axis] = node_pos + layout_pos;
+    if (!(child->flags & GUI_BOX_FLAG_FIXED_X<<axis)) {
+      child->fixed_pos.raw[axis] = node_pos + layout_pos;
 
-    if (axis == node->major_layout_axis) {
-      layout_pos += child->fixed_size.raw[axis];
+      if (axis == node->major_layout_axis) {
+        layout_pos += child->fixed_size.raw[axis];
+      }
     }
   }
 
