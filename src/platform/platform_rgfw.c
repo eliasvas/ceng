@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <sys/stat.h>
 
+#define STR_IMPLEMENTATION
 #define BRAND_IMPLEMENTATION
 #define PROFILER_IMPLEMENTATION
 #include "base/base_inc.h"

@@ -32,7 +32,7 @@ typedef struct {
 //@FIXME: This is not correct, FIX this
 static int json_tok_count_number(char* num_str) {
     int count = 0;
-    for(u32 i = 0; i < cstr_len(num_str); ++i, ++count) {
+    for(u32 i = 0; i < cstr_count(num_str); ++i, ++count) {
         char c = num_str[i];
         if (c != 'e' && c != 'E' && c != '.' && c != '-' && (c < '0' || c > '9'))break;
     }
@@ -42,7 +42,7 @@ static int json_tok_count_number(char* num_str) {
 static int json_tok_count_string(char* s) {
     int count = 0;
     int quote_count = 0;
-    for(u32 i = 0; i < cstr_len(s); ++i, ++count) {
+    for(u32 i = 0; i < cstr_count(s); ++i, ++count) {
         if (quote_count == 2)break;
         char c = s[i];
         if (c == '\"')quote_count+=1;
@@ -66,7 +66,7 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
     }
 
     int count = 0;
-    for (u32 i = 0; i < cstr_len(json_str); i+=count) {
+    for (u32 i = 0; i < cstr_count(json_str); i+=count) {
         Json_Token token = {};
         char *c = &json_str[i];
         count = 1;
@@ -111,15 +111,15 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
                 token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_NUMBER};
                 break;
             case 't':
-                count = cstr_len("true");
+                count = cstr_count("true");
                 token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_TRUE};
                 break;
             case 'f':
-                count = cstr_len("false");
+                count = cstr_count("false");
                 token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_FALSE};
                 break;
             case 'n':
-                count = cstr_len("null");
+                count = cstr_count("null");
                 token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_NULL};
                 break;
             case '\"':

@@ -1,6 +1,7 @@
 #ifndef HASH_H__
 #define HASH_H__
 #include "helper.h"
+#include "str.h"
 
 static u64 djb2_buf(buf b) {
   u64 hash = 5381;

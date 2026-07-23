@@ -307,13 +307,8 @@ static f64 pwr(double b, int e) {
 // String stuff
 //////////////////////////////
 
-#define MAKE_STR(s) ((buf){s, cstr_len(s)})
-
-static u32 cstr_len(char *s) {
-  u32 count = 0;
-  while (s[count]) count++;
-  return count;
-}
+s64 cstr_count(const char *s);
+#define MAKE_STR(s) ((buf){s, cstr_count(s)})
 
 static b32 str_cmp(char *l, char *r, s64 size) {
   if (!l || !r) return 0;

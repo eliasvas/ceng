@@ -10,6 +10,7 @@
 #include "easing.h"
 #include "brand.h"
 #include "time_util.h"
+#include "str.h"
 #include "HandmadeMath/HandmadeMath.h"
 
 #endif
