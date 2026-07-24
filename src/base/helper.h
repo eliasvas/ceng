@@ -313,8 +313,6 @@ static f64 pwr(double b, int e) {
 //////////////////////////////
 
 s64 cstr_count(const char *s);
-#define MAKE_STR(s) ((buf){s, cstr_count(s)})
-
 static b32 str_cmp(char *l, char *r, s64 size) {
   if (!l || !r) return 0;
   for (s64 idx = 0; idx < size; idx++) {
@@ -392,6 +390,8 @@ static b32 str_to_bool(char *s, s64 size) {
 // Buffer abstraction
 //////////////////////////////
 
+// TODO: Type conversions should go eventually to str.h all else deleted, buf is good but str8 better..
+
 typedef struct {
   char *data;
   s64 count;
@@ -432,6 +432,7 @@ static buf buf_lcut(buf b, buf delim) {
   return b;
 }
 
+#define MAKE_STR(s) ((buf){s, cstr_count(s)})
 
 
 #endif

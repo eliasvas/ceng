@@ -218,7 +218,7 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
     tri_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(tri_vs, tri_fs),
 
-      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *(Ogl_Tex*)am_get(asset_id_from_path(MAKE_STR("white.png")))},
+      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *(Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png")))},
       .vbos = {
         [0] = {
           // the vertex buffer for this should probably be made after r_end has been called
@@ -320,7 +320,7 @@ RN_Pass *rn_pass_back() {
 
 void rn_push_quad(RN_Pass *pass, R_Quad q) {
   // white.png is just an invalid png name, which means that the default texture will be mapped (white)
-  if (q.tex == nullptr) q.tex = ((Ogl_Tex*)am_get(asset_id_from_path(MAKE_STR("white.png"))));
+  if (q.tex == nullptr) q.tex = ((Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png"))));
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 

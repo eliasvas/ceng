@@ -53,9 +53,9 @@ struct Asset_Mgr{
 #ifndef ASSET_MGR_IMPLEMENTATION
 
 Asset_Handle am_get(Asset_Id id);
-Asset_Id am_load_from_data(buf asset_path, buf asset_data);
+Asset_Id am_load_from_data(str8 asset_path, str8 asset_data);
 void am_init(Arena *arena, Arena *tarena);
-Asset_Id asset_id_from_path(buf path);
+Asset_Id asset_id_from_path(str8 path);
 
 #else
 
@@ -81,13 +81,13 @@ void am_init(Arena *arena, Arena *tarena) {
 
 }
 
-Asset_Kind asset_kind_from_path(buf path) {
+Asset_Kind asset_kind_from_path(str8 path) {
   return (path.count < 3) ?  ASSET_KIND_TEX :
    path.data[path.count-1] + path.data[path.count-2] + path.data[path.count-3]; // look at enum Asset_Kind
 }
 
-Asset_Id asset_id_from_path(buf path) {
-  return (Asset_Id){djb2_buf(path), asset_kind_from_path(path)};
+Asset_Id asset_id_from_path(str8 path) {
+  return (Asset_Id){djb2_buf(path.data, path.count), asset_kind_from_path(path)};
 }
 
 ///////////////////////////////////////
@@ -111,7 +111,7 @@ Ogl_Tex *tex_mgr_get(Tex_Mgr *mgr, Asset_Id id) {
   return (tex) ? tex : &(mgr->default_value);
 }
 
-Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, buf asset_path, buf asset_data) { // maybe pass this as argument we got from am_load_from_data(..)
+Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_path, str8 asset_data) { // maybe pass this as argument we got from am_load_from_data(..)
   Asset_Id id = asset_id_from_path(asset_path); 
 
   Ogl_Tex tex = {};
@@ -159,7 +159,7 @@ Asset_Handle am_get(Asset_Id id) {
   }
 }
 
-Asset_Id am_load_from_data(buf asset_path, buf asset_data) {
+Asset_Id am_load_from_data(str8 asset_path, str8 asset_data) {
   Asset_Id id = asset_id_from_path(asset_path);
 
   switch(id.kind) {

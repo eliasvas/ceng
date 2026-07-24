@@ -24,6 +24,16 @@ static Gui_Box g_nil_box __attribute__((section(".rodata"))) = {
 
 
 
+Gui_ID gui_get_id_from_label(str8 label) {
+  return djb2_buf(label.data, label.count);
+}
+
+str8 gui_get_label_no_hh(str8 label) {
+  u64 hh_pos = str8_find_needle(label, STR8L("##"));
+  if (hh_pos != STR8_NO_MATCH) label.count = hh_pos;
+  return label;
+}
+
 Gui_Box *gui_nil_box() {
   return (&g_nil_box);
 }
@@ -36,7 +46,7 @@ b32 gui_box_is_nil(Gui_Box *box) {
   return ((box == nullptr) || (box == gui_nil_box()));
 }
 
-Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
+Gui_Box *gui_box_make(str8 label, Gui_ID id, Gui_Box_Flags flags) {
   Gui_Box *box = gui_nil_box();
   s32 slot_idx = gui_slot_idx_from_id(id);
   // Try to find box in hashmap
@@ -68,7 +78,8 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
     box->last_frame_used = ctx.frame_idx;
     box->child_count = 0;
     box->id = id;
-    box->label = label;
+    //box->label = label;
+    box->label = gui_get_label_no_hh(label); // we chop any ##abcd diversifiers
     box->flags = flags;
 
     box->text_align = gui_top_text_alignment();
@@ -106,10 +117,11 @@ Gui_Box *gui_box_make(buf label, Gui_ID id, Gui_Box_Flags flags) {
   return box;
 }
 
+
 // TODO: This should probably be a signal_return and step 3 with button logic should become generic-er
-Gui_Signal gui_button(buf label) {
+Gui_Signal gui_button(str8 label) {
   // 0. allocate/reuse/retain box pointer
-  Gui_ID id = djb2_buf(label);
+  Gui_ID id = gui_get_id_from_label(label);
   u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
   Gui_Box *box = gui_box_make(label, id, flags);
   // 1. Fill the (immediate) params
@@ -159,9 +171,10 @@ Gui_Signal gui_button(buf label) {
 }
 
 
-Gui_Signal gui_panel(buf label) {
+
+Gui_Signal gui_panel(str8 label) {
   // 0. allocate/reuse/retain box pointer
-  Gui_ID id = djb2_buf(label);
+  Gui_ID id = gui_get_id_from_label(label);
   u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX);
   Gui_Box *box = gui_box_make(label, id, flags);
   // 1. Fill the (immediate) params
@@ -207,8 +220,8 @@ void gui_begin(rect viewport, f32 dt) {
   gui_push_bg_color(v4m(0.4,0.4,0.4,0.9));
   ctx.viewport = viewport;
   // Initialize a root box
-  buf root_label = MAKE_STR("ROOTBOX");
-  Gui_ID root_id = djb2_buf(root_label);
+  str8 root_label = STR8L("ROOTBOX");
+  Gui_ID root_id = gui_get_id_from_label(root_label);
   f32 pad_px = 100;
   gui_set_next_fixed_x(ctx.viewport.x + pad_px/2);
   gui_set_next_fixed_y(ctx.viewport.y + pad_px/2);

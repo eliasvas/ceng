@@ -1,8 +1,11 @@
 #ifndef STR_H__
 #define STR_H__
-#include "base_inc.h"
+//#include "base_inc.h"
 
-// TODO: Should buffers become regular strings?
+#include "stdint.h"
+#include "base/arena.h"
+
+// TODO: Should buffers become regular strings? (YES)
 
 /*
 Intro: These are _LENGTH-BASED_ strings, all the code uses these, yes its all C.
@@ -21,6 +24,10 @@ typedef struct {
 #define STR8L(S) (str8){(u8*)(S), sizeof(S) - 1}
 #define STR8C(S) (str8){(u8*)(S), strlen(S) - 1}
 #define STR8_VARG(S) (int)(S).count, (S).data
+
+
+// FIXME: I don't like this because you cant do stuff like str8_substr(s, 0, str8_find_needle(s, "##")) because
+// str8_find_needle could just be U64_MAX... and you have to do ternary operator bullshit.. fix this!
 #define STR8_NO_MATCH U64_MAX
 
 #ifndef STR_IMPLEMENTATION
@@ -33,11 +40,10 @@ b32 str8_eq(str8 left, str8 right);
 b32 str8_starts_with(str8 s, str8 prefix);
 b32 str8_ends_with(str8 s, str8 prefix);
 str8 str8_substr(str8 s, s64 start_incl, s64 end_incl);
+u64 str8_find_needle(str8 haystack, str8 needle);
 
 
 #else
-
-// struct str8_bldr
 
 //////////////////////////////
 // common string helpers
@@ -63,11 +69,17 @@ char char_to_lower(char c) {
   return c;
 }
 
-// char is alpha
-// char is num
-// char is alphanum
-// char to lower
-// char to upp 
+b32 char_is_alpha(char c) {
+  return ((c >='a' && c<='z') || (c >= 'A' && c <= 'Z'));
+}
+
+b32 char_is_num(char c) {
+  return (c >= '0' && c <= '9');
+}
+
+b32 char_is_alphanum(char c) {
+  return (char_is_alpha(c) || char_is_num(c));
+}
 
 //////////////////////////////
 // str8
@@ -105,10 +117,10 @@ b32 str8_eq(str8 left, str8 right) {
 u64 str8_find_needle(str8 haystack, str8 needle) {
   for (s64 i = 0; i < haystack.count - needle.count + 1; i+=1) {
     str8 haystack_candidate = STR8(&haystack.data[i], needle.count);
-    if (str8_eq(haystack_candidate, needle)) return i;
+    if (str8_eq(haystack_candidate, needle)) return (u64)i;
   }
 
-  return STR8_NO_MATCH;
+  return (u64)STR8_NO_MATCH;
 }
 
 b32 str8_starts_with(str8 s, str8 prefix) {
@@ -134,6 +146,7 @@ str8 str8_substr(str8 s, s64 start_incl, s64 end_incl) {
 // TODO: str8_list API?
 // TODO: str8_path API?
 // TODO: Fuzzy finding in a str8 producing a str8_list?
+
 #endif
 
 

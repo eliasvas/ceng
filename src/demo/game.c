@@ -12,23 +12,6 @@
 extern void platform_play_sound(const char *sound);
 
 void game_init(Game_State *gs) {
-  // Problem scope: print a 'status' bar
-
-  assert(str8_eq(STR8L("Hello"), STR8L("Hello")));
-  assert(str8_starts_with(STR8L("Hello"), STR8L("He")));
-  assert(str8_starts_with(STR8L("Hello"), STR8L("Hello")));
-  assert(str8_ends_with(STR8L("Hello"), STR8L("Hello")));
-  assert(str8_ends_with(STR8L("Hello"), STR8L("ello")));
-  assert(str8_ends_with(STR8L("Hello"), STR8L("o")));
-  str8 status = upper_from_str8(gs->frame_arena, STR8L("fps: 50"));
-  printf("[%.*s]\n", STR8_VARG(status));
-  printf("[%.*s]", STR8_VARG(str8_substr(STR8L("Hello"), 1,2)));
-
-  //gui_init(gs->frame_arena, &gs->font, &gs->input);
-
-
-  exit(1);
-
   entity_store_init();
 
   // Make the hero
@@ -163,40 +146,33 @@ void game_render(Game_State *gs, float dt) {
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_SUM_OF_CHILDREN, 1.0, 1.0});
   gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PERCENT_OF_PARENT, 0.8, 1.0});
   gui_set_next_bg_color(v4m(0.3,0.3,0.9,0.85));
-  Gui_Signal panel = gui_panel(MAKE_STR("Panel"));
+  Gui_Signal panel = gui_panel(STR8L("Panel"));
   gui_push_parent(panel.box);
 
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_set_next_bg_color(v4m(0.7,0.5,0.3,0.85));
   static bool other_enabled = false;
-  if (gui_button(MAKE_STR("Click Secret")).pressed) {
+  if (gui_button(STR8L("Secret")).pressed) {
     other_enabled = !other_enabled;
     printf("Reset\n");
   }
 
-  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 100, 1.0});
-  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PIXELS, 100, 0.0});
-  gui_set_next_bg_color(v4m(0.1,0.4,0.6,0.85));
-  Gui_Signal panel2 = gui_panel(MAKE_STR("Panel2"));
-  gui_push_parent(panel2.box);
-
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
   gui_set_next_bg_color(v4m(0.3,0.5,0.3,0.85));
-  gui_button(MAKE_STR("Hey"));
+  gui_button(STR8L("WOWO"));
 
   gui_set_next_bg_color(v4m(0.5,0.5,0.5,0.85));
   gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 200, 0.0});
   gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 0.0});
   if (other_enabled) {
-    if (gui_button(MAKE_STR("WOW")).pressed) {
+    if (gui_button(STR8L("WOWO##2")).pressed) {
       printf("WOW\n");
     }
     //gs->request_reload = true;
   }
-  gui_pop_parent(); // Panel2
 
   gui_pop_parent(); // Panel
 #endif

@@ -33,11 +33,11 @@ typedef struct {
 
 Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height);
 void bfont_flip_bitmap(u8 *bitmap, s32 width, s32 height);
-f32 bfont_measure_text_width(Font_Info *font_info, buf text, f32 scale);
-f32 bfont_measure_text_height(Font_Info *font_info, buf text, f32 scale);
-rect bfont_calc_text_rect(Font_Info *font_info, buf text, v2 baseline_pos, f32 scale);
-s64 bfont_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f32 target_width);
+f32 bfont_measure_text_width(Font_Info *font_info, str8 text, f32 scale);
+f32 bfont_measure_text_height(Font_Info *font_info, str8 text, f32 scale);
+rect bfont_calc_text_rect(Font_Info *font_info, str8 text, v2 baseline_pos, f32 scale);
+s64 bfont_count_glyphs_until_width(Font_Info *font_info, str8 text, f32 scale, f32 target_width);
 
 // TODO: This should be elsewhere ok?
-void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
+void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 baseline_pos, f32 scale, color col, bool draw_box);
 #endif

@@ -18,7 +18,7 @@ static const u8 default_font_data[] = {
 };
 
 void png_stbi_write_func(void *context, void *data, int size) {
-  buf *pinfo = (buf*)context;
+  str8 *pinfo = (str8*)context;
   memcpy(pinfo->data+pinfo->count, data, size);
   pinfo->count += size;
 }
@@ -102,19 +102,19 @@ Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_he
     }
   }
 
-  buf ctx = (buf) {
+  str8 ctx = (str8) {
     .data = arena_push_array(temp_arena, u8, sizeof(u32)*atlas_width *atlas_height + 1024),
     .count = 0,
   };
   stbi_write_png_to_func(png_stbi_write_func, &ctx, atlas_width, atlas_height, 4, font_bitmap_rgba, atlas_width*sizeof(u32));
   font.tex_dim = v2m(atlas_width, atlas_height);
-  font.tex_id = am_load_from_data(MAKE_STR("fa.png"), (buf){ctx.data, ctx.count});
+  font.tex_id = am_load_from_data(STR8L("fa.png"), STR8(ctx.data, ctx.count));
   arena_reset_to_pos(temp_arena, temp_arena_pos_start);
 
   return font;
 }
 
-rect bfont_calc_text_rect(Font_Info *font_info, buf text, v2 pos, f32 scale) {
+rect bfont_calc_text_rect(Font_Info *font_info, str8 text, v2 pos, f32 scale) {
   u32 glyph_count = text.count;
   if (glyph_count == 0) return (rect){};
 
@@ -142,18 +142,18 @@ rect bfont_calc_text_rect(Font_Info *font_info, buf text, v2 pos, f32 scale) {
   return r;
 }
 
-f32 bfont_measure_text_width(Font_Info *font_info, buf text, f32 scale) {
+f32 bfont_measure_text_width(Font_Info *font_info, str8 text, f32 scale) {
   return bfont_calc_text_rect(font_info, text, v2m(0,0), scale).w;
 }
 
-f32 bfont_measure_text_height(Font_Info *font_info, buf text, f32 scale) {
+f32 bfont_measure_text_height(Font_Info *font_info, str8 text, f32 scale) {
   return bfont_calc_text_rect(font_info, text, v2m(0,0), scale).h;
 }
 
-s64 bfont_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f32 target_width) {
+s64 bfont_count_glyphs_until_width(Font_Info *font_info, str8 text, f32 scale, f32 target_width) {
   s64 glyph_count = 0;
   while (glyph_count < text.count) {
-    f32 text_w = bfont_measure_text_width(font_info, buf_make(text.data, glyph_count), scale);
+    f32 text_w = bfont_measure_text_width(font_info, STR8(text.data, glyph_count), scale);
     if (text_w >= target_width) {
       if (glyph_count > 0) glyph_count -= 1;
       break;
@@ -164,7 +164,7 @@ s64 bfont_count_glyphs_until_width(Font_Info *font_info, buf text, f32 scale, f3
   return glyph_count;
 }
 
-void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 pos, f32 scale, color col, bool draw_bounding_box) {
+void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 pos, f32 scale, color col, bool draw_bounding_box) {
   rect tr = bfont_calc_text_rect(font_info, text, pos, scale);
   Ogl_Tex *font_tex = (Ogl_Tex*)am_get(font_info->tex_id);
 

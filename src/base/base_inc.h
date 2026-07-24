@@ -1,6 +1,7 @@
 #ifndef BASE_INC_H__
 #define BASE_INC_H__
 
+#include "str.h"
 #include "helper.h"
 #include "arena.h"
 #include "bmath.h"
@@ -10,7 +11,6 @@
 #include "easing.h"
 #include "brand.h"
 #include "time_util.h"
-#include "str.h"
 #include "HandmadeMath/HandmadeMath.h"
 
 #endif

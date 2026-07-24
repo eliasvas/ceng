@@ -77,7 +77,7 @@ struct Gui_Box {
 
   // misc
   Gui_ID id;
-  buf label;
+  str8 label;
   Gui_Box_Flags flags;
   Gui_Axis major_layout_axis;
   Gui_Text_Alignment text_align;
@@ -111,14 +111,14 @@ typedef struct {
 
 
 // Interface that we should provide (for now)
-void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, buf text, v2 baseline_pos, f32 scale, color col, bool draw_box);
+void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 baseline_pos, f32 scale, color col, bool draw_box);
 
 void gui_init(Arena *tarena, Font_Info *font, Input *input);
 
 
 Gui_Box *gui_nil_box();
-Gui_Signal gui_button(buf label);
-Gui_Signal gui_panel(buf label);
+Gui_Signal gui_button(str8 label);
+Gui_Signal gui_panel(str8 label);
 
 void gui_begin(rect viewport, f32 dt);
 void gui_end();
