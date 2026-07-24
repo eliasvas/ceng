@@ -2,7 +2,18 @@
 #define GUI2_H_
 #include "core/core_inc.h"
 
+// @IDEA: Have a gui_render layer where a command buffer API
+// will be used and output just rectangles + texcoords for drawing,
+// having clipped them correctly and applied alpha and everything,
+// and make that agnostic to the actual rendering API, then these
+// commands will be fed to an SDF renderer for the actual work,
+// that way we dont have to hardware clip and can draw UI in 1 drawcall (probably)
 
+/*
+@HMMM: Maybe the whole 2d renderer should do the SDF thing but also have a view matrix
+so we are FULLY generic and can render game graphics or UI with the same shader?
+Think about this a bit not sure we can do that, look into the SDF more closely.
+*/
 typedef u64 Gui_ID;
 
 typedef enum {

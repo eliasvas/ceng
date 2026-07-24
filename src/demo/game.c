@@ -1,5 +1,6 @@
 //#define INPUT_IMPLEMENTATION
 #include "core/input.h"
+#include "base/base_inc.h"
 
 #include "game.h"
 #include "gui2/g2.h"
@@ -11,6 +12,23 @@
 extern void platform_play_sound(const char *sound);
 
 void game_init(Game_State *gs) {
+  // Problem scope: print a 'status' bar
+
+  assert(str8_eq(STR8L("Hello"), STR8L("Hello")));
+  assert(str8_starts_with(STR8L("Hello"), STR8L("He")));
+  assert(str8_starts_with(STR8L("Hello"), STR8L("Hello")));
+  assert(str8_ends_with(STR8L("Hello"), STR8L("Hello")));
+  assert(str8_ends_with(STR8L("Hello"), STR8L("ello")));
+  assert(str8_ends_with(STR8L("Hello"), STR8L("o")));
+  str8 status = upper_from_str8(gs->frame_arena, STR8L("fps: 50"));
+  printf("[%.*s]\n", STR8_VARG(status));
+  printf("[%.*s]", STR8_VARG(str8_substr(STR8L("Hello"), 1,2)));
+
+  //gui_init(gs->frame_arena, &gs->font, &gs->input);
+
+
+  exit(1);
+
   entity_store_init();
 
   // Make the hero

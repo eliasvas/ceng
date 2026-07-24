@@ -274,6 +274,8 @@ static f64 pwr(double b, int e) {
     #define M_ALLOC(bytes) VirtualAlloc(NULL, bytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
     #define M_RELEASE(base, bytes) VirtualFree(base, bytes, MEM_RELEASE)
     #define M_ZERO(p, s) (ZeroMemory(p, s))
+// TODO: NO cstdlib
+    #define M_CMP(a, b, s) memcmp(a, b, s)
 #else
     #include <sys/mman.h>
     #include <string.h>
@@ -282,10 +284,13 @@ static f64 pwr(double b, int e) {
     #define M_ALLOC(bytes) mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)
     #define M_RELEASE(base, bytes) munmap(base, bytes)
     #define M_ZERO(p, s) memset(p, 0, s)
+// TODO: NO cstdlib
+    #define M_CMP(a, b, s) memcmp(a, b, s)
 #endif
 
 #define M_ZERO_STRUCT(p)  M_ZERO((p), sizeof(*(p)))
 #define M_ZERO_ARRAY(a)  M_ZERO((a), sizeof(a))
+// TODO: add memcpy and memcmp here please!
 
 // FIXME: NO STD LIBRARY PLEASE
 #define M_COPY(dest, src, n) memcpy(dest, src,n);
