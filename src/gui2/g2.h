@@ -119,6 +119,7 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input);
 Gui_Box *gui_nil_box();
 Gui_Signal gui_button(str8 label);
 Gui_Signal gui_panel(str8 label);
+Gui_Signal gui_spacer(Gui_Size size);
 
 void gui_begin(rect viewport, f32 dt);
 void gui_end();
@@ -158,7 +159,6 @@ typedef struct {
   Gui_Box *root;
   s64 frame_idx;
   f32 dt;
-
 
   Gui_Parent_Node parent_nil_stack_top;
   struct { Gui_Parent_Node *top; Gui_Box * bottom_val; Gui_Parent_Node *free; b32 auto_pop; } parent_stack;

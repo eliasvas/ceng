@@ -3,9 +3,7 @@
 /*
 FIXME FIXME FIXME
 The  number of drawcalls explodes (one per rectangle/string of text) because:
-- We do hardware clipping (We need to flush before continuing to apply the scissor rect)
-- We use 2 different textures for 'white' and text (and probably non-ASCII glyphs as well)
-We Should do the clipping on the fragment shader somehow (probably via discard) + combine our textures to one (or clamp to white??).
+- We do hardware clipping (We need to flush before continuing to apply the scissor rect) - We use 2 different textures for 'white' and text (and probably non-ASCII glyphs as well) We Should do the clipping on the fragment shader somehow (probably via discard) + combine our textures to one (or clamp to white??).
 */
 
 #define GUI_STACKS_IMPLEMENTATION
@@ -23,9 +21,9 @@ static Gui_Box g_nil_box __attribute__((section(".rodata"))) = {
 };
 
 
-
+Gui_ID gui_empty_id() { return 0; }
 Gui_ID gui_get_id_from_label(str8 label) {
-  return djb2_buf(label.data, label.count);
+  return (label.count) ? djb2_buf(label.data, label.count) : gui_empty_id(); 
 }
 
 str8 gui_get_label_no_hh(str8 label) {
@@ -33,6 +31,7 @@ str8 gui_get_label_no_hh(str8 label) {
   if (hh_pos != STR8_NO_MATCH) label.count = hh_pos;
   return label;
 }
+
 
 Gui_Box *gui_nil_box() {
   return (&g_nil_box);
@@ -46,27 +45,38 @@ b32 gui_box_is_nil(Gui_Box *box) {
   return ((box == nullptr) || (box == gui_nil_box()));
 }
 
-Gui_Box *gui_box_make(str8 label, Gui_ID id, Gui_Box_Flags flags) {
+Gui_Box *gui_box_make(str8 label, Gui_Box_Flags flags) {
+  Gui_ID id = gui_get_id_from_label(label);
   Gui_Box *box = gui_nil_box();
-  s32 slot_idx = gui_slot_idx_from_id(id);
+  b32 is_transient = (id == gui_empty_id());
+
   // Try to find box in hashmap
+  b32 first_time = true;
+  s32 slot_idx = gui_slot_idx_from_id(id);
   for (Gui_Box *b = ctx.slots[slot_idx].hash_first; !gui_box_is_nil(b); b=b->hash_next) {
     if (b->id == id) {
       box = b;
+      first_time = false;
       break;
     }
   }
+
   // Try to reuse a Gui_Box from the freelist
   if (gui_box_is_nil(box)) {
     box = ctx.box_freelist;
     sll_stack_pop(ctx.box_freelist); 
   }
+
   // Finally (if freelist is empty) just allocate it from the arena..
   if (gui_box_is_nil(box)) {
     box = arena_push_array(ctx.arena, Gui_Box, 1);
   }
-  // Plug the box to the persistent hashmap
-  dll_push_back_NPZ(gui_nil_box(), ctx.slots[slot_idx].hash_first, ctx.slots[slot_idx].hash_last, box, hash_next, hash_prev);
+
+  // If this box is a spacer, DON'T plug into the persistent hierarchy 
+  if (first_time && !is_transient) {
+    // Plug the box to the persistent hashmap
+    dll_push_back_NPZ(gui_nil_box(), ctx.slots[slot_idx].hash_first, ctx.slots[slot_idx].hash_last, box, hash_next, hash_prev);
+  }
 
   // Clear some stuff (document this better)
   {
@@ -85,6 +95,9 @@ Gui_Box *gui_box_make(str8 label, Gui_ID id, Gui_Box_Flags flags) {
     box->text_align = gui_top_text_alignment();
     box->bg_color = gui_top_bg_color();
     box->text_color = gui_top_text_color();
+
+    box->parent = gui_top_parent();
+    box->major_layout_axis = gui_top_child_layout_axis(); 
 
     if (ctx.fixed_width_stack.top != &ctx.fixed_width_nil_stack_top) {
       box->flags |= GUI_BOX_FLAG_FIXED_WIDTH;
@@ -108,12 +121,14 @@ Gui_Box *gui_box_make(str8 label, Gui_ID id, Gui_Box_Flags flags) {
       box->flags |= GUI_BOX_FLAG_FIXED_Y;
       box->fixed_pos.raw[GUI_AXIS_Y] = gui_top_fixed_y();
     }
-    gui_autopop_all_stacks();
-
-    // TODO: Here we should check wether the fixed_size stacks have values,
-    // boxes should NOT be made with FIXED flags
-    //if (box->flags & GUI_BOX_FLAGS_FIXED_WIDTH) { box->fixed_size.x = params.fixed_width;}
   }
+
+  // Hook box to the per-frame hierarchy
+  Gui_Box *parent = box->parent;
+  dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
+  if (parent != gui_nil_box()) { parent->child_count+=1; }
+
+  gui_autopop_all_stacks();
   return box;
 }
 
@@ -121,22 +136,8 @@ Gui_Box *gui_box_make(str8 label, Gui_ID id, Gui_Box_Flags flags) {
 // TODO: This should probably be a signal_return and step 3 with button logic should become generic-er
 Gui_Signal gui_button(str8 label) {
   // 0. allocate/reuse/retain box pointer
-  Gui_ID id = gui_get_id_from_label(label);
   u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
-  Gui_Box *box = gui_box_make(label, id, flags);
-  // 1. Fill the (immediate) params
-  {
-    box->parent = gui_top_parent();
-    box->major_layout_axis = gui_top_child_layout_axis(); 
-  }
-
-  // FIXME: Should this happen along with push to persistent hashmap (why is it done here)
-  // 2. Hook into the layout structure
-  Gui_Box *parent = box->parent;
-  dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
-  if (parent != gui_nil_box()) {
-    parent->child_count+=1;
-  }
+  Gui_Box *box = gui_box_make(label, flags);
 
   // 3. Button/Box logic (using previous frame's final_rect.p.raw, AKA box->final_rect.p.raw!)
   rect r = box->final_rect;
@@ -148,13 +149,13 @@ Gui_Signal gui_button(str8 label) {
 
   b32 res = false;
   if (collides) {
-    ctx.hot_id = id;
+    ctx.hot_id = box->id;
     if (lmb_pressed) {
-      ctx.active_id = id;
+      ctx.active_id = box->id;
     }
   }
   if (lmb_released) {
-    if (ctx.hot_id == id) {
+    if (ctx.hot_id == box->id) {
       res = true;
     }
     ctx.active_id = 0;
@@ -162,35 +163,27 @@ Gui_Signal gui_button(str8 label) {
 
   // FIXME: these should happen at gui_end, not every time a 'signal' is made
   f32 anim_rate = 1.0 - pow_f32(2.0, (-20.0f * ctx.dt));
-  b32 is_hot = (ctx.hot_id == id);
+  b32 is_hot = (ctx.hot_id == box->id);
   box->hot_t += ((f32)is_hot - box->hot_t) * anim_rate;
-  b32 is_active = (ctx.active_id == id);
+  b32 is_active = (ctx.active_id == box->id);
   box->active_t += ((f32)is_active - box->active_t) * anim_rate;
 
   return (Gui_Signal){res, box};
 }
 
-
+Gui_Signal gui_spacer(Gui_Size size) {
+  Gui_Axis layout_axis = gui_top_child_layout_axis(); 
+  if (layout_axis == GUI_AXIS_X) gui_set_next_pref_width(size);
+  if (layout_axis == GUI_AXIS_Y) gui_set_next_pref_height(size);
+  Gui_Box *box = gui_box_make(STR8L(""), 0);
+  // No signal stuff here!
+  return (Gui_Signal){false, box};
+}
 
 Gui_Signal gui_panel(str8 label) {
-  // 0. allocate/reuse/retain box pointer
-  Gui_ID id = gui_get_id_from_label(label);
   u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX);
-  Gui_Box *box = gui_box_make(label, id, flags);
-  // 1. Fill the (immediate) params
-  {
-    box->parent = gui_top_parent();
-    box->major_layout_axis = gui_top_child_layout_axis(); 
-  }
-
-  // FIXME: Should this happen along with push to persistent hashmap (why is it done here)
-  // 2. Hook into the layout structure
-  Gui_Box *parent = box->parent;
-  dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
-  if (parent != gui_nil_box()) {
-    parent->child_count+=1;
-  }
-
+  Gui_Box *box = gui_box_make(label, flags);
+  // No signal stuff here!
   return (Gui_Signal){false, box};
 }
 
@@ -220,15 +213,12 @@ void gui_begin(rect viewport, f32 dt) {
   gui_push_bg_color(v4m(0.4,0.4,0.4,0.9));
   ctx.viewport = viewport;
   // Initialize a root box
-  str8 root_label = STR8L("ROOTBOX");
-  Gui_ID root_id = gui_get_id_from_label(root_label);
   f32 pad_px = 100;
   gui_set_next_fixed_x(ctx.viewport.x + pad_px/2);
   gui_set_next_fixed_y(ctx.viewport.y + pad_px/2);
   gui_set_next_fixed_width(ctx.viewport.w - pad_px);
   gui_set_next_fixed_height(ctx.viewport.h - pad_px);
-
-  ctx.root = gui_box_make(root_label, root_id, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+  ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
 
   gui_push_parent(ctx.root);
 }

@@ -163,13 +163,15 @@ void game_render(Game_State *gs, float dt) {
   gui_set_next_bg_color(v4m(0.3,0.5,0.3,0.85));
   gui_button(STR8L("WOWO"));
 
+  gui_spacer((Gui_Size) {GUI_SIZEKIND_PIXELS, 4, 0.0});
+
   gui_set_next_bg_color(v4m(0.5,0.5,0.5,0.85));
   gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 200, 0.0});
   gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 0.0});
   if (other_enabled) {
     if (gui_button(STR8L("WOWO##2")).pressed) {
-      printf("WOW\n");
+      printf("WOWO##2\n");
     }
     //gs->request_reload = true;
   }
