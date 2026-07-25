@@ -153,24 +153,24 @@ void game_render(Game_State *gs, float dt) {
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_set_next_bg_color(v4m(0.7,0.5,0.3,0.85));
   static bool other_enabled = false;
-  if (gui_button(STR8L("Secret")).pressed) {
+  if (gui_button(STR8L("Secret")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
     other_enabled = !other_enabled;
     printf("Reset\n");
   }
 
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
-  gui_set_next_bg_color(v4m(0.3,0.5,0.3,0.85));
+  gui_set_next_bg_color(v4m(0.1,0.9,0.1,0.85));
   gui_button(STR8L("WOWO"));
 
   gui_spacer((Gui_Size) {GUI_SIZEKIND_PIXELS, 4, 0.0});
 
-  gui_set_next_bg_color(v4m(0.5,0.5,0.5,0.85));
+  gui_set_next_bg_color(v4m(0.5,0.5,0.9,0.85));
   gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 200, 0.0});
   gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 0.0});
   if (other_enabled) {
-    if (gui_button(STR8L("WOWO##2")).pressed) {
+    if (gui_button(STR8L("WOWO##2")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
       printf("WOWO##2\n");
     }
     //gs->request_reload = true;

@@ -99,13 +99,19 @@ struct Gui_Box_Hash_Slot {
   Gui_Box *hash_last;
 };
 
-typedef struct {
-  // TODO: Add more stuff here
-  b32 pressed;
-  // ..
-  // ..
-  // ..
 
+typedef enum {
+  GUI_SIGNAL_FLAG_LMB_PRESSED  = (0x1 << 0),
+  GUI_SIGNAL_FLAG_MMB_PRESSED  = (0x1 << 1),
+  GUI_SIGNAL_FLAG_RMB_PRESSED  = (0x1 << 2),
+  GUI_SIGNAL_FLAG_LMB_RELEASED = (0x1 << 3),
+  GUI_SIGNAL_FLAG_MMB_RELEASED = (0x1 << 4),
+  GUI_SIGNAL_FLAG_RMB_RELEASED = (0x1 << 5),
+} Gui_Signal_Flags;
+
+typedef struct {
+  // TODO: Add a scroll value?
+  Gui_Signal_Flags sflags;
   Gui_Box *box;
 }Gui_Signal;
 

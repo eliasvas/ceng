@@ -132,43 +132,59 @@ Gui_Box *gui_box_make(str8 label, Gui_Box_Flags flags) {
   return box;
 }
 
+Gui_Signal gui_signal_from_box(Gui_Box *box) {
+  Gui_Signal sig = {
+    .box = box,
+    .sflags = 0,
+  };
 
-// TODO: This should probably be a signal_return and step 3 with button logic should become generic-er
+  if (box->flags & GUI_BOX_FLAG_CLICKABLE) {
+    // 0. Clicking logic
+    rect r = box->final_rect;
+    v2 bl_mp = input_get_mouse_pos(ctx.input);
+    bl_mp.y = (ctx.viewport.h - bl_mp.y);
+    b32 collides = rect_isect_point(r, bl_mp);
+
+    for (s32 mbtn_idx = 0; mbtn_idx < 3; mbtn_idx+=1) {
+      b32 mb_pressed = input_mkey_pressed(ctx.input, INPUT_MOUSE_LMB+mbtn_idx);
+      b32 mb_released = input_mkey_released(ctx.input, INPUT_MOUSE_LMB+mbtn_idx);
+
+      s32 mbtn_idx = 0;
+      if (collides) {
+        ctx.hot_id = box->id;
+        if (mb_pressed) {
+          ctx.active_id = box->id;
+          sig.sflags |= (GUI_SIGNAL_FLAG_LMB_PRESSED << mbtn_idx);
+          break; // is this correct?
+        }
+      }
+      if (mb_released) {
+        if (ctx.hot_id == box->id) {
+          sig.sflags |= (GUI_SIGNAL_FLAG_LMB_RELEASED << mbtn_idx);
+          break; // is this correct?
+        }
+        ctx.active_id = 0;
+      }
+    }
+
+    // 1. hot/active animations (these are here bc hot_id is set on step 0)
+    {
+      // FIXME: these should happen at gui_end right?
+      f32 anim_rate = 1.0 - pow_f32(2.0, (-20.0f * ctx.dt));
+      b32 is_hot = (ctx.hot_id == box->id);
+      box->hot_t += ((f32)is_hot - box->hot_t) * anim_rate;
+      b32 is_active = (ctx.active_id == box->id);
+      box->active_t += ((f32)is_active - box->active_t) * anim_rate;
+    }
+  }
+
+  return sig;
+}
+
 Gui_Signal gui_button(str8 label) {
-  // 0. allocate/reuse/retain box pointer
   u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
   Gui_Box *box = gui_box_make(label, flags);
-
-  // 3. Button/Box logic (using previous frame's final_rect.p.raw, AKA box->final_rect.p.raw!)
-  rect r = box->final_rect;
-  v2 bl_mp = input_get_mouse_pos(ctx.input);
-  bl_mp.y = (ctx.viewport.h - bl_mp.y);
-  b32 collides = rect_isect_point(r, bl_mp);
-  b32 lmb_pressed = input_mkey_pressed(ctx.input, INPUT_MOUSE_LMB);
-  b32 lmb_released = input_mkey_released(ctx.input, INPUT_MOUSE_LMB);
-
-  b32 res = false;
-  if (collides) {
-    ctx.hot_id = box->id;
-    if (lmb_pressed) {
-      ctx.active_id = box->id;
-    }
-  }
-  if (lmb_released) {
-    if (ctx.hot_id == box->id) {
-      res = true;
-    }
-    ctx.active_id = 0;
-  }
-
-  // FIXME: these should happen at gui_end, not every time a 'signal' is made
-  f32 anim_rate = 1.0 - pow_f32(2.0, (-20.0f * ctx.dt));
-  b32 is_hot = (ctx.hot_id == box->id);
-  box->hot_t += ((f32)is_hot - box->hot_t) * anim_rate;
-  b32 is_active = (ctx.active_id == box->id);
-  box->active_t += ((f32)is_active - box->active_t) * anim_rate;
-
-  return (Gui_Signal){res, box};
+  return gui_signal_from_box(box);
 }
 
 Gui_Signal gui_spacer(Gui_Size size) {
@@ -176,15 +192,13 @@ Gui_Signal gui_spacer(Gui_Size size) {
   if (layout_axis == GUI_AXIS_X) gui_set_next_pref_width(size);
   if (layout_axis == GUI_AXIS_Y) gui_set_next_pref_height(size);
   Gui_Box *box = gui_box_make(STR8L(""), 0);
-  // No signal stuff here!
-  return (Gui_Signal){false, box};
+  return gui_signal_from_box(box);
 }
 
 Gui_Signal gui_panel(str8 label) {
-  u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX);
+  u32 flags = (GUI_BOX_FLAG_DRAW_BOX);
   Gui_Box *box = gui_box_make(label, flags);
-  // No signal stuff here!
-  return (Gui_Signal){false, box};
+  return gui_signal_from_box(box);
 }
 
 void gui_init(Arena *tarena, Font_Info *font, Input *input) {
@@ -213,12 +227,13 @@ void gui_begin(rect viewport, f32 dt) {
   gui_push_bg_color(v4m(0.4,0.4,0.4,0.9));
   ctx.viewport = viewport;
   // Initialize a root box
-  f32 pad_px = 100;
-  gui_set_next_fixed_x(ctx.viewport.x + pad_px/2);
-  gui_set_next_fixed_y(ctx.viewport.y + pad_px/2);
-  gui_set_next_fixed_width(ctx.viewport.w - pad_px);
-  gui_set_next_fixed_height(ctx.viewport.h - pad_px);
-  ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+  // TODO: ROOTBOX should finally be the whole screen space and this rect should be in user-code
+  gui_set_next_fixed_x(5);
+  gui_set_next_fixed_y(10);
+  gui_set_next_fixed_width(300);
+  gui_set_next_fixed_height(300);
+  //ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+  ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX);
 
   gui_push_parent(ctx.root);
 }
