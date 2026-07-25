@@ -183,10 +183,12 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
     Glyph_Info metrics = font_info->glyphs[c - font_info->first_codepoint];
     f32 atlas_height = font_info->tex_dim.y;
     R_Quad quad = (R_Quad) {
-        .dst_rect = rec(baseline_pos.x + ((i==0)?0:metrics.off.x*scale),
-                        baseline_pos.y - (metrics.off.y*scale + metrics.r.h*scale),//+metrics.off.y*scale, 
-                        metrics.r.w*scale,
-                        metrics.r.h*scale
+        .dst_rect = 
+          rect_clip_against(
+            rec(baseline_pos.x + ((i==0)?0:metrics.off.x*scale), 
+              baseline_pos.y - (metrics.off.y*scale + metrics.r.h*scale), 
+              metrics.r.w*scale, metrics.r.h*scale),
+            clip_rect
         ),
         .src_rect = rec(metrics.r.x,
             atlas_height - metrics.r.y - metrics.r.h,

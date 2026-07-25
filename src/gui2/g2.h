@@ -52,6 +52,7 @@ typedef enum {
   GUI_BOX_FLAG_ALLOW_OVERFLOW_Y = (0x1 << 6),
   GUI_BOX_FLAG_DRAW_BOX         = (0x1 << 7),
   GUI_BOX_FLAG_DRAW_TEXT        = (0x1 << 8),
+  GUI_BOX_FLAG_CLIP             = (0x1 << 9),
 } Gui_Box_Flags;
 
 typedef struct Gui_Box Gui_Box;
@@ -124,7 +125,7 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input);
 
 Gui_Box *gui_nil_box();
 Gui_Signal gui_button(str8 label);
-Gui_Signal gui_panel(str8 label);
+Gui_Signal gui_pane(str8 label);
 Gui_Signal gui_spacer(Gui_Size size);
 
 void gui_begin(rect viewport, f32 dt);

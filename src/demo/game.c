@@ -144,10 +144,12 @@ void game_render(Game_State *gs, float dt) {
 #if 1
   // Small GUI test (mainly for Box reuse test right now)
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_SUM_OF_CHILDREN, 1.0, 1.0});
-  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PERCENT_OF_PARENT, 0.8, 1.0});
+  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PERCENT_OF_PARENT, 0.65, 1.0});
   gui_set_next_bg_color(v4m(0.3,0.3,0.9,0.85));
-  Gui_Signal panel = gui_panel(STR8L("Panel"));
-  gui_push_parent(panel.box);
+  Gui_Signal pane = gui_pane(STR8L("Pane"));
+  // HACK
+  pane.box->flags |= GUI_BOX_FLAG_ALLOW_OVERFLOW_X;
+  gui_push_parent(pane.box);
 
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
@@ -158,14 +160,14 @@ void game_render(Game_State *gs, float dt) {
     printf("Reset\n");
   }
 
-  gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
+  gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
   gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
   gui_set_next_bg_color(v4m(0.1,0.9,0.1,0.85));
   gui_button(STR8L("WOWO"));
 
   gui_spacer((Gui_Size) {GUI_SIZEKIND_PIXELS, 4, 0.0});
 
-  gui_set_next_bg_color(v4m(0.5,0.5,0.9,0.85));
+  gui_set_next_bg_color(v4m(0.1,0.1,0.3,0.35));
   gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 200, 0.0});
   gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 0.0});
@@ -176,7 +178,7 @@ void game_render(Game_State *gs, float dt) {
     //gs->request_reload = true;
   }
 
-  gui_pop_parent(); // Panel
+  gui_pop_parent(); // Pane
 #endif
 
   gui_end();

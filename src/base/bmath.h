@@ -331,6 +331,25 @@ static b32 rect_isect_rect(rect a, rect b) {
              b.y + b.h < a.y);
 }
 
+static rect rect_clip_against(rect clipey, rect clipper) {
+  rect final = clipey;
+
+  f32 clipper_min_x = minimum(clipper.p.x, clipper.p.x + clipper.dim.x);
+  f32 clipper_max_x = maximum(clipper.p.x, clipper.p.x + clipper.dim.x);
+  f32 clipper_min_y = minimum(clipper.p.y, clipper.p.y + clipper.dim.y);
+  f32 clipper_max_y = maximum(clipper.p.y, clipper.p.y + clipper.dim.y);
+
+  final.p.x = clamp(final.p.x, clipper_min_x, clipper_max_x);
+  final.p.y = clamp(final.p.y, clipper_min_y, clipper_max_y);
+
+  f32 final_w = clamp(final.p.x+final.dim.x, clipper_min_x, clipper_max_x);
+  final.dim.x = final_w - final.p.x;
+  f32 final_h = clamp(final.p.y+final.dim.y, clipper_min_y, clipper_max_y);
+  final.dim.y = final_h - final.p.y;
+
+  return final;
+}
+
 static b32 rect_inside_rect(rect b, rect s) {
   return (rect_isect_point(b, v2m(s.x,     s.y)) &&
           rect_isect_point(b, v2m(s.x+s.w, s.y)) &&

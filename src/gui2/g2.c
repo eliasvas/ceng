@@ -1,5 +1,12 @@
 #include "g2.h"
 
+// TODO: Tooltips
+// TODO: Clipping
+// TODO: Dragging / viewclamping
+// TODO: Text field
+// TODO: Positional animations
+// TODO: Keyboard NAV
+
 /*
 FIXME FIXME FIXME
 The  number of drawcalls explodes (one per rectangle/string of text) because:
@@ -138,9 +145,17 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
     .sflags = 0,
   };
 
+  // 0. Clip boxes for better event listening
   if (box->flags & GUI_BOX_FLAG_CLICKABLE) {
-    // 0. Clicking logic
     rect r = box->final_rect;
+    for (Gui_Box *parent = box->parent; !gui_box_is_nil(parent); parent = parent->parent) {
+      if (parent->flags & GUI_BOX_FLAG_CLIP) {
+        r = rect_clip_against(r, parent->final_rect);
+        break;
+      }
+    }
+
+    // 1. Clicking logic
     v2 bl_mp = input_get_mouse_pos(ctx.input);
     bl_mp.y = (ctx.viewport.h - bl_mp.y);
     b32 collides = rect_isect_point(r, bl_mp);
@@ -167,7 +182,7 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
       }
     }
 
-    // 1. hot/active animations (these are here bc hot_id is set on step 0)
+    // 2. hot/active animations (these are here bc hot_id is set on step 0)
     {
       // FIXME: these should happen at gui_end right?
       f32 anim_rate = 1.0 - pow_f32(2.0, (-20.0f * ctx.dt));
@@ -195,8 +210,8 @@ Gui_Signal gui_spacer(Gui_Size size) {
   return gui_signal_from_box(box);
 }
 
-Gui_Signal gui_panel(str8 label) {
-  u32 flags = (GUI_BOX_FLAG_DRAW_BOX);
+Gui_Signal gui_pane(str8 label) {
+  u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP);
   Gui_Box *box = gui_box_make(label, flags);
   return gui_signal_from_box(box);
 }
@@ -404,17 +419,28 @@ void gui_layout_calc_fixed_pos_and_final_rects(Gui_Box *node, Gui_Axis axis) {
 }
 
 
+// TODO: Move this to a different file ok?
 void gui_render(Gui_Box *root) {
-  // 0. Draw the Regular box
+
+  // 0. Calculate the clip rect (Simple software way)
+  rect clip_rect = root->final_rect;
+  for (Gui_Box *parent = root->parent; !gui_box_is_nil(parent); parent = parent->parent) {
+    if (parent->flags & GUI_BOX_FLAG_CLIP) {
+      clip_rect = rect_clip_against(clip_rect, parent->final_rect);
+      break;
+    }
+  }
+
+  // 1. Draw the Regular box
   if (root->flags & GUI_BOX_FLAG_DRAW_BOX) {
     R_Quad quad = (R_Quad) {
-        .dst_rect = root->final_rect,
+        .dst_rect = clip_rect,
         .c = v4_add(root->bg_color, v4m(0.2 * root->hot_t, 0.2*root->active_t,0,0)),
     };
     rn_push_quad(rn_pass_front(), quad);
   }
 
-  // 1. Draw the text
+  // 2. Draw the text
   if (root->flags & GUI_BOX_FLAG_DRAW_TEXT) {
     rect r = bfont_calc_text_rect(ctx.font, root->label, v2m(0,0), ctx.g_scale);
     v2 text_draw_pos = {};
@@ -429,10 +455,10 @@ void gui_render(Gui_Box *root) {
         text_draw_pos = v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
         break;
     }
-    bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport , ctx.viewport, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
+    bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport, clip_rect, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
   }
 
-  // 2. Proceed to render the remaining hierarchy (back-to-front)
+  // 3. Proceed to render the remaining hierarchy (back-to-front)
   for (Gui_Box *child = root->first; !gui_box_is_nil(child); child = child->next) {
     gui_render(child);
   }
