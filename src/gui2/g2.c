@@ -29,6 +29,7 @@ static Gui_Box g_nil_box __attribute__((section(".rodata"))) = {
 
 
 Gui_ID gui_empty_id() { return 0; }
+Gui_ID gui_id_eq(Gui_ID a, Gui_ID b) { return (a == b); }
 Gui_ID gui_get_id_from_label(str8 label) {
   return (label.count) ? djb2_buf(label.data, label.count) : gui_empty_id(); 
 }
@@ -516,5 +517,79 @@ void gui_end() {
   gui_prune_unused_boxes();
   gui_render(ctx.root);
   ctx.hot_id = 0;
+}
+
+Gui_Axis gui_axis_flip(Gui_Axis axis) {
+  return !(axis);
+}
+
+Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) {
+  gui_push_bg_color(col(0.2,0.2,0.2,1.0));
+  // Scroll list should fit in parent space right?
+  gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 1.0});
+  gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 1.0});
+  gui_set_next_child_layout_axis(gui_axis_flip(axis));
+	Gui_Box *scroll_list = gui_box_make(s, GUI_BOX_FLAG_DRAW_BOX|GUI_BOX_FLAG_CLIP);
+  gui_push_parent(scroll_list);
+
+  gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+  gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+  gui_set_next_child_layout_axis(axis);
+
+  str8 scroll_region_text = str8_sprintf(ctx.temp_arena, "%.*s_region", (int)s.count, s.data);
+	Gui_Box *scroll_region = gui_box_make(scroll_region_text, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y);
+
+  f32 scroll_region_dim = (axis == GUI_AXIS_Y) ? scroll_region->final_rect.h : scroll_region->final_rect.w;
+  f32 visible_items =  scroll_region_dim / sdata->item_px;
+  f32 scroll_button_dim = scroll_region_dim * minimum(1.0, visible_items / (f32)sdata->item_count);
+
+  f32 min_dim_px = 0;
+  f32 max_dim_px = sdata->item_px * (sdata->item_count - visible_items); 
+
+
+  if (visible_items < (f32)sdata->item_count) {
+    gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, sdata->scroll_bar_px, 1.0});
+    gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+    gui_set_next_child_layout_axis(axis);
+    gui_set_next_bg_color(v4_multf(gui_top_bg_color(), 0.9));
+
+    str8 scroll_bar_text = str8_sprintf(ctx.temp_arena, "%.*s_bar", (int)s.count, s.data);
+    Gui_Box *scroll_bar= gui_box_make(scroll_bar_text, GUI_BOX_FLAG_DRAW_BOX);
+
+    gui_push_parent(scroll_bar);
+    gui_spacer((Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, sdata->scroll_percent, 0.0});
+    gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, scroll_button_dim, 1.0});
+    gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+    gui_set_next_bg_color(sdata->scroll_button_color);
+    str8 scroll_button_text = str8_sprintf(ctx.temp_arena, "%.*s_sbutton", (int)s.count, s.data);
+    Gui_Box *scroll_button = gui_box_make(scroll_button_text, GUI_BOX_FLAG_DRAW_BOX|GUI_BOX_FLAG_CLICKABLE);
+    Gui_Signal scroll_button_sig = gui_signal_from_box(scroll_button);
+    gui_spacer((Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0 - sdata->scroll_percent, 0.0});
+    if (gui_id_eq(scroll_button_sig.box->id, ctx.hot_id)) {
+      sdata->scroll_percent += sdata->scroll_speed * input_get_mouse_delta(ctx.input).raw[axis] * ctx.dt;
+      sdata->scroll_percent = clamp(sdata->scroll_percent, 0, 1);
+    }
+    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, sdata->scroll_percent);
+    gui_pop_parent();
+
+    gui_pop_parent();
+    gui_pop_bg_color();
+
+  }
+
+	Gui_Signal sig = gui_signal_from_box(scroll_region);
+  gui_push_parent(sig.box);
+  gui_push_child_layout_axis(axis);
+  gui_push_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+  gui_push_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, sdata->item_px, 1.0});
+
+	return sig;
+}
+
+void gui_scroll_list_end(str8 s) {
+  gui_pop_parent();
+  gui_pop_child_layout_axis();
+  gui_pop_pref_width();
+  gui_pop_pref_height();
 }
 

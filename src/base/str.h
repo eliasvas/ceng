@@ -43,6 +43,7 @@ bool str8_starts_with(str8 s, str8 prefix);
 bool str8_ends_with(str8 s, str8 postfix);
 str8 str8_substr(str8 s, int64_t start_incl, int64_t end_incl);
 uint64_t str8_find_needle(str8 haystack, str8 needle);
+str8 str8_sprintf(Arena *arena, const char* format, ...);
 
 
 #else
@@ -143,6 +144,26 @@ str8 str8_substr(str8 s, int64_t start_incl, int64_t end_incl) {
   s.count = (end_incl - start_incl)+1;
 
   return s;
+}
+
+str8 str8_sprintf(Arena *arena, const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+
+  // +1 byte for null terminator (Do we need this? FIXME)
+  s32 size = vsnprintf(NULL, 0, format, args)+1;
+
+  // Also because of push_array_nz, the 'null' terminator is not nulled ??
+  char *mem = arena_push_array_nz(arena, u8, size);
+  assert(mem);
+
+  va_end(args);
+  va_start(args, format);
+  vsnprintf(mem, size, format, args);
+  va_end(args);
+
+  return STR8(mem, size-1);
+
 }
 
 // TODO: str8_list API?

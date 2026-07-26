@@ -141,7 +141,33 @@ void game_render(Game_State *gs, float dt) {
   gui_begin(gs->game_viewport, dt);
   gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);
 
-#if 1
+  static Gui_Scroll_Data sdata = {
+    .scroll_percent = 0,
+    .item_px = 50, // FIXME change this to 60 to see some weird stuff..
+    .item_count = 6,
+    .scroll_bar_px = 40,
+    .scroll_button_px = 50,
+    .scroll_button_color = col(0.5,1,0.4,1),
+    .scroll_speed = 1,
+  };
+
+  Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
+  assert(scroll_list.box);
+
+  gui_button(STR8L("AAAA"));
+  gui_button(STR8L("BBBB"));
+  gui_button(STR8L("CCCC"));
+  gui_button(STR8L("DDDD"));
+  gui_button(STR8L("EEEE"));
+  gui_button(STR8L("FFFF"));
+#if 0
+  gui_button(STR8L("GGGG"));
+  gui_button(STR8L("HHHH"));
+#endif
+
+  gui_scroll_list_end(STR8L("MyScrollTest"));
+
+#if 0
   // Small GUI test (mainly for Box reuse test right now)
   gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_SUM_OF_CHILDREN, 1.0, 1.0});
   gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PERCENT_OF_PARENT, 0.65, 1.0});

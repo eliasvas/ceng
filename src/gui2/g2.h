@@ -134,6 +134,20 @@ Gui_Signal gui_button(str8 label);
 Gui_Signal gui_pane(str8 label);
 Gui_Signal gui_spacer(Gui_Size size);
 
+
+typedef struct {
+  f32 scroll_percent;
+  f32 item_px;
+  s32 item_count;
+
+  u32 scroll_bar_px;
+  u32 scroll_button_px;
+  color scroll_button_color;
+  f32 scroll_speed;
+} Gui_Scroll_Data;
+Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data* sdata);
+void gui_scroll_list_end(str8 s);
+
 void gui_begin(rect viewport, f32 dt);
 void gui_end();
 
