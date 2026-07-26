@@ -145,44 +145,41 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
     .sflags = 0,
   };
 
-  // 0. Clip boxes for better event listening
-  if (box->flags & GUI_BOX_FLAG_CLICKABLE) {
-    rect r = box->final_rect;
-    for (Gui_Box *parent = box->parent; !gui_box_is_nil(parent); parent = parent->parent) {
-      if (parent->flags & GUI_BOX_FLAG_CLIP) {
-        r = rect_clip_against(r, parent->final_rect);
-        break;
-      }
-    }
 
-    // 1. Clicking logic
-    v2 bl_mp = input_get_mouse_pos(ctx.input);
-    bl_mp.y = (ctx.viewport.h - bl_mp.y);
-    b32 collides = rect_isect_point(r, bl_mp);
+  // 0. Clipping + mouse over logic
+  rect r = box->final_rect;
+  for (Gui_Box *parent = box->parent; !gui_box_is_nil(parent); parent = parent->parent) {
+    if (parent->flags & GUI_BOX_FLAG_CLIP) {
+      r = rect_clip_against(r, parent->final_rect);
+      break;
+    }
+  }
+  b32 mouse_over = rect_isect_point(r, input_get_mouse_pos(ctx.input));
+
+  // 1. Clicking hot/active logic (+ animations for now)
+  if (box->flags & GUI_BOX_FLAG_CLICKABLE) {
 
     for (s32 mbtn_idx = 0; mbtn_idx < 3; mbtn_idx+=1) {
       b32 mb_pressed = input_mkey_pressed(ctx.input, INPUT_MOUSE_LMB+mbtn_idx);
       b32 mb_released = input_mkey_released(ctx.input, INPUT_MOUSE_LMB+mbtn_idx);
 
-      s32 mbtn_idx = 0;
-      if (collides) {
+      if (mouse_over) {
         ctx.hot_id = box->id;
         if (mb_pressed) {
           ctx.active_id = box->id;
           sig.sflags |= (GUI_SIGNAL_FLAG_LMB_PRESSED << mbtn_idx);
-          break; // is this correct?
+          break;
         }
       }
       if (mb_released) {
         if (ctx.hot_id == box->id) {
           sig.sflags |= (GUI_SIGNAL_FLAG_LMB_RELEASED << mbtn_idx);
-          break; // is this correct?
+          break;
         }
         ctx.active_id = 0;
       }
     }
 
-    // 2. hot/active animations (these are here bc hot_id is set on step 0)
     {
       // FIXME: these should happen at gui_end right?
       f32 anim_rate = 1.0 - pow_f32(2.0, (-20.0f * ctx.dt));
@@ -190,6 +187,25 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
       box->hot_t += ((f32)is_hot - box->hot_t) * anim_rate;
       b32 is_active = (ctx.active_id == box->id);
       box->active_t += ((f32)is_active - box->active_t) * anim_rate;
+    }
+  }
+
+  // TODO: Make this view offset animatable w/ anim_rate like above!
+  // FIXME: Shouldn't this instead of mouse_over handle actual events? 
+  // We should make the event system check overlapping rects correctly!
+  // 2. View scrolling (rn only on y axis)
+  if (box->flags & GUI_BOX_FLAG_SCROLLABLE && mouse_over) {
+    v2 scroll = input_get_scroll_delta(ctx.input);
+
+    v2 mdelta = input_get_mouse_delta(ctx.input);
+    b32 mmb_down = input_mkey_down(ctx.input, INPUT_MOUSE_MMB);
+
+    // 3. View clamp if needed w/ rect's view bounds
+    for (s32 axis = GUI_AXIS_X; axis <= GUI_AXIS_Y; axis+=1) {
+      if (mmb_down && mdelta.raw[axis]) scroll.raw[axis] += mdelta.raw[axis]; 
+      box->view_off.raw[axis] += scroll.raw[axis];
+      if (box->flags & (GUI_BOX_FLAG_VIEW_CLAMP_X<<axis)) 
+        box->view_off.raw[axis] = clamp(box->view_off.raw[axis], 0, box->view_bounds.raw[axis] - box->final_rect.dim.raw[axis]);
     }
   }
 
@@ -211,7 +227,9 @@ Gui_Signal gui_spacer(Gui_Size size) {
 }
 
 Gui_Signal gui_pane(str8 label) {
-  u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP);
+  //u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y);
+  //u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_X |GUI_BOX_FLAG_VIEW_CLAMP_Y);
+  u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP | GUI_BOX_FLAG_SCROLLABLE);
   Gui_Box *box = gui_box_make(label, flags);
   return gui_signal_from_box(box);
 }
@@ -396,22 +414,28 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
 void gui_layout_calc_fixed_pos_and_final_rects(Gui_Box *node, Gui_Axis axis) {
   f32 node_pos = node->fixed_pos.raw[axis];
   f32 layout_pos = 0;
+  f32 bounds = 0;
 
   // Calculate final rect for the box
   node->final_rect.p.raw[axis] = node->fixed_pos.raw[axis];
   node->final_rect.dim.raw[axis] = node->fixed_size.raw[axis];
 
+
   // Calculate this box's children fixed positions
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
     if (!(child->flags & GUI_BOX_FLAG_FIXED_X<<axis)) {
-      child->fixed_pos.raw[axis] = node_pos + layout_pos;
+      child->fixed_pos.raw[axis] = node_pos + layout_pos + node->view_off.raw[axis];
 
       if (axis == node->major_layout_axis) {
         layout_pos += child->fixed_size.raw[axis];
+        bounds += child->fixed_size.raw[axis];
+      } else {
+        bounds = maximum(bounds, child->fixed_size.raw[axis]);
       }
     }
   }
 
+  node->view_bounds.raw[axis] = bounds;
   // Recurse
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
     gui_layout_calc_fixed_pos_and_final_rects(child, axis);

@@ -225,7 +225,8 @@ int main(void) {
           };
           break;
         case RGFW_mousePosChanged:
-          v2 new_mp = v2m(event.mouse.x, event.mouse.y);
+          // We make the mouse bottom-left based because we like OpenGL-coords everywhere
+          v2 new_mp = v2m(event.mouse.x, gs.wdim.y - event.mouse.y);
           input_event.evt = (Input_Event){
             .data.mme = (Input_MouseMotion_Event) { .mouse_pos = new_mp },
             .kind = INPUT_EVENT_KIND_MOUSEMOTION,
@@ -271,6 +272,13 @@ int main(void) {
               .is_down = (event.type == RGFW_mouseButtonPressed),
             },
             .kind = INPUT_EVENT_KIND_MOUSE,
+          };
+          break;
+        case RGFW_mouseScroll:
+          v2 scroll_amount = v2m(event.delta.x, event.delta.y);
+          input_event.evt = (Input_Event){
+            .data.mwe = (Input_MouseWheel_Event) { .wheel_delta= scroll_amount },
+            .kind = INPUT_EVENT_KIND_MOUSEWHEEL,
           };
           break;
         default:

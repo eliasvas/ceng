@@ -60,11 +60,11 @@ void game_update(Game_State *gs, float dt) {
 
   // Camera stuff (This is wrong because we post-multiply.. FIXME)
   v2 mouse_delta = input_get_mouse_delta(&gs->input);
-  if (input_mkey_down(&gs->input, INPUT_MOUSE_MMB)) { 
+  if (input_mkey_down(&gs->input, INPUT_MOUSE_RMB)) { 
     HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), mouse_delta.x*dt);
     gs->view = HMM_Mul(gs->view, HMM_QToM4(rot_q));
   }
-  if (input_mkey_down(&gs->input, INPUT_MOUSE_MMB)) { 
+  if (input_mkey_down(&gs->input, INPUT_MOUSE_RMB)) { 
     HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(1,0,0), mouse_delta.y*dt);
     gs->view = HMM_Mul(gs->view, HMM_QToM4(rot_q));
   }
@@ -149,6 +149,7 @@ void game_render(Game_State *gs, float dt) {
   Gui_Signal pane = gui_pane(STR8L("Pane"));
   // HACK
   pane.box->flags |= GUI_BOX_FLAG_ALLOW_OVERFLOW_X;
+  pane.box->flags |= GUI_BOX_FLAG_ALLOW_OVERFLOW_Y;
   gui_push_parent(pane.box);
 
   gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});

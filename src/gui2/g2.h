@@ -43,16 +43,19 @@ typedef enum {
 } Gui_Axis;
 
 typedef enum {
-  GUI_BOX_FLAG_CLICKABLE        = (0x1 << 0),
-  GUI_BOX_FLAG_FIXED_X          = (0x1 << 1),
-  GUI_BOX_FLAG_FIXED_Y          = (0x1 << 2),
-  GUI_BOX_FLAG_FIXED_WIDTH      = (0x1 << 3),
-  GUI_BOX_FLAG_FIXED_HEIGHT     = (0x1 << 4),
-  GUI_BOX_FLAG_ALLOW_OVERFLOW_X = (0x1 << 5),
-  GUI_BOX_FLAG_ALLOW_OVERFLOW_Y = (0x1 << 6),
-  GUI_BOX_FLAG_DRAW_BOX         = (0x1 << 7),
-  GUI_BOX_FLAG_DRAW_TEXT        = (0x1 << 8),
-  GUI_BOX_FLAG_CLIP             = (0x1 << 9),
+  GUI_BOX_FLAG_CLICKABLE        = (0x1 <<  0),
+  GUI_BOX_FLAG_SCROLLABLE       = (0x1 <<  1),
+  GUI_BOX_FLAG_FIXED_X          = (0x1 <<  2),
+  GUI_BOX_FLAG_FIXED_Y          = (0x1 <<  3),
+  GUI_BOX_FLAG_FIXED_WIDTH      = (0x1 <<  4),
+  GUI_BOX_FLAG_FIXED_HEIGHT     = (0x1 <<  5),
+  GUI_BOX_FLAG_ALLOW_OVERFLOW_X = (0x1 <<  6),
+  GUI_BOX_FLAG_ALLOW_OVERFLOW_Y = (0x1 <<  7),
+  GUI_BOX_FLAG_DRAW_BOX         = (0x1 <<  8),
+  GUI_BOX_FLAG_DRAW_TEXT        = (0x1 <<  9),
+  GUI_BOX_FLAG_CLIP             = (0x1 << 10),
+  GUI_BOX_FLAG_VIEW_CLAMP_X     = (0x1 << 11),
+  GUI_BOX_FLAG_VIEW_CLAMP_Y     = (0x1 << 12),
 } Gui_Box_Flags;
 
 typedef struct Gui_Box Gui_Box;
@@ -69,12 +72,15 @@ struct Gui_Box {
   Gui_Box *hash_prev;
 
   // TODO: Maybe add anim_coords????
-  //rect local_rect;
   rect final_rect;
 
   v2 fixed_pos;
   v2 fixed_size;
   Gui_Size pref_size[2];
+  v2 view_off;
+
+  // max width/height of whole box (not just visible part
+  v2 view_bounds;
 
   // misc
   Gui_ID id;

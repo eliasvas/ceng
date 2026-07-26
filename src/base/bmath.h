@@ -332,22 +332,28 @@ static b32 rect_isect_rect(rect a, rect b) {
 }
 
 static rect rect_clip_against(rect clipey, rect clipper) {
-  rect final = clipey;
+    f32 clipey_min_x = minimum(clipey.x, clipey.x + clipey.w);
+    f32 clipey_max_x = maximum(clipey.x, clipey.x + clipey.w);
+    f32 clipey_min_y = minimum(clipey.y, clipey.y + clipey.h);
+    f32 clipey_max_y = maximum(clipey.y, clipey.y + clipey.h);
 
-  f32 clipper_min_x = minimum(clipper.p.x, clipper.p.x + clipper.dim.x);
-  f32 clipper_max_x = maximum(clipper.p.x, clipper.p.x + clipper.dim.x);
-  f32 clipper_min_y = minimum(clipper.p.y, clipper.p.y + clipper.dim.y);
-  f32 clipper_max_y = maximum(clipper.p.y, clipper.p.y + clipper.dim.y);
+    f32 clipper_min_x = minimum(clipper.x, clipper.x + clipper.w);
+    f32 clipper_max_x = maximum(clipper.x, clipper.x + clipper.w);
+    f32 clipper_min_y = minimum(clipper.y, clipper.y + clipper.h);
+    f32 clipper_max_y = maximum(clipper.y, clipper.y + clipper.h);
 
-  final.p.x = clamp(final.p.x, clipper_min_x, clipper_max_x);
-  final.p.y = clamp(final.p.y, clipper_min_y, clipper_max_y);
+    f32 isec_min_x = maximum(clipey_min_x, clipper_min_x);
+    f32 isec_max_x = minimum(clipey_max_x, clipper_max_x);
+    f32 isec_min_y = maximum(clipey_min_y, clipper_min_y);
+    f32 isec_max_y = minimum(clipey_max_y, clipper_max_y);
 
-  f32 final_w = clamp(final.p.x+final.dim.x, clipper_min_x, clipper_max_x);
-  final.dim.x = final_w - final.p.x;
-  f32 final_h = clamp(final.p.y+final.dim.y, clipper_min_y, clipper_max_y);
-  final.dim.y = final_h - final.p.y;
+    rect final;
+    final.x = isec_min_x;
+    final.y = isec_min_y;
+    final.w = maximum(0.0, isec_max_x - isec_min_x);
+    final.h = maximum(0.0, isec_max_y - isec_min_y);
 
-  return final;
+    return final;
 }
 
 static b32 rect_inside_rect(rect b, rect s) {
@@ -410,7 +416,7 @@ static rect rect_fit_inside(rect src, rect dest, Rect_Fit_Mode mode) {
   return (rect) {
     .x = p.x,
     .y = p.y,
-    .w = src.y,
+    .w = src.w,
     .h = src.h,
   };
 }
