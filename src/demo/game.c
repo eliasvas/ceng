@@ -3,7 +3,7 @@
 #include "base/base_inc.h"
 
 #include "game.h"
-#include "gui2/g2.h"
+#include "gui/gui.h"
 #include "entity.h"
 
 #define ASSET_MGR_IMPLEMENTATION
@@ -154,7 +154,7 @@ void game_render(Game_State *gs, float dt) {
   Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
   assert(scroll_list.box);
 
-  gui_button(STR8L("AAAA"));
+  if (gui_button(STR8L("AAAA")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
   gui_button(STR8L("BBBB"));
   gui_button(STR8L("CCCC"));
   gui_button(STR8L("DDDD"));

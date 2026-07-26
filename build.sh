@@ -80,7 +80,7 @@ start=$(date +%s.%3N)
 echo "Building gamelib.."
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
-"$ENGINE_DIR"/src/gui2/*.c \
+"$ENGINE_DIR"/src/gui/*.c \
 -o "$OUTPUT_DIR/libgame.so"
 elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
 [ $? -eq 0 ] && echo "done in ($elapsed) ✅" || { echo "failed ❌"; exit 1; }

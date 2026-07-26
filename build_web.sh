@@ -66,7 +66,7 @@ echo "Building WASM game..."
 EMCC_DEBUG=1 $EMCC -v \
   $CFLAGS $OPT_FLAGS $INCLUDES \
   -fPIC -shared \
-  "$GAME_DIR"/*.c src/gui2/*.c \
+  "$GAME_DIR"/*.c src/gui/*.c \
   -o build/libgame.so \
   $EM_FLAGS \
 && echo "WASM Game Build succeeded. ✅" \

@@ -1,4 +1,4 @@
-#include "g2.h"
+#include "gui.h"
 
 #ifndef GUI_STACKS_IMPLEMENTATION
 
