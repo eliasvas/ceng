@@ -132,7 +132,7 @@ void gui_init(Arena *tarena, Font_Info *font, Input *input);
 Gui_Box *gui_nil_box();
 Gui_Signal gui_button(str8 label);
 Gui_Signal gui_pane(str8 label);
-Gui_Signal gui_spacer(Gui_Size size);
+Gui_Signal gui_spacer(Gui_Axis layout_axis, Gui_Size size);
 
 
 typedef struct {

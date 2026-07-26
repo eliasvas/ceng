@@ -164,7 +164,7 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
       b32 mb_pressed = input_mkey_pressed(ctx.input, INPUT_MOUSE_LMB+mbtn_idx);
       b32 mb_released = input_mkey_released(ctx.input, INPUT_MOUSE_LMB+mbtn_idx);
 
-      if (mouse_over) {
+      if (mouse_over && ctx.active_id == 0) {
         ctx.hot_id = box->id;
         if (mb_pressed) {
           ctx.active_id = box->id;
@@ -219,8 +219,7 @@ Gui_Signal gui_button(str8 label) {
   return gui_signal_from_box(box);
 }
 
-Gui_Signal gui_spacer(Gui_Size size) {
-  Gui_Axis layout_axis = gui_top_child_layout_axis(); 
+Gui_Signal gui_spacer(Gui_Axis layout_axis, Gui_Size size) {
   if (layout_axis == GUI_AXIS_X) gui_set_next_pref_width(size);
   if (layout_axis == GUI_AXIS_Y) gui_set_next_pref_height(size);
   Gui_Box *box = gui_box_make(STR8L(""), 0);
@@ -514,6 +513,8 @@ void gui_end() {
     gui_layout_enforce_size_constraints(ctx.root, axis);
     gui_layout_calc_fixed_pos_and_final_rects(ctx.root, axis);
   }
+  //printf("hot: %lu\n", ctx.hot_id);
+  //printf("active: %lu\n", ctx.active_id);
   gui_prune_unused_boxes();
   gui_render(ctx.root);
   ctx.hot_id = 0;
@@ -537,19 +538,18 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
   gui_set_next_child_layout_axis(axis);
 
   str8 scroll_region_text = str8_sprintf(ctx.temp_arena, "%.*s_region", (int)s.count, s.data);
-	Gui_Box *scroll_region = gui_box_make(scroll_region_text, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y);
+	Gui_Box *scroll_region = gui_box_make(scroll_region_text, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y | GUI_BOX_FLAG_ALLOW_OVERFLOW_Y);
 
   f32 scroll_region_dim = (axis == GUI_AXIS_Y) ? scroll_region->final_rect.h : scroll_region->final_rect.w;
-  f32 visible_items =  scroll_region_dim / sdata->item_px;
+  f32 visible_items =  scroll_region_dim / (f32)sdata->item_px;
   f32 scroll_button_dim = scroll_region_dim * minimum(1.0, visible_items / (f32)sdata->item_count);
 
   f32 min_dim_px = 0;
   f32 max_dim_px = sdata->item_px * (sdata->item_count - visible_items); 
 
-
   if (visible_items < (f32)sdata->item_count) {
     gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, sdata->scroll_bar_px, 1.0});
-    gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+    gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 1.0});
     gui_set_next_child_layout_axis(axis);
     gui_set_next_bg_color(v4_multf(gui_top_bg_color(), 0.9));
 
@@ -557,25 +557,29 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
     Gui_Box *scroll_bar= gui_box_make(scroll_bar_text, GUI_BOX_FLAG_DRAW_BOX);
 
     gui_push_parent(scroll_bar);
-    gui_spacer((Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, sdata->scroll_percent, 0.0});
+
+    gui_spacer(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, sdata->scroll_percent, 0.0});
+
     gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, scroll_button_dim, 1.0});
     gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
-    gui_set_next_bg_color(sdata->scroll_button_color);
+    //gui_set_next_bg_color(sdata->scroll_button_color);
     str8 scroll_button_text = str8_sprintf(ctx.temp_arena, "%.*s_sbutton", (int)s.count, s.data);
     Gui_Box *scroll_button = gui_box_make(scroll_button_text, GUI_BOX_FLAG_DRAW_BOX|GUI_BOX_FLAG_CLICKABLE);
     Gui_Signal scroll_button_sig = gui_signal_from_box(scroll_button);
-    gui_spacer((Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0 - sdata->scroll_percent, 0.0});
-    if (gui_id_eq(scroll_button_sig.box->id, ctx.hot_id)) {
+
+    gui_spacer(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0 - sdata->scroll_percent, 0.0});
+
+    if (gui_id_eq(scroll_button_sig.box->id, ctx.active_id)) {
       sdata->scroll_percent += sdata->scroll_speed * input_get_mouse_delta(ctx.input).raw[axis] * ctx.dt;
       sdata->scroll_percent = clamp(sdata->scroll_percent, 0, 1);
     }
-    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, sdata->scroll_percent);
-    gui_pop_parent();
+    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, -sdata->scroll_percent);
 
-    gui_pop_parent();
+    gui_pop_parent(); // scroll_bar
     gui_pop_bg_color();
 
   }
+  gui_pop_parent(); // scroll_list
 
 	Gui_Signal sig = gui_signal_from_box(scroll_region);
   gui_push_parent(sig.box);
