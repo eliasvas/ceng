@@ -47,7 +47,7 @@ fi
 GAME_DIR="$(realpath "$GAME_DIR")"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
 ENGINE_DIR="$(realpath "$ENGINE_DIR")"
-EXT_DIR="./ext"
+EXT_DIR="$ENGINE_DIR/ext"
 
 # -----------------------------
 # Prepare output directory
@@ -73,7 +73,7 @@ CLIBS="-lX11 -lGL -lXrandr -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
-INCLUDE_DIRS="-Iext -I$ENGINE_DIR/frz -I$ENGINE_DIR/src -I$GAME_DIR"
+INCLUDE_DIRS="-I$EXT_DIR -I$ENGINE_DIR/frz -I$ENGINE_DIR/src -I$GAME_DIR"
 
 
 start=$(date +%s.%3N)
