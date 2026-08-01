@@ -8,7 +8,10 @@ git lfs install
 ## Cloning
 This repo uses git LFS for assets and a submodule for stb libraries, you can:
 ```bash
-git clone --recursive https://github.com/eliasvas/prototype
+git clone --recursive https://github.com/eliasvas/ceng
+pushd data
+git-lfs pull
+popd
 ```
 ## Building
 ### Linux

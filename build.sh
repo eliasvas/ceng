@@ -69,7 +69,7 @@ mkdir -p "$OUTPUT_DIR"
 
 CFLAGS="${CFLAGS:-} -std=gnu23"
 #@TODO: remove -lgame we NEED the reload ok?! only for release builds this bullshit
-CLIBS="-lX11 -lGL -lGLEW -lXrandr -lm -lgame"
+CLIBS="-lX11 -lGL -lXrandr -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
