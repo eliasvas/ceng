@@ -1,5 +1,5 @@
 //#include "game.h"
-#include "core/rend.h"
+#include "rend/rend_inc.h"
 
 // HACK
 extern void platform_play_sound(const char *sound);

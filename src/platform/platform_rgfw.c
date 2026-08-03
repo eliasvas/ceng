@@ -17,7 +17,7 @@
 #endif
 
 #define OGL_IMPLEMENTATION
-#include "core/ogl.h"
+#include "rend/rend_inc.h"
 
 #define INPUT_IMPLEMENTATION
 #include "core/input.h"

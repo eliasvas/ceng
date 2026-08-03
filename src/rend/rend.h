@@ -6,7 +6,7 @@
 
 #include "base/base_inc.h"
 #include "frz/frz.h"
-#include "core/ogl.h"
+#include "ogl.h"
 
 #define REND_MAX_INSTANCES 512
 #define REND_MAX_TEXTURES 4

@@ -2,7 +2,7 @@
 #define BFONT_H__
 #include "base/base_inc.h"
 #include "core/asset_mgr.h"
-#include "rend.h"
+#include "rend/rend_inc.h"
 
 // TODO: LOD stuff and our own lookup data structure (Glyph_Cache?)
 // TODO: SDF font support

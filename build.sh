@@ -104,6 +104,7 @@ $CC $CFLAGS $DEBUG_FLAGS \
     -Iext -Isrc -I$GAME_DIR \
     -L"$OUTPUT_DIR" \
     src/core/*.c \
+    src/rend/*.c \
     src/platform/platform_rgfw.c \
     "$OUTPUT_DIR/ma.o" \
     -o "$OUTPUT_DIR/ceng" \

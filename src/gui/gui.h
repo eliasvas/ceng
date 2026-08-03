@@ -38,8 +38,8 @@ typedef struct {
 
 #define GUI_AXIS_COUNT 2
 typedef enum {
-  GUI_AXIS_X,
-  GUI_AXIS_Y,
+  GUI_AXIS_X = 0,
+  GUI_AXIS_Y = 1,
 } Gui_Axis;
 
 typedef enum {

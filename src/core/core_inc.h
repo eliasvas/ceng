@@ -2,8 +2,6 @@
 #define _CORE_INC_H__
 
 #include "base/base_inc.h"
-#include "ogl.h"
-#include "rend.h"
 #include "input.h"
 #include "asset_mgr.h"
 #include "bfont.h"

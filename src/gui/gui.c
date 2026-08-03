@@ -199,14 +199,20 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
     v2 scroll = input_get_scroll_delta(ctx.input);
 
     v2 mdelta = input_get_mouse_delta(ctx.input);
+    printf("mdelta: %f %f\n", mdelta.x, mdelta.y);
     b32 mmb_down = input_mkey_down(ctx.input, INPUT_MOUSE_MMB);
 
     // 3. View clamp if needed w/ rect's view bounds
     for (s32 axis = GUI_AXIS_X; axis <= GUI_AXIS_Y; axis+=1) {
       if (mmb_down && mdelta.raw[axis]) scroll.raw[axis] += mdelta.raw[axis]; 
       box->view_off.raw[axis] += scroll.raw[axis];
-      if (box->flags & (GUI_BOX_FLAG_VIEW_CLAMP_X<<axis)) 
-        box->view_off.raw[axis] = clamp(box->view_off.raw[axis], 0, box->view_bounds.raw[axis] - box->final_rect.dim.raw[axis]);
+      // When i remove this scrolling with held lmb works.. whyy????
+
+      //if (box->flags & (GUI_BOX_FLAG_VIEW_CLAMP_X<<axis)) {
+      if (box->flags & (GUI_BOX_FLAG_VIEW_CLAMP_Y)) {
+        printf("off = %f\n", box->view_off.raw[axis]);
+      }
+        //box->view_off.raw[axis] = clamp(box->view_off.raw[axis], -1000000, 1000000);//box->view_bounds.raw[axis] - box->final_rect.dim.raw[axis]);
     }
   }
 
@@ -573,7 +579,7 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
       sdata->scroll_percent += sdata->scroll_speed * input_get_mouse_delta(ctx.input).raw[axis] * ctx.dt;
       sdata->scroll_percent = clamp(sdata->scroll_percent, 0, 1);
     }
-    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, -sdata->scroll_percent);
+    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, sdata->scroll_percent);
 
     gui_pop_parent(); // scroll_bar
     gui_pop_bg_color();

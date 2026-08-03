@@ -9,8 +9,7 @@
 #include "bfont.h"
 
 #include "base/base_inc.h"
-#include "ogl.h"
-#include "rend.h"
+#include "rend/rend_inc.h"
 
 // By default we just embed ProggyClean - Ugly AF but for now it'll do!
 static const u8 default_font_data[] = {

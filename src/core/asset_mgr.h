@@ -1,7 +1,7 @@
 #ifndef ASSET_MGR_H__
 #define ASSET_MGR_H__
 #include "base/base_inc.h"
-#include "ogl.h"
+#include "rend/rend_inc.h"
 // @FIXME: Currently there is no asset deletion!
 
 typedef void* Asset_Handle;
