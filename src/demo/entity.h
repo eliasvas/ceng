@@ -6,9 +6,15 @@ extern void platform_play_sound(const char *sound);
 
 typedef struct {
  HMM_Vec3 pos;
- HMM_Vec3 off; // collider offset
  HMM_Vec3 vel;
+
+ // Tihs hdim maybe should go inside entity?
+ // not really connected to physics
  HMM_Vec3 hdim;
+
+ // Collider offset and dimension
+ HMM_Vec3 col_off;
+ HMM_Vec3 col_hdim;
  f32 mass;
 } Phys_Box;
 
@@ -26,6 +32,8 @@ typedef struct {
 
   b32 dynamic;
   Phys_Box box;
+  HMM_Vec3 move_dir;
+
   b32 grounded;
   f32 dash_timer;
   HMM_Vec3 dash_dir;
@@ -96,30 +104,28 @@ Entity *entity_store_find(Game_State *gs, Entity_Id id) {
   return nullptr;
 }
 
-
-
 b32 pb_isect(Phys_Box *a, Phys_Box* b) {
-  if (fabsf(a->pos.X - b->pos.X) > (a->hdim.X + b->hdim.X)) return false;
-  if (fabsf(a->pos.Y - b->pos.Y) > (a->hdim.Y + b->hdim.Y)) return false;
-  if (fabsf(a->pos.Z - b->pos.Z) > (a->hdim.Z + b->hdim.Z)) return false;
+  if (fabsf(a->pos.X - b->pos.X) > (a->col_hdim.X + b->col_hdim.X)) return false;
+  if (fabsf(a->pos.Y - b->pos.Y) > (a->col_hdim.Y + b->col_hdim.Y)) return false;
+  if (fabsf(a->pos.Z - b->pos.Z) > (a->col_hdim.Z + b->col_hdim.Z)) return false;
   return true;
 }
 
 b32 entity_collides(Game_State *gs, Entity_Id id, HMM_Vec3 candidate_pos) {
   Entity *e = entity_store_find(gs, id);
-  Phys_Box ebox = e->box;
-  ebox.pos = candidate_pos;
-  ebox.pos = HMM_Add(ebox.pos, ebox.off);
+
+  Phys_Box col_box = e->box;
+  col_box.pos = HMM_Add(candidate_pos, col_box.col_off);
 
   for (s64 hash_slot = 0; hash_slot < entity_store.slot_count; hash_slot+=1) {
     Entity_Node *en = entity_store.slots[hash_slot].hash_first;
     while (en) {
       Entity *test = &(en->e);
       Phys_Box testbox = test->box;
-      testbox.pos = HMM_Add(testbox.pos, testbox.off);
+      testbox.pos = HMM_Add(testbox.pos, testbox.col_off);
 
       if (test->id != id) {
-        if (pb_isect(&ebox, &testbox)) {
+        if (pb_isect(&col_box, &testbox)) {
           return true;
         }
       }
@@ -154,7 +160,7 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
           e->dash_dir = move_dir;
         }
         if (e->dash_timer > 0) {
-          f32 dash_scale = 50;
+          f32 dash_scale = 30;
 
           e->box.vel.X = e->dash_dir.X * dash_scale; 
           e->box.vel.Z = e->dash_dir.Z * dash_scale; 
@@ -177,9 +183,8 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
       }
 
       // Simple axis separated movement
+      e->move_dir = HMM_Norm(e->box.vel);
       for (s32 axis = 0; axis < 3; axis += 1) {
-        // TODO: Also check direction of collision ok?????
-
         HMM_Vec3 candidate_pos_axis = e->box.pos;
         candidate_pos_axis.Elements[axis] += e->box.vel.Elements[axis] * dt;
         b32 collides_axis = entity_collides(gs, e->id, candidate_pos_axis);
@@ -189,9 +194,29 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
       // Render le cube
       HMM_Mat4 model = HMM_MulM4(HMM_Translate(e->box.pos),HMM_Scale(HMM_Mul(e->box.hdim, 2.0f)));
       HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model);
-
       rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, e->col);
-      rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp, v4m(0,0.0,0.0,1));
+
+      // Render le collider
+      HMM_Mat4 model_collider = HMM_MulM4(HMM_Translate(e->box.col_off), 
+          HMM_MulM4(HMM_Translate(e->box.pos),
+          HMM_Scale(HMM_Mul(e->box.col_hdim, 2.0f)))
+      );
+      HMM_Mat4 mvp_collider = HMM_Mul(HMM_Mul(gs->proj, gs->view), model_collider);
+      rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp_collider,
+          v4m(e->dynamic,e->dynamic,e->dynamic,1));
+
+
+      /*
+      // Also a cube denoting the move dir
+      HMM_Mat4 model_head = HMM_MulM4(
+          HMM_Translate(HMM_V3(e->box.off.X * e->move_dir.X, e->box.off.Y * e->move_dir.Y, e->box.off.Z * e->move_dir.Z)),
+          model
+      );
+
+
+      mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model_head);
+      rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp, v4m(1,1,1,1));
+      */
 
       // Iterate
       en = en->hash_next;

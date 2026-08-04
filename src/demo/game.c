@@ -20,8 +20,9 @@ void game_init(Game_State *gs) {
   hero->dynamic = true;
   hero->box = (Phys_Box) {
     .pos = HMM_V3(1,4,1),
-    .off = HMM_V3(0,0,0),
-    .hdim = HMM_V3(0.5,0.5,0.5),
+    .col_off = HMM_V3(0,0,0),
+    .hdim = HMM_V3(0.3, 0.5, 0.3),
+    .col_hdim = HMM_V3(0.5,0.5,0.5),
   };
   hero->col = v4m(0.9,0.4,0.3,1.0);
   
@@ -32,7 +33,8 @@ void game_init(Game_State *gs) {
       test->dynamic = false;
       test->box = (Phys_Box) {
         .pos = HMM_V3(width,height,1),
-        .off = HMM_V3(0,0,0),
+        .col_off = HMM_V3(0,0,0),
+        .col_hdim = HMM_V3(0.5,0.5,0.5),
         .hdim = HMM_V3(0.5,0.5,0.5),
       };
       test->col = v4m(0.2,0.4,0.9,1.0);
@@ -43,7 +45,8 @@ void game_init(Game_State *gs) {
   ground->dynamic = false;
   ground->box = (Phys_Box) {
     .pos = HMM_V3(0,-1.01,0),
-    .off = HMM_V3(0,0,0),
+    .col_off = HMM_V3(0,0,0),
+    .col_hdim = HMM_V3(4,1,4),
     .hdim = HMM_V3(4,1,4),
   };
   ground->col = v4m(0.4,0.4,0.4,1.0);
@@ -153,66 +156,18 @@ void game_render(Game_State *gs, float dt) {
 
   Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
   assert(scroll_list.box);
-
   //gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 100.0, 0.0});
   gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
-  if (gui_button(STR8L("AAAA")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
-  gui_button(STR8L("BBBB"));
-  gui_button(STR8L("CCCC"));
-  gui_button(STR8L("DDDD"));
-  gui_button(STR8L("EEEE"));
-  gui_button(STR8L("FFFF"));
-  gui_button(STR8L("GGGG"));
-  gui_button(STR8L("HHHH"));
-  gui_pop_pref_width();
-#if 0
-  gui_button(STR8L("GGGG"));
-  gui_button(STR8L("HHHH"));
-#endif
-
+    if (gui_button(STR8L("AAAA")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
+    gui_button(STR8L("BBBB"));
+    gui_button(STR8L("CCCC"));
+    gui_button(STR8L("DDDD"));
+    gui_button(STR8L("EEEE"));
+    gui_button(STR8L("FFFF"));
+    gui_button(STR8L("GGGG"));
+    gui_button(STR8L("HHHH"));
+    gui_pop_pref_width();
   gui_scroll_list_end(STR8L("MyScrollTest"));
-
-#if 0
-  // Small GUI test (mainly for Box reuse test right now)
-  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_SUM_OF_CHILDREN, 1.0, 1.0});
-  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_PERCENT_OF_PARENT, 0.65, 1.0});
-  gui_set_next_bg_color(v4m(0.3,0.3,0.9,0.85));
-  Gui_Signal pane = gui_pane(STR8L("Pane"));
-  // HACK
-  pane.box->flags |= GUI_BOX_FLAG_ALLOW_OVERFLOW_X;
-  pane.box->flags |= GUI_BOX_FLAG_ALLOW_OVERFLOW_Y;
-  gui_push_parent(pane.box);
-
-  gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
-  gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
-  gui_set_next_bg_color(v4m(0.7,0.5,0.3,0.85));
-  static bool other_enabled = false;
-  if (gui_button(STR8L("Secret")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
-    other_enabled = !other_enabled;
-    printf("Reset\n");
-  }
-
-  gui_push_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 1.0});
-  gui_push_pref_height((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 1.0, 0.0});
-  gui_set_next_bg_color(v4m(0.1,0.9,0.1,0.85));
-  gui_button(STR8L("WOWO"));
-
-  gui_spacer((Gui_Size) {GUI_SIZEKIND_PIXELS, 4, 0.0});
-
-  gui_set_next_bg_color(v4m(0.1,0.1,0.3,0.35));
-  gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
-  gui_set_next_pref_height((Gui_Size) {GUI_SIZEKIND_PIXELS, 200, 0.0});
-  gui_set_next_pref_width((Gui_Size) {GUI_SIZEKIND_TEXT_CONTENT, 5.0, 0.0});
-  if (other_enabled) {
-    if (gui_button(STR8L("WOWO##2")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
-      printf("WOWO##2\n");
-    }
-    //gs->request_reload = true;
-  }
-
-  gui_pop_parent(); // Pane
-#endif
-
   gui_end();
 #endif
 
