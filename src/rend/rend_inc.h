@@ -4,5 +4,6 @@
 #include "base/base_inc.h"
 #include "ogl.h"
 #include "rend.h"
+#include "r3d.h"
 
 #endif
