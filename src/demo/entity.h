@@ -1,6 +1,8 @@
 //#include "game.h"
 #include "rend/rend_inc.h"
 
+// Major inspiration: https://jorenjoestar.github.io/post/serialization_for_games/ 
+
 // HACK
 extern void platform_play_sound(const char *sound);
 

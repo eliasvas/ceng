@@ -123,23 +123,26 @@ void game_render(Game_State *gs, float dt) {
 
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
+  //entity_store_update_render(gs, dt);
 
-#if 0
-  HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), HMM_QToM4(rot_q));
-  // 3. Draw a spinning quad
-  HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), HMM_PI * gs->time_sec);
-  Tri_Vertex my_verts[] = {
-    (Tri_Vertex) {.pos = v3m(-1,+1,0), .color = v4m(1,0,1,0.9)}, 
-    (Tri_Vertex) {.pos = v3m(-1,-1,0), .color = v4m(1,1,0,0.9)}, 
-    (Tri_Vertex) {.pos = v3m(+1,-1,0), .color = v4m(0,1,1,0.9)}, 
-    (Tri_Vertex) {.pos = v3m(+1,+1,0), .color = v4m(0,0,1,0.9)}, 
+
+  // Sample quad for renderer architecture
+  rn_begin(gs->frame_arena, gs->game_viewport);
+  R_Quad q = (R_Quad){
+    .dst_rect = rec(50,50,600,600),
+    .src_rect = rec(0,0,128,80),
+    .c = col(1.0,1.0,1.0,1.0),
+    .rot_deg = 0,
+    .tex = (Ogl_Tex*)am_get(asset_id_from_path(STR8L("atlas.png"))),
   };
-  rn_imm_verts(gs->game_viewport, my_verts, array_count(my_verts), OGL_PRIM_TYPE_TRIANGLE_FAN, (m4*)&mvp);
-#endif
-  entity_store_update_render(gs, dt);
+
+  rn_push_quad(rn_pass_front(), q);
+  rn_flush_all();
+
+
 
   // Gui Test
-#if 1
+#if 0
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport, dt);
   gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);

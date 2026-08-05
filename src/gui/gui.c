@@ -485,6 +485,7 @@ void gui_render(Gui_Box *root) {
         text_draw_pos = v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
         break;
     }
+    // We shouldn't use bfont for immediate draws.. should go throught r2d
     bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport, clip_rect, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
   }
 

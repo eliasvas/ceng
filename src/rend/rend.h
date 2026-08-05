@@ -4,6 +4,9 @@
 // TODO: Texture handling is atrocious, make it possible (also Ogl side) to assign c-style texture sampler arrays to a slot
 // TODO: Look at the batch fragment shader todos.. BEWARE!!
 
+/*
+ * General idea is to have low-level and high-level API, do fs-side clips
+ * */
 #include "base/base_inc.h"
 #include "frz/frz.h"
 #include "ogl.h"
@@ -105,6 +108,8 @@ void rn_push_quad(RN_Pass *pass, R_Quad q);
 
 // Maybe delete from here??
 void r3d_load_shaders();
+
+
 
 
 #endif

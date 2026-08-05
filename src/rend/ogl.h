@@ -603,8 +603,8 @@ static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
 
 void ogl_tex_update(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   tex->format = format;
-  tex->width = w;
-  tex->height= w;
+  tex->width  = w;
+  tex->height = h;
 
   GLenum type = (ogl_tex_format_is_floating_point(tex->format)) ? GL_FLOAT : GL_UNSIGNED_BYTE;
   GLint internal_format = ogl_tex_format_to_gl_internal_format(tex->format);
