@@ -126,6 +126,7 @@ void game_render(Game_State *gs, float dt) {
   //entity_store_update_render(gs, dt);
 
 
+  // TODO: Maybe we should push/pop asset ids for textures??
   // Sample quad for renderer architecture
   rn_begin(gs->frame_arena, gs->game_viewport);
   R_Quad q = (R_Quad){

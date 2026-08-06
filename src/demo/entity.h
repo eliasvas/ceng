@@ -22,9 +22,8 @@ typedef struct {
 
 typedef enum {
   ENTITY_KIND_HERO,
-  ENTITY_KIND_GRASS,
-  ENTITY_KIND_EMPTY,
-  ENTITY_KIND_WALL,
+  ENTITY_KIND_ENEMY,
+  ENTITY_KIND_BULLET,
 }Entity_Kind;
 
 typedef u64 Entity_Id;

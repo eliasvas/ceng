@@ -46,12 +46,14 @@ void main() {
   vec2 hdim = vec2(0.5,0.5);
 
   vec2 pos = vertices[gl_VertexID]; // [-0.5, 0.5] range
+
   pos *= dim; // scale
   pos = rotate2d(v_rot_rad) * pos; // rotate
 
   pos += hdim * dim; // += hdim so that its centered on upper-left corner
 
   pos += pos_offset; // translate
+  
 
 	gl_Position = view_proj * vec4(pos, 0.0, 1.0);
 
