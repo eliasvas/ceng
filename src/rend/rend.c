@@ -6,19 +6,24 @@ static Ogl_Render_Bundle batch_bundle = {};
 
 // TODO: Should these globals be here? what about asset management (textures/materials/meshes etc..)
 static Arena *__frame_arena;
-static RN_Pass_List __render_passes;
+static R2D_Pass_List __render_passes;
 
 ////////////////////////////////////////////////
 // Batch Shaders
 ////////////////////////////////////////////////
-const char* batch_vs = R"(#version 300 es
-precision highp float;
+
+// SDF ref: https://iquilezles.org/articles/distfunctions/
+
+const char* batch_vs = R"(#version 460 core
 layout(location=0) in vec4 src_rect;
 layout(location=1) in vec4 dst_rect;
 layout(location=2) in vec4 v_color;
 layout(location=3) in float v_rot_rad;
+layout(location=4) in float corner_radius;
+layout(location=5) in float softness;
 
 layout (std140) uniform BatchUbo { mat4 view_proj; };
+
 
 vec2 vertices[4] = vec2[](
   vec2(-0.5,+0.5),
@@ -34,53 +39,80 @@ vec2 tex_coords[4] = vec2[](
   vec2(1.0,1.0)
 );
 
-out vec4 f_color;
-out vec2 f_tc;
+
 
 mat2 rotate2d(float angle) { return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)); }
+
+out Vertex_Data {
+  vec4 color;
+  vec2 tc;
+
+  vec2 dst_pos;
+  vec2 dst_hdim;
+  float corner_radius;
+  float softness;
+} vdata;
 
 void main() { 
   vec2 pos_offset = dst_rect.xy;
   vec2 dim = dst_rect.zw;
 
-  vec2 hdim = vec2(0.5,0.5);
-
   vec2 pos = vertices[gl_VertexID]; // [-0.5, 0.5] range
-
   pos *= dim; // scale
+  vec2 local_pos = pos;
+
   pos = rotate2d(v_rot_rad) * pos; // rotate
 
-  pos += hdim * dim; // += hdim so that its centered on upper-left corner
-
+  pos += dim/2.0; // += hdim so that its centered on upper-left corner
   pos += pos_offset; // translate
   
 
 	gl_Position = view_proj * vec4(pos, 0.0, 1.0);
 
-  f_color = v_color;
+  vdata.color = v_color;
 
   vec2 uv = tex_coords[gl_VertexID];
-  f_tc = src_rect.xy + uv * src_rect.zw;
+  vdata.tc = src_rect.xy + uv * src_rect.zw;
+
+  vdata.dst_pos = local_pos;
+  vdata.dst_hdim = dim / 2.0;
+  vdata.corner_radius = corner_radius;
+  vdata.softness = softness;
 }
 )";
 
-const char* batch_fs = R"(#version 300 es
-precision highp float;
+const char* batch_fs = R"(#version 460 core
 layout(location = 0) out vec4 out_color;
 
-in vec2 f_tc;
-in vec4 f_color;
+float sd_rect(vec2 p, vec2 hdim, float corner_radius) {
+   p = abs(p) - hdim + corner_radius;
+   return length(max(p, 0.0)) + min(max(p.x, p.y), 0.0) - corner_radius;
+}
+
 uniform sampler2D u_tex;
+
+in Vertex_Data {
+  vec4 color;
+  vec2 tc;
+
+  vec2 dst_pos;
+  vec2 dst_hdim;
+  float corner_radius;
+  float softness;
+} vdata;
 
 void main() {
   ivec2 texture_size;
   vec2 tc;
 
+  float d = sd_rect(vdata.dst_pos, vdata.dst_hdim, vdata.corner_radius);
+  float edge = 1.0 - smoothstep(0.0, vdata.softness, d);
+
   // FIXME: GLES30 doesn't support c-style sampler2D array indexing so we have to use max 1 texture
+  // FIXME: revert back to old (good) way
   texture_size = textureSize(u_tex, 0);
-  tc = f_tc / vec2(texture_size.x, texture_size.y);
-  out_color = f_color * texture(u_tex, tc);
-  //out_color = f_color;
+  tc = vdata.tc / vec2(texture_size.x, texture_size.y);
+  out_color = edge * vdata.color * texture(u_tex, tc);
 }
 
 )";
@@ -137,10 +169,12 @@ void r2d_try_load_shaders() {
         [0] = {
           .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Batch_Vertex)),
           .vattribs = {
-            [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect), .stride = sizeof(Batch_Vertex), .instanced = true, },
-            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect), .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),    .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect),       .stride = sizeof(Batch_Vertex), .instanced = true, },
+            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),          .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [4] = { .location = 4, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, corner_radius),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [5] = { .location = 5, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, softness),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
           },
         },
       },
@@ -160,7 +194,7 @@ static m4 r_cam_make_view_mat(R_C2D *cam) {
   return m4_mult(m4_translate(v3m(cam->offset.x, cam->offset.y, 0)),m4_mult(rot,m4_mult(m4_scale(v3m(cam->zoom, cam->zoom,0)), m4_translate(v3m(-cam->origin.x, -cam->origin.y,0)))));
 }
 
-void rn_begin(Arena *arena, rect dummy_viewport) {
+void r2d_begin(Arena *arena, rect dummy_viewport) {
   M_ZERO_STRUCT(&__render_passes);
   __frame_arena = arena;
 
@@ -171,14 +205,14 @@ void rn_begin(Arena *arena, rect dummy_viewport) {
     .zoom = 1.0, 
     .rot_deg = 0
   };
-  RN_Pass *top_pass = rn_push_pass(RN_PASS_KIND_2D, dummy_cam, dummy_viewport);
+  R2D_Pass *top_pass = r2d_push_pass(R2D_PASS_KIND_2D, dummy_cam, dummy_viewport);
   assert(top_pass);
   r2d_try_load_shaders();
   r3d_try_load_shaders();
 }
 
-void rn_flush_all() {
-  for (RN_Pass *pass = __render_passes.last; pass != nullptr; pass = pass->prev) {
+void r2d_flush_all() {
+  for (R2D_Pass *pass = __render_passes.last; pass != nullptr; pass = pass->prev) {
     R_Quad_Array quads = r_quad_chunk_list_to_array(__frame_arena, &pass->quads);
     Batch_Vertex *batch_vertices = arena_push_array(__frame_arena, Batch_Vertex,REND_MAX_INSTANCES);
 
@@ -191,6 +225,8 @@ void rn_flush_all() {
         .dst_rect = *(v4*)&q->dst_rect,
         .color = q->c,
         .rot_rad = DEG2RAD(q->rot_deg),
+        .corner_radius = q->corner_radius,
+        .softness = q->softness,
       };
 
       batch_vertices[vertex_idx] = v;
@@ -224,9 +260,9 @@ void rn_flush_all() {
   }
 }
 
-RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport) {
+R2D_Pass *r2d_push_pass(R2D_Pass_Kind kind, R_C2D cam2d, rect viewport) {
   // 0. Allocate pass
-  RN_Pass *pass = arena_push_array(__frame_arena, RN_Pass, 1);
+  R2D_Pass *pass = arena_push_array(__frame_arena, R2D_Pass, 1);
 
   // 1. Hook it up to our g_list
   dll_push_back(__render_passes.first, __render_passes.last, pass);
@@ -241,15 +277,15 @@ RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport) {
 }
 
 // TODO: Should become better
-RN_Pass *rn_pass_front() {
+R2D_Pass *r2d_pass_front() {
   return __render_passes.first;
 }
 
-RN_Pass *rn_pass_back() {
+R2D_Pass *r2d_pass_back() {
   return __render_passes.last;
 }
 
-void rn_push_quad(RN_Pass *pass, R_Quad q) {
+void r2d_push_quad(R2D_Pass *pass, R_Quad q) {
   // white.png is just an invalid png name, which means that the default texture will be mapped (white)
   if (q.tex == nullptr) q.tex = ((Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png"))));
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);

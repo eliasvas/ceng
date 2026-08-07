@@ -123,27 +123,30 @@ void game_render(Game_State *gs, float dt) {
 
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
-  //entity_store_update_render(gs, dt);
+  entity_store_update_render(gs, dt);
 
-
+  // Simple test for quad rendernig
+#if 0
   // TODO: Maybe we should push/pop asset ids for textures??
   // Sample quad for renderer architecture
-  rn_begin(gs->frame_arena, gs->game_viewport);
+  r2d_begin(gs->frame_arena, gs->game_viewport);
   R_Quad q = (R_Quad){
     .dst_rect = rec(50,50,600,600),
     .src_rect = rec(0,0,128,80),
     .c = col(1.0,1.0,1.0,1.0),
-    .rot_deg = 0,
+    .rot_deg = 90.0 * gs->time_sec,
+    .corner_radius = 20.0,
+    .softness = 4.0,
     .tex = (Ogl_Tex*)am_get(asset_id_from_path(STR8L("atlas.png"))),
   };
 
-  rn_push_quad(rn_pass_front(), q);
-  rn_flush_all();
-
+  r2d_push_quad(r2d_pass_front(), q);
+  r2d_flush_all();
+#endif
 
 
   // Gui Test
-#if 0
+#if 1
   // Perform a reload if reset button is clicked
   gui_begin(gs->game_viewport, dt);
   gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);

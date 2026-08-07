@@ -90,6 +90,9 @@ struct Gui_Box {
   Gui_Text_Alignment text_align;
   v4 bg_color;
   v4 text_color;
+ 
+  f32 corner_radius; // TODO: maybe corner_radii down the line?
+  f32 softness;
 
   f32 hot_t;
   f32 active_t;
@@ -163,6 +166,8 @@ typedef struct Gui_Bg_Color_Node Gui_Bg_Color_Node; struct Gui_Bg_Color_Node {Gu
 typedef struct Gui_Text_Color_Node Gui_Text_Color_Node; struct Gui_Text_Color_Node {Gui_Text_Color_Node *next; v4 v;};
 typedef struct Gui_Text_Alignment_Node Gui_Text_Alignment_Node; struct Gui_Text_Alignment_Node {Gui_Text_Alignment_Node *next; Gui_Text_Alignment v;};
 typedef struct Gui_Font_Scale_Node Gui_Font_Scale_Node; struct Gui_Font_Scale_Node {Gui_Font_Scale_Node *next; f32 v;};
+typedef struct Gui_Box_Corner_Radius_Node Gui_Box_Corner_Radius_Node; struct Gui_Box_Corner_Radius_Node {Gui_Box_Corner_Radius_Node *next; f32 v;};
+typedef struct Gui_Box_Softness_Node Gui_Box_Softness_Node; struct Gui_Box_Softness_Node {Gui_Box_Softness_Node *next; f32 v;};
 typedef struct Gui_Child_Layout_Axis_Node Gui_Child_Layout_Axis_Node; struct Gui_Child_Layout_Axis_Node {Gui_Child_Layout_Axis_Node *next; Gui_Axis v;};
 #include "gui_stacks.h"
 
@@ -207,6 +212,10 @@ typedef struct {
   struct { Gui_Text_Color_Node *top; v4 bottom_val; Gui_Text_Color_Node *free; b32 auto_pop; } text_color_stack;
   Gui_Font_Scale_Node font_scale_nil_stack_top;
   struct { Gui_Font_Scale_Node *top; f32 bottom_val; Gui_Font_Scale_Node *free; b32 auto_pop; } font_scale_stack;
+  Gui_Box_Corner_Radius_Node box_corner_radius_nil_stack_top;
+  struct { Gui_Box_Corner_Radius_Node *top; f32 bottom_val; Gui_Box_Corner_Radius_Node *free; b32 auto_pop; } box_corner_radius_stack;
+  Gui_Box_Softness_Node box_softness_nil_stack_top;
+  struct { Gui_Box_Softness_Node *top; f32 bottom_val; Gui_Box_Softness_Node *free; b32 auto_pop; } box_softness_stack;
   Gui_Text_Alignment_Node text_alignment_nil_stack_top;
   struct { Gui_Text_Alignment_Node *top; Gui_Text_Alignment bottom_val; Gui_Text_Alignment_Node *free; b32 auto_pop; } text_alignment_stack;
   Gui_Child_Layout_Axis_Node child_layout_axis_nil_stack_top;

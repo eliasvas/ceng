@@ -172,7 +172,7 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
         .dst_rect = tr,
         .c = col(0.9,0.4,0.4,1.0),
     };
-    rn_push_quad(rn_pass_front(), quad);
+    r2d_push_quad(r2d_pass_front(), quad);
   }
 
   v2 baseline_pos = pos;
@@ -197,7 +197,7 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
         .c = col,
         .tex = font_tex,
     };
-    rn_push_quad(rn_pass_front(), quad);
+    r2d_push_quad(r2d_pass_front(), quad);
     baseline_pos.x += metrics.xadvance*scale;
   }
 }

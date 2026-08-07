@@ -52,6 +52,16 @@ f32 gui_set_next_font_scale(f32 v);
 f32 gui_push_font_scale(f32 v);
 f32 gui_pop_font_scale(void);
 
+f32 gui_top_box_corner_radius(void);
+f32 gui_set_next_box_corner_radius(f32 v);
+f32 gui_push_box_corner_radius(f32 v);
+f32 gui_pop_box_corner_radius(void);
+
+f32 gui_top_box_softness(void);
+f32 gui_set_next_box_softness(f32 v);
+f32 gui_push_box_softness(f32 v);
+f32 gui_pop_box_softness(void);
+
 Gui_Text_Alignment gui_top_text_alignment(void);
 Gui_Text_Alignment gui_set_next_text_alignment(Gui_Text_Alignment v);
 Gui_Text_Alignment gui_push_text_alignment(Gui_Text_Alignment v);
@@ -180,6 +190,18 @@ void gui_init_stacks() {
 	ctx.font_scale_stack.bottom_val = ctx.font_scale_nil_stack_top.v;
 	ctx.font_scale_stack.free = 0;
 	ctx.font_scale_stack.auto_pop = 0;
+	// -- box_corner_radius stack initialization
+	ctx.box_corner_radius_nil_stack_top.v = 0.0;
+	ctx.box_corner_radius_stack.top = &ctx.box_corner_radius_nil_stack_top;
+	ctx.box_corner_radius_stack.bottom_val = ctx.box_corner_radius_nil_stack_top.v;
+	ctx.box_corner_radius_stack.free = 0;
+	ctx.box_corner_radius_stack.auto_pop = 0;
+	// -- box_softness stack initialization
+	ctx.box_softness_nil_stack_top.v = 0.0;
+	ctx.box_softness_stack.top = &ctx.box_softness_nil_stack_top;
+	ctx.box_softness_stack.bottom_val = ctx.box_softness_nil_stack_top.v;
+	ctx.box_softness_stack.free = 0;
+	ctx.box_softness_stack.auto_pop = 0;
 	// -- child_layout_axis stack initialization
 	ctx.child_layout_axis_nil_stack_top.v = GUI_AXIS_X;
 	ctx.child_layout_axis_stack.top = &ctx.child_layout_axis_nil_stack_top;
@@ -237,6 +259,16 @@ f32 gui_top_font_scale(void) { gui_stack_top_impl(gui_get_ctx(), Font_Scale, fon
 f32 gui_set_next_font_scale(f32 v) { gui_stack_set_next_impl(gui_get_ctx(), Font_Scale, font_scale, f32, v); }
 f32 gui_push_font_scale(f32 v) { gui_stack_push_impl(gui_get_ctx(), Font_Scale, font_scale, f32, v); }
 f32 gui_pop_font_scale(void) { gui_stack_pop_impl(gui_get_ctx(), Font_Scale, font_scale); }
+
+f32 gui_top_box_corner_radius(void) { gui_stack_top_impl(gui_get_ctx(), Box_Corner_Radius, box_corner_radius); }
+f32 gui_set_next_box_corner_radius(f32 v) { gui_stack_set_next_impl(gui_get_ctx(), Box_Corner_Radius, box_corner_radius, f32, v); }
+f32 gui_push_box_corner_radius(f32 v) { gui_stack_push_impl(gui_get_ctx(), Box_Corner_Radius, box_corner_radius, f32, v); }
+f32 gui_pop_box_corner_radius(void) { gui_stack_pop_impl(gui_get_ctx(), Box_Corner_Radius, box_corner_radius); }
+
+f32 gui_top_box_softness(void) { gui_stack_top_impl(gui_get_ctx(), Box_Softness, box_softness); }
+f32 gui_set_next_box_softness(f32 v) { gui_stack_set_next_impl(gui_get_ctx(), Box_Softness, box_softness, f32, v); }
+f32 gui_push_box_softness(f32 v) { gui_stack_push_impl(gui_get_ctx(), Box_Softness, box_softness, f32, v); }
+f32 gui_pop_box_softness(void) { gui_stack_pop_impl(gui_get_ctx(), Box_Softness, box_softness); }
 
 Gui_Text_Alignment gui_top_text_alignment(void) { gui_stack_top_impl(gui_get_ctx(), Text_Alignment, text_alignment); }
 Gui_Text_Alignment gui_set_next_text_alignment(Gui_Text_Alignment v) { gui_stack_set_next_impl(gui_get_ctx(), Text_Alignment, text_alignment, Gui_Text_Alignment, v); }
@@ -311,6 +343,8 @@ void gui_autopop_all_stacks() {
 	if (ctx.text_color_stack.auto_pop) { gui_pop_text_color();ctx.text_color_stack.auto_pop = 0; }
 	if (ctx.text_alignment_stack.auto_pop) { gui_pop_text_alignment();ctx.text_alignment_stack.auto_pop = 0; }
 	if (ctx.font_scale_stack.auto_pop) { gui_pop_font_scale();ctx.font_scale_stack.auto_pop = 0; }
+	if (ctx.box_corner_radius_stack.auto_pop) { gui_pop_box_corner_radius();ctx.box_corner_radius_stack.auto_pop = 0; }
+	if (ctx.box_softness_stack.auto_pop) { gui_pop_box_softness();ctx.box_softness_stack.auto_pop = 0; }
 	if (ctx.child_layout_axis_stack.auto_pop) { gui_pop_child_layout_axis();ctx.child_layout_axis_stack.auto_pop = 0; }
 }
 #endif

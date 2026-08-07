@@ -129,6 +129,8 @@ Gui_Box *gui_box_make(str8 label, Gui_Box_Flags flags) {
       box->flags |= GUI_BOX_FLAG_FIXED_Y;
       box->fixed_pos.raw[GUI_AXIS_Y] = gui_top_fixed_y();
     }
+    box->corner_radius = gui_top_box_corner_radius();
+    box->softness = gui_top_box_softness();
   }
 
   // Hook box to the per-frame hierarchy
@@ -465,9 +467,11 @@ void gui_render(Gui_Box *root) {
   if (root->flags & GUI_BOX_FLAG_DRAW_BOX) {
     R_Quad quad = (R_Quad) {
         .dst_rect = clip_rect,
+        .softness = root->softness,
+        .corner_radius = root->corner_radius,
         .c = v4_add(root->bg_color, v4m(0.2 * root->hot_t, 0.2*root->active_t,0,0)),
     };
-    rn_push_quad(rn_pass_front(), quad);
+    r2d_push_quad(r2d_pass_front(), quad);
   }
 
   // 2. Draw the text
@@ -567,6 +571,8 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
 
     gui_spacer(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, sdata->scroll_percent, 0.0});
 
+    gui_set_next_box_corner_radius(8.0);
+    gui_set_next_box_softness(2.0);
     gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, scroll_button_dim, 1.0});
     gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
     //gui_set_next_bg_color(sdata->scroll_button_color);

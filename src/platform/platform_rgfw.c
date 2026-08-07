@@ -295,7 +295,7 @@ int main(void) {
     /////////////////////////////////////////////////////
     {
       TIME_BLOCK("GAME_UPDATERENDER");
-      rn_begin(gs.frame_arena, gs.game_viewport);
+      r2d_begin(gs.frame_arena, gs.game_viewport);
       game_api.update(&gs, dt);
       game_api.render(&gs, dt);
 #ifdef SOFT_REND
@@ -306,7 +306,7 @@ int main(void) {
     /////////////////////////////////////////////////////
     // 3.4 Render all the stuff (captured in game_render(..))
     /////////////////////////////////////////////////////
-    rn_flush_all();
+    r2d_flush_all();
 
     /////////////////////////////////////////////////////
     // 3.5 Swap the window (Desktop mode only)

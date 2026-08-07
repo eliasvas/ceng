@@ -19,6 +19,8 @@ typedef struct {
   v4 dst_rect;
   v4 color;
   f32 rot_rad;
+  f32 corner_radius;
+  f32 softness;
 } Batch_Vertex;
 
 
@@ -26,6 +28,8 @@ typedef struct {
   rect src_rect, dst_rect;
   color c;
   f32 rot_deg;
+  f32 corner_radius;
+  f32 softness;
 
   Ogl_Tex *tex;
 } R_Quad;
@@ -71,40 +75,40 @@ typedef struct {
 
   s64 node_count;
   s64 quad_count;
-} R_Quad_Chunk_List ;
+} R_Quad_Chunk_List;
 
 typedef enum {
-  RN_PASS_KIND_2D,
-  RN_PASS_KIND_3D, // TBA
-} RN_Pass_Kind;
+  R2D_PASS_KIND_2D,
+  R2D_PASS_KIND_3D, // TBA
+} R2D_Pass_Kind;
 
-typedef struct RN_Pass RN_Pass;
-struct RN_Pass {
-#define RN_MAX_CMD 256
+typedef struct R2D_Pass R2D_Pass;
+struct R2D_Pass {
+#define R2D_MAX_CMD 256
   R_Quad_Chunk_List quads;
   s32 cmd_count;
-  RN_Pass_Kind kind;
+  R2D_Pass_Kind kind;
 
   R_C2D cam2d;
   rect viewport;
 
 
-  RN_Pass *next;
-  RN_Pass *prev;
+  R2D_Pass *next;
+  R2D_Pass *prev;
 };
 
 typedef struct {
-  RN_Pass *first;
-  RN_Pass *last;
+  R2D_Pass *first;
+  R2D_Pass *last;
   s32 count;
-} RN_Pass_List;
+} R2D_Pass_List;
 
-void rn_begin(Arena *arena, rect dummy_viewport);
-RN_Pass *rn_pass_front();
-RN_Pass *rn_pass_back();
-void rn_flush_all();
-RN_Pass *rn_push_pass(RN_Pass_Kind kind, R_C2D cam2d, rect viewport);
-void rn_push_quad(RN_Pass *pass, R_Quad q);
+void r2d_begin(Arena *arena, rect dummy_viewport);
+R2D_Pass *r2d_pass_front();
+R2D_Pass *r2d_pass_back();
+void r2d_flush_all();
+R2D_Pass *r2d_push_pass(R2D_Pass_Kind kind, R_C2D cam2d, rect viewport);
+void r2d_push_quad(R2D_Pass *pass, R_Quad q);
 
 // Maybe delete from here??
 void r3d_load_shaders();
