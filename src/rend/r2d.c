@@ -112,7 +112,6 @@ void main() {
   float d = sd_rect(vdata.dst_pos, vdata.dst_hdim, vdata.corner_radius);
   float edge = 1.0 - smoothstep(0.0, vdata.softness, d);
 
-  // FIXME FIXME FIXME u_tex[IDX] index should be passed as a flat int shader side, so we can batch ok?!?!?!!!
   texture_size = textureSize(u_tex[vdata.tidx], 0);
   tc = vdata.tc / vec2(texture_size.x, texture_size.y);
   out_color = edge * vdata.color * texture(u_tex[vdata.tidx], tc);
@@ -216,6 +215,7 @@ void r2d_begin(Arena *arena, rect dummy_viewport) {
 }
 
 void r2d_flush_verts(R2D_Pass *pass, Batch_Vertex *vertices, s32 vcount,  Ogl_Tex **tex_cache) {
+  if (vcount <= 0) return;
   u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
 
   // set the textures
@@ -255,7 +255,8 @@ void r2d_flush_all() {
 
     Ogl_Tex* tex_cache[OGL_MAX_ACTIVE_TEXTURES] = {};
     s64 vcount = 0;
-    for (s64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
+
+    for (s64 quad_idx = 0; quad_idx < quads.count; quad_idx += 1) {
       R_Quad *q = &quads.quads[quad_idx];
 
       Batch_Vertex v = (Batch_Vertex){
@@ -267,7 +268,7 @@ void r2d_flush_all() {
         .softness = q->softness,
       };
 
-      // 0. Try to add texture to tex_cache
+      // 0. Try to add texture to tex_cache - flush otherwise
       b32 tex_added = false;
       for (s32 i = 0; i < OGL_MAX_ACTIVE_TEXTURES; i += 1) {
         if (tex_cache[i] == nullptr || tex_cache[i] == q->tex) {
@@ -277,33 +278,37 @@ void r2d_flush_all() {
           break;
         }
       }
-
-      // 1. Try to add vertex to instance array
-      b32 instance_array_full = (vcount == REND_MAX_INSTANCES);
-      if (!instance_array_full && tex_added) {
-          batch_vertices[vcount++] = v;
+      if (!tex_added) {
+        r2d_flush_verts(pass, batch_vertices, vcount, tex_cache);
+        vcount = 0;
+        M_ZERO_ARRAY(tex_cache);
+        tex_cache[0] = q->tex;
       }
 
-      // 2. Check if we loaded all the quads array?
-      b32 is_last_vertex = (quad_idx + 1 >= quads.count);
 
-      // 3. flush if a condition is met
-      if (!tex_added || instance_array_full || is_last_vertex) {
+      // 1. Check if instance array is full and flush if so
+      b32 instance_array_full = (vcount == REND_MAX_INSTANCES);
+      if (instance_array_full) {
         r2d_flush_verts(pass, batch_vertices, vcount, tex_cache);
-        M_ZERO_ARRAY(tex_cache);
-
         vcount = 0;
-        if (!tex_added) {
-            tex_cache[0] = q->tex;
-            v.tidx = 0;
-            batch_vertices[vcount++] = v;
-        }
-        if (instance_array_full) {
-            batch_vertices[vcount++] = v;
-        }
+        M_ZERO_ARRAY(tex_cache);
+        tex_cache[0] = q->tex;
+        v.tidx = 0;
+      }
+
+      // 2. Add the vertex to instance array
+      batch_vertices[vcount++] = v;
+
+      // 3. Check if we are at the end of quads array - and flush if so
+      b32 is_last_vertex = (quad_idx + 1 >= quads.count);
+      if (is_last_vertex) {
+        r2d_flush_verts(pass, batch_vertices, vcount, tex_cache);
       }
     }
   }
+
+  // Cleanup render passes (They are now rendererd)
+  //__render_passes.first = __render_passes.last = nullptr;
 }
 
 R2D_Pass *r2d_push_pass(R2D_Pass_Kind kind, R_C2D cam2d, rect viewport) {

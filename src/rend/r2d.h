@@ -17,7 +17,7 @@ typedef struct {
   v4 src_rect;
   v4 dst_rect;
   v4 color;
-  u32 tidx; // texture index
+  s32 tidx; // texture index
   f32 rot_rad;
   f32 corner_radius;
   f32 softness;
