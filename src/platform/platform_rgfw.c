@@ -214,7 +214,7 @@ int main(void) {
     /////////////////////////////////////////////////////
     // 3.2 Handling incoming events for the frame
     /////////////////////////////////////////////////////
-    RGFW_event event;
+    RGFW_event event = {};
     while (RGFW_window_checkEvent(win, &event)) {
       Input_Event_Node input_event = {};
       switch(event.type) {

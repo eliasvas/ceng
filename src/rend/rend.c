@@ -18,9 +18,10 @@ const char* batch_vs = R"(#version 460 core
 layout(location=0) in vec4 src_rect;
 layout(location=1) in vec4 dst_rect;
 layout(location=2) in vec4 v_color;
-layout(location=3) in float v_rot_rad;
-layout(location=4) in float corner_radius;
-layout(location=5) in float softness;
+layout(location=3) in int tidx;
+layout(location=4) in float v_rot_rad;
+layout(location=5) in float corner_radius;
+layout(location=6) in float softness;
 
 layout (std140) uniform BatchUbo { mat4 view_proj; };
 
@@ -47,6 +48,7 @@ out Vertex_Data {
   vec4 color;
   vec2 tc;
 
+  flat int tidx;
   vec2 dst_pos;
   vec2 dst_hdim;
   float corner_radius;
@@ -78,6 +80,7 @@ void main() {
   vdata.dst_hdim = dim / 2.0;
   vdata.corner_radius = corner_radius;
   vdata.softness = softness;
+  vdata.tidx = tidx;
 }
 )";
 
@@ -89,12 +92,13 @@ float sd_rect(vec2 p, vec2 hdim, float corner_radius) {
    return length(max(p, 0.0)) + min(max(p.x, p.y), 0.0) - corner_radius;
 }
 
-uniform sampler2D u_tex;
+uniform sampler2D u_tex[4];
 
 in Vertex_Data {
   vec4 color;
   vec2 tc;
 
+  flat int tidx;
   vec2 dst_pos;
   vec2 dst_hdim;
   float corner_radius;
@@ -108,11 +112,10 @@ void main() {
   float d = sd_rect(vdata.dst_pos, vdata.dst_hdim, vdata.corner_radius);
   float edge = 1.0 - smoothstep(0.0, vdata.softness, d);
 
-  // FIXME: GLES30 doesn't support c-style sampler2D array indexing so we have to use max 1 texture
-  // FIXME: revert back to old (good) way
-  texture_size = textureSize(u_tex, 0);
+  // FIXME FIXME FIXME u_tex[IDX] index should be passed as a flat int shader side, so we can batch ok?!?!?!!!
+  texture_size = textureSize(u_tex[vdata.tidx], 0);
   tc = vdata.tc / vec2(texture_size.x, texture_size.y);
-  out_color = edge * vdata.color * texture(u_tex, tc);
+  out_color = edge * vdata.color * texture(u_tex[vdata.tidx], tc);
 }
 
 )";
@@ -172,9 +175,10 @@ void r2d_try_load_shaders() {
             [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect),       .stride = sizeof(Batch_Vertex), .instanced = true, },
             [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
             [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),          .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [4] = { .location = 4, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, corner_radius),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [5] = { .location = 5, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, softness),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_INT, .offset = offsetof(Batch_Vertex, tidx),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [4] = { .location = 4, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [5] = { .location = 5, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, corner_radius),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [6] = { .location = 6, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, softness),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
           },
         },
       },
@@ -211,12 +215,46 @@ void r2d_begin(Arena *arena, rect dummy_viewport) {
   r3d_try_load_shaders();
 }
 
+void r2d_flush_verts(R2D_Pass *pass, Batch_Vertex *vertices, s32 vcount,  Ogl_Tex **tex_cache) {
+  u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
+
+  // set the textures
+  for (s32 i = 0; i < OGL_MAX_ACTIVE_TEXTURES; i+=1) {
+    if (tex_cache[i] != nullptr) {
+      buf sampler_name = arena_sprintf(__frame_arena, "u_tex[%d]", i);
+      batch_bundle.textures[i] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = *tex_cache[i],};
+    }
+  }
+
+  // set vertex buffer
+  ogl_buf_update(&batch_bundle.vbos[0].buffer, 0, vertices, vcount, sizeof(Batch_Vertex));
+
+  // set the ubo (currently only the VP matrix)
+  m4 proj = m4_ortho(0,pass->viewport.w,0,pass->viewport.h,-1,1);
+  m4 view = r_cam_make_view_mat(&pass->cam2d);
+  m4 m = m4_mult(proj, view);
+  ogl_buf_update(&batch_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
+
+  // Set dynamically before drawcall currently
+  batch_bundle.dyn_state.viewport = *(Ogl_rect *)&pass->viewport;
+  batch_bundle.dyn_state.scissor = *(Ogl_rect *)&pass->viewport;
+
+  ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, vcount);
+
+  arena_reset_to_pos(__frame_arena, arena_prev_pos);
+
+
+  //for (s32 i = 0; i < OGL_MAX_ACTIVE_TEXTURES; i+=1) { batch_bundle.textures[i] = (Ogl_Tex_Slot){}; }
+  //M_ZERO(*tex_cache, sizeof(tex_cache[0]) * OGL_MAX_ACTIVE_TEXTURES);
+}
+
 void r2d_flush_all() {
   for (R2D_Pass *pass = __render_passes.last; pass != nullptr; pass = pass->prev) {
     R_Quad_Array quads = r_quad_chunk_list_to_array(__frame_arena, &pass->quads);
     Batch_Vertex *batch_vertices = arena_push_array(__frame_arena, Batch_Vertex,REND_MAX_INSTANCES);
 
-    s64 vertex_idx  = 0;
+    Ogl_Tex* tex_cache[OGL_MAX_ACTIVE_TEXTURES] = {};
+    s64 vcount = 0;
     for (s64 quad_idx = 0; quad_idx < quads.count; ++quad_idx) {
       R_Quad *q = &quads.quads[quad_idx];
 
@@ -229,32 +267,40 @@ void r2d_flush_all() {
         .softness = q->softness,
       };
 
-      batch_vertices[vertex_idx] = v;
-      vertex_idx+=1;
+      // 0. Try to add texture to tex_cache
+      b32 tex_added = false;
+      for (s32 i = 0; i < OGL_MAX_ACTIVE_TEXTURES; i += 1) {
+        if (tex_cache[i] == nullptr || tex_cache[i] == q->tex) {
+          tex_cache[i] = q->tex;
+          v.tidx = i;
+          tex_added = true;
+          break;
+        }
+      }
 
-      if (vertex_idx >= REND_MAX_INSTANCES || quad_idx+1 >= quads.count || quads.quads[quad_idx+1].tex->impl_state != q->tex->impl_state) {
+      // 1. Try to add vertex to instance array
+      b32 instance_array_full = (vcount == REND_MAX_INSTANCES);
+      if (!instance_array_full && tex_added) {
+          batch_vertices[vcount++] = v;
+      }
 
-        u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
-        buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
-        batch_bundle.textures[0] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = *(q->tex),};
+      // 2. Check if we loaded all the quads array?
+      b32 is_last_vertex = (quad_idx + 1 >= quads.count);
 
-        // set vertex buffer
-        // @BEWARE only for 2D rendering, for 3D we gotta branch
-        ogl_buf_update(&batch_bundle.vbos[0].buffer, 0, batch_vertices, vertex_idx, sizeof(Batch_Vertex));
+      // 3. flush if a condition is met
+      if (!tex_added || instance_array_full || is_last_vertex) {
+        r2d_flush_verts(pass, batch_vertices, vcount, tex_cache);
+        M_ZERO_ARRAY(tex_cache);
 
-        // set the ubo (currently only the VP matrix)
-        m4 proj = m4_ortho(0,pass->viewport.w,0,pass->viewport.h,-1,1);
-        m4 view = r_cam_make_view_mat(&pass->cam2d);
-        m4 m = m4_mult(proj, view);
-        ogl_buf_update(&batch_bundle.ubos[0].buffer, 0, &m, 1, sizeof(m4));
-
-        // Set dynamically before drawcall currently
-      batch_bundle.dyn_state.viewport = *(Ogl_rect *)&pass->viewport;
-      batch_bundle.dyn_state.scissor = *(Ogl_rect *)&pass->viewport;
-
-        ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, vertex_idx);
-        arena_reset_to_pos(__frame_arena, arena_prev_pos);
-        vertex_idx = 0;
+        vcount = 0;
+        if (!tex_added) {
+            tex_cache[0] = q->tex;
+            v.tidx = 0;
+            batch_vertices[vcount++] = v;
+        }
+        if (instance_array_full) {
+            batch_vertices[vcount++] = v;
+        }
       }
     }
   }

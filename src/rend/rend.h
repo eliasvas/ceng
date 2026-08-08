@@ -1,5 +1,5 @@
-#ifndef _REND2D_H__
-#define _REND2D_H__
+#ifndef _R2D_H__
+#define _R2D_H__
 
 // TODO: Texture handling is atrocious, make it possible (also Ogl side) to assign c-style texture sampler arrays to a slot
 // TODO: Look at the batch fragment shader todos.. BEWARE!!
@@ -12,12 +12,12 @@
 #include "ogl.h"
 
 #define REND_MAX_INSTANCES 512
-#define REND_MAX_TEXTURES 4
 
 typedef struct {
   v4 src_rect;
   v4 dst_rect;
   v4 color;
+  u32 tidx; // texture index
   f32 rot_rad;
   f32 corner_radius;
   f32 softness;

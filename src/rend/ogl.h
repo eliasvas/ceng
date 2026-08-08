@@ -770,7 +770,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the texture(s)
-  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
     if (tex->tex.impl_state) {
       glActiveTexture(GL_TEXTURE0+slot_idx);
