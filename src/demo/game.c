@@ -74,64 +74,51 @@ void game_update(Game_State *gs, float dt) {
 }
 
 void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
-  assert(cell_count%2 == 0 && "Cell count has to be divisible by 2 because its centered to origin dummy");
+  s32 line_count_per_axis = cell_count + 1; 
+  Tri_Vertex *points = arena_push_array(gs->frame_arena, Tri_Vertex, line_count_per_axis*4);
   color c1 = v4m(0.7,0.7,0.7,1);
-  color c2 = v4m(0.8,0.4,0.4,1);
-  color c3 = v4m(0.4,0.8,0.4,1);
-  Tri_Vertex quad_verts[4] = {
-    (Tri_Vertex) {.pos = v3m(0,0,1), .color = c1}, 
-    (Tri_Vertex) {.pos = v3m(0,0,0), .color = c1}, 
-    (Tri_Vertex) {.pos = v3m(1,0,0), .color = c1}, 
-    (Tri_Vertex) {.pos = v3m(1,0,1), .color = c1}, 
-  };
 
-  // Regular grid
-  for (s32 z_coord = - cell_count/2; z_coord < cell_count/2; z_coord += 1) {
-    for (s32 x_coord = - cell_count/2; x_coord < cell_count/2; x_coord += 1) {
-      if (z_coord == 0 && x_coord == 0) continue;
+  HMM_Mat4 model = HMM_Translate(HMM_V3(0, 0, 0));
+  HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model);
 
-      // This is the logic..
-      HMM_Mat4 model = HMM_Translate(HMM_V3(x_coord, 0, z_coord));
-      HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model);
+  s32 point_idx = 0;
 
-      rn_imm_verts(gs->game_viewport, quad_verts, array_count(quad_verts), OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp);
-    }
-  } 
+#if 1
+  for (s32 line_x = 0; line_x < line_count_per_axis; line_x +=1) {
+    v3 start = v3m(-cell_count/2.0,0, line_x - cell_count/2.0);
+    v3 end   = v3m(+cell_count/2.0,0, line_x - cell_count/2.0);
 
-  HMM_Mat4 mv = HMM_Mul(gs->proj, gs->view);
+    points[point_idx++] = (Tri_Vertex) {.pos = start, .color = c1};
+    points[point_idx++] = (Tri_Vertex) {.pos = end, .color = c1};
+  }
+#endif
 
-  // X-axis red highlight
-  Tri_Vertex line_x[4] = {
-    (Tri_Vertex) {.pos = v3m(-cell_count/2,0,0), .color = c2}, 
-    (Tri_Vertex) {.pos = v3m(cell_count/2,0,0), .color = c2}, 
-  };
-  rn_imm_verts(gs->game_viewport, line_x, array_count(line_x), OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mv);
+  for (s32 line_z = 0; line_z < line_count_per_axis; line_z +=1) {
+    v3 start = v3m(line_z - cell_count/2.0, 0,-cell_count/2.0);
+    v3 end   = v3m(line_z - cell_count/2.0, 0,+cell_count/2.0);
 
-  // Z-axis green highlight
-  Tri_Vertex line_z[4] = {
-    (Tri_Vertex) {.pos = v3m(0,0,-cell_count/2), .color = c3}, 
-    (Tri_Vertex) {.pos = v3m(0,0,cell_count/2), .color = c3}, 
-  };
-  rn_imm_verts(gs->game_viewport, line_z, array_count(line_z), OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mv);
+    points[point_idx++] = (Tri_Vertex) {.pos = start, .color = c1};
+    points[point_idx++] = (Tri_Vertex) {.pos = end, .color = c1};
+  }
+
+  assert(point_idx == line_count_per_axis*4);
+  rn_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 
 }
 
 void game_render(Game_State *gs, float dt) {
-
   //m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
-
 
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
   entity_store_update_render(gs, dt);
 
   // Simple test for quad rendernig
-#if 1
+#if 0
   // TODO: Maybe we should push/pop asset ids for textures??
   // Sample quad for renderer architecture
-  r2d_begin(gs->frame_arena, gs->game_viewport);
   R_Quad q = (R_Quad){
-    .dst_rect = rec(300,200,200,200),
+    .dst_rect = rec(300,200,500,500),
     .src_rect = rec(0,0,128,80),
     .c = col(1.0,1.0,1.0,1.0),
     .rot_deg = 9.0 * gs->time_sec,
@@ -139,11 +126,13 @@ void game_render(Game_State *gs, float dt) {
     .softness = 4.0,
     .tex = (Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png"))),
   };
-
   r2d_push_quad(r2d_pass_front(), q);
 
+  // For test
+  //r2d_flush_all();
+
   q = (R_Quad){
-    .dst_rect = rec(500,200,200,200),
+    .dst_rect = rec(500,200,500,500),
     .src_rect = rec(0,0,128,80),
     .c = col(1.0,1.0,1.0,1.0),
     .rot_deg = 19.0 * gs->time_sec,
@@ -153,7 +142,8 @@ void game_render(Game_State *gs, float dt) {
   };
   r2d_push_quad(r2d_pass_front(), q);
 
-  r2d_flush_all();
+  //r2d_flush_all();
+
 #endif
 
 
