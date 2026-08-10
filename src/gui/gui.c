@@ -374,8 +374,8 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
           child_idx+=1;
         }
       }
-      // 1.3 Change the size of all children so that they fit the parent fixed_size by taking a proportion of their available size
 
+      // 1.3 Change the size of all children so that they fit the parent fixed_size by taking a proportion of their available size
       child_idx = 0;
       for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
         child->fixed_size.raw[axis] -= needed_size * (available_sizes[child_idx] / available_size_sum);
@@ -586,7 +586,7 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
       sdata->scroll_percent += sdata->scroll_speed * input_get_mouse_delta(ctx.input).raw[axis] * ctx.dt;
       sdata->scroll_percent = clamp(sdata->scroll_percent, 0, 1);
     }
-    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, sdata->scroll_percent);
+    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, -sdata->scroll_percent);
 
     gui_pop_parent(); // scroll_bar
     gui_pop_bg_color();

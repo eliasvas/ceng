@@ -114,7 +114,7 @@ void game_render(Game_State *gs, float dt) {
   entity_store_update_render(gs, dt);
 
   // Simple test for quad rendernig
-#if 0
+#if 1
   // TODO: Maybe we should push/pop asset ids for textures??
   // Sample quad for renderer architecture
   R_Quad q = (R_Quad){

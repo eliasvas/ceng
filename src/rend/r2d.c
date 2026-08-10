@@ -106,15 +106,22 @@ in Vertex_Data {
 } vdata;
 
 void main() {
-  ivec2 texture_size;
-  vec2 tc;
-
   float d = sd_rect(vdata.dst_pos, vdata.dst_hdim, vdata.corner_radius);
   float edge = 1.0 - smoothstep(0.0, vdata.softness, d);
 
-  texture_size = textureSize(u_tex[vdata.tidx], 0);
-  tc = vdata.tc / vec2(texture_size.x, texture_size.y);
-  out_color = edge * vdata.color * texture(u_tex[vdata.tidx], tc);
+  if (vdata.tidx == 0) {
+    vec2 tc = vdata.tc / textureSize(u_tex[0], 0).xy;
+    out_color = edge * vdata.color * texture(u_tex[0], tc);
+  } else if (vdata.tidx == 1) {
+    vec2 tc = vdata.tc / textureSize(u_tex[1], 0).xy;
+    out_color = edge * vdata.color * texture(u_tex[1], tc);
+  } else if (vdata.tidx == 2) {
+    vec2 tc = vdata.tc / textureSize(u_tex[2], 0).xy;
+    out_color = edge * vdata.color * texture(u_tex[2], tc);
+  } else {
+    vec2 tc = vdata.tc / textureSize(u_tex[3], 0).xy;
+    out_color = edge * vdata.color * texture(u_tex[3], tc);
+  }
 }
 
 )";
@@ -223,6 +230,8 @@ void r2d_flush_verts(R2D_Pass *pass, Batch_Vertex *vertices, s32 vcount,  Ogl_Te
     if (tex_cache[i] != nullptr) {
       buf sampler_name = arena_sprintf(__frame_arena, "u_tex[%d]", i);
       batch_bundle.textures[i] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = *tex_cache[i],};
+    } else {
+      batch_bundle.textures[i] = (Ogl_Tex_Slot){};
     }
   }
 
@@ -278,6 +287,7 @@ void r2d_flush_all() {
           break;
         }
       }
+
       if (!tex_added) {
         r2d_flush_verts(pass, batch_vertices, vcount, tex_cache);
         vcount = 0;
@@ -307,6 +317,7 @@ void r2d_flush_all() {
     }
   }
 
+  // No need because currently only one renderpass?
   // Cleanup render passes (They are now rendererd)
   //__render_passes.first = __render_passes.last = nullptr;
 }
