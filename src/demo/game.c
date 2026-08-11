@@ -7,7 +7,7 @@
 #include "entity.h"
 
 #define ASSET_MGR_IMPLEMENTATION
-#include "core/asset_mgr.h"
+#include "asset/asset_mgr.h"
 
 extern void platform_play_sound(const char *sound);
 
@@ -161,8 +161,8 @@ void game_render(Game_State *gs, float dt) {
   static Gui_Scroll_Data sdata = {
     .item_px = 60, // FIXME change this to 60 to see some weird stuff..
     .item_count = 8,
-    .scroll_bar_px = 30,
-    .scroll_button_px = 30,
+    .scroll_bar_px = 15,
+    .scroll_button_px = 15,
     .scroll_button_color = col(0.5,1,0.4,1),
     .scroll_speed = 1,
     .scroll_percent = 0,

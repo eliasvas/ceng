@@ -547,6 +547,7 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
   gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
   gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
   gui_set_next_child_layout_axis(axis);
+  gui_set_next_bg_color(v4_multf(gui_top_bg_color(), 1.2));
 
   str8 scroll_region_text = str8_sprintf(ctx.temp_arena, "%.*s_region", (int)s.count, s.data);
 	Gui_Box *scroll_region = gui_box_make(scroll_region_text, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y | GUI_BOX_FLAG_ALLOW_OVERFLOW_Y);
@@ -571,7 +572,7 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
 
     gui_spacer(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, sdata->scroll_percent, 0.0});
 
-    gui_set_next_box_corner_radius(8.0);
+    gui_set_next_box_corner_radius(4.0);
     gui_set_next_box_softness(2.0);
     gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, scroll_button_dim, 1.0});
     gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});

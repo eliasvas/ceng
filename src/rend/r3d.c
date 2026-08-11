@@ -1,5 +1,5 @@
 #include "rend/rend_inc.h"
-#include "core/asset_mgr.h"
+#include "asset/asset_mgr.h"
 
 // Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle tri_bundle = {};

@@ -22,8 +22,9 @@
 #define INPUT_IMPLEMENTATION
 #include "core/input.h"
 
+// TODO: Stop the asset manager single module bullshit
 #define ASSET_MGR_IMPLEMENTATION
-#include "core/asset_mgr.h"
+#include "asset/asset_mgr.h"
 
 // DESKTOP: Because miniaudio has TOO MANY warnings when building
 // I have opted to put it in its own SILENT compilation unit (no -Wall)
