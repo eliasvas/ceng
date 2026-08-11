@@ -54,6 +54,11 @@ void game_init(Game_State *gs) {
   gs->view = HMM_LookAt_RH(HMM_V3(0,8,10), HMM_V3(0,0,0), HMM_V3(0,1,0));
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
+
+  Json_Element *root = json_parse(gs->frame_arena, test_str);
+  Json_Element* elem = json_lookup(root, MAKE_STR("msg-bools"));
+  assert(elem);
+
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -114,7 +119,7 @@ void game_render(Game_State *gs, float dt) {
   entity_store_update_render(gs, dt);
 
   // Simple test for quad rendernig
-#if 1
+#if 0
   // TODO: Maybe we should push/pop asset ids for textures??
   // Sample quad for renderer architecture
   R_Quad q = (R_Quad){

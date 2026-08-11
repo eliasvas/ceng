@@ -201,7 +201,7 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
     v2 scroll = input_get_scroll_delta(ctx.input);
 
     v2 mdelta = input_get_mouse_delta(ctx.input);
-    printf("mdelta: %f %f\n", mdelta.x, mdelta.y);
+    //printf("mdelta: %f %f\n", mdelta.x, mdelta.y);
     b32 mmb_down = input_mkey_down(ctx.input, INPUT_MOUSE_MMB);
 
     // 3. View clamp if needed w/ rect's view bounds
@@ -212,7 +212,7 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
 
       //if (box->flags & (GUI_BOX_FLAG_VIEW_CLAMP_X<<axis)) {
       if (box->flags & (GUI_BOX_FLAG_VIEW_CLAMP_Y)) {
-        printf("off = %f\n", box->view_off.raw[axis]);
+        //printf("off = %f\n", box->view_off.raw[axis]);
       }
         //box->view_off.raw[axis] = clamp(box->view_off.raw[axis], -1000000, 1000000);//box->view_bounds.raw[axis] - box->final_rect.dim.raw[axis]);
     }

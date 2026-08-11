@@ -43,11 +43,10 @@ typedef struct {
   Asset_Mgr *parent;
 } Tex_Mgr;
 
-struct Asset_Mgr{
+struct Asset_Mgr {
   Arena *arena;
   Arena *tarena;
   Tex_Mgr tm;
-
 };
 
 #ifndef ASSET_MGR_IMPLEMENTATION
