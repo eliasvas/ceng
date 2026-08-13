@@ -20,7 +20,7 @@ typedef enum {
   JSON_TOKEN_KIND_STRING,
 } Json_Token_Kind;
 typedef struct {
-  buf buf;
+  str8 buf;
   Json_Token_Kind kind;
 } Json_Token;
 typedef struct {
@@ -72,28 +72,28 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
         count = 1;
         switch (c[0]) {
            case ',':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_COMMA};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_COMMA};
                 break;
             case ':':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_COLON};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_COLON};
                 break;
             case '(':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_LPAREN};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_LPAREN};
                 break;
             case ')':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_RPAREN};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_RPAREN};
                 break;
             case '[':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_LBRACKET};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_LBRACKET};
                 break;
             case ']':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_RBRACKET};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_RBRACKET};
                 break;
             case '{':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_LCURLY};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_LCURLY};
                 break;
             case '}':
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_RCURLY};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_RCURLY};
                 break;
             case '-':
             case '+':
@@ -108,25 +108,25 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
             case '8':
             case '9':
                 count = json_tok_count_number(c);
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_NUMBER};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_NUMBER};
                 break;
             case 't':
                 count = cstr_count("true");
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_TRUE};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_TRUE};
                 break;
             case 'f':
                 count = cstr_count("false");
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_FALSE};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_FALSE};
                 break;
             case 'n':
                 count = cstr_count("null");
-                token = (Json_Token) {buf_make(c, count), JSON_TOKEN_KIND_NULL};
+                token = (Json_Token) {STR8(c, count), JSON_TOKEN_KIND_NULL};
                 break;
             case '\"':
                 count = json_tok_count_string(c);
                 assert(count);
                 // +1 -2 to remove the quotes '\"' FIXME: this is hacky
-                token = (Json_Token) {buf_make(c+1, count-2), JSON_TOKEN_KIND_STRING};
+                token = (Json_Token) {STR8(c+1, count-2), JSON_TOKEN_KIND_STRING};
                 break;
             case ' ':
             case '\\':
@@ -149,14 +149,14 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
 static void json_tok_print(Json_Tokens tokens) {
   for (u64 idx = 0; idx < tokens.count; idx+=1) {
     Json_Token tok = json_tok_get(tokens, idx);
-    printf ("%.*s\n", (int)tok.buf.count, tok.buf.data);
+    printf ("%.*s\n", STR8_VARG(tok.buf));
   }
 }
 
 typedef struct Json_Element Json_Element;
 struct Json_Element {
-  buf label;
-  buf value;
+  str8 label;
+  str8 value;
 
   Json_Element *first;
   Json_Element *next;
@@ -192,16 +192,38 @@ static void json_parser_eat_tok(Json_Parser *parser, Json_Token_Kind expected_to
   }
 }
 
-static Json_Element* json_lookup(Json_Element *root, buf label) {
+static s32 json_count_children(Json_Element *root) {
   Json_Element *iter = root->first;
-  while (iter != nullptr && !buf_eq(iter->label, label))iter = iter->next;
+  s32 children_count = 0;
+  while (iter != nullptr) {
+    children_count+=1;
+    iter = iter->next;
+  }
+
+  return children_count;
+}
+
+static s32 json_count_siblings(Json_Element *root) {
+  Json_Element *iter = root;
+  s32 sib_count = 0;
+  while (iter != nullptr) {
+    iter = iter->next;
+    if (iter) sib_count+=1;
+  }
+
+  return sib_count;
+}
+
+static Json_Element* json_lookup(Json_Element *root, str8 label) {
+  Json_Element *iter = root->first;
+  while (iter != nullptr && !str8_eq(iter->label, label))iter = iter->next;
 
   return iter;
 }
 
-static Json_Element* json_parse_element(Json_Parser *parser, buf label);
-static buf json_parse_primitive(Json_Parser *parser) {
-  buf prim = {};
+static Json_Element* json_parse_element(Json_Parser *parser, str8 label);
+static str8 json_parse_primitive(Json_Parser *parser) {
+  str8 prim = {};
   Json_Token tok = json_parser_get_tok(parser);
   bool found = true;
   if (tok.kind == JSON_TOKEN_KIND_TRUE) {
@@ -223,8 +245,8 @@ static buf json_parse_primitive(Json_Parser *parser) {
   return prim;
 }
 
-static Json_Element* json_parse_list(Json_Parser *parser, buf label, Json_Token_Kind end_token, bool has_labels);
-static Json_Element* json_parse_element(Json_Parser *parser, buf label) {
+static Json_Element* json_parse_list(Json_Parser *parser, str8 label, Json_Token_Kind end_token, bool has_labels);
+static Json_Element* json_parse_element(Json_Parser *parser, str8 label) {
   Json_Token tok = json_parser_get_tok(parser);
 
   // Try to parse a sublist (if its an object or array)
@@ -248,11 +270,11 @@ static Json_Element* json_parse_element(Json_Parser *parser, buf label) {
   return e;
 }
 
-static Json_Element* json_parse_list(Json_Parser *parser, buf label, Json_Token_Kind end_token, bool has_labels) {
+static Json_Element* json_parse_list(Json_Parser *parser, str8 label, Json_Token_Kind end_token, bool has_labels) {
   Json_Element *first = nullptr;
   Json_Element *last = nullptr;
 
-  buf labelv = {};
+  str8 labelv = {};
   while (json_parser_get_tok(parser).kind != end_token) {
     if (has_labels) {
       // parse the label
@@ -279,11 +301,11 @@ static Json_Element *json_parse_tokens(Arena *arena, Json_Tokens tokens) {
     .arena = arena,
     .error_state = JSON_PARSER_ERROR_NONE,
   };
-  Json_Element *e = json_parse_element(&p, (buf){});
+  Json_Element *e = json_parse_element(&p, (str8){});
 
   if (p.error_state != JSON_PARSER_ERROR_NONE) {
     Json_Token tok = json_tok_get(p.tokens, p.error_token);
-    printf("parsing Json file failed with error [%d] at token [%d]=[%.*s]\n", p.error_state, p.error_token, (int)tok.buf.count, tok.buf.data);
+    printf("parsing Json file failed with error [%d] at token [%d]=[%.*s]\n", p.error_state, p.error_token, STR8_VARG(tok.buf));
     return nullptr;
   } 
   return e;
@@ -296,18 +318,77 @@ static Json_Element *json_parse(Arena *arena, char *json_str) {
   return root;
 }
 
-static char *test_str = "{ \"msg-type\": [ \"0xdeadbeef\", \"irc log\" ], \
-\"msg-from\": { \"class\": \"soldier\", \"name\": \"Wixilav\" }, \
-\"msg-to\": { \"class\": \"supreme-commander\", \"name\": \"[Redacted]\" }, \
-\"msg-nums\": [ 12,2,3,4,5 ], \
-\"msg-floats\": [ 3.14 , 5.22, 5.43 ], \
-\"msg-bools\": [ true, false ], \
-\"msg-log\": [ \
-    \"soldier: Boss there is a slight problem with the piece offering to humans\", \
-    \"supreme-commander: Explain yourself soldier!\", \
-    \"soldier: Well they don't seem to move anymore...\", \
-    \"supreme-commander: Oh snap, I came here to see them twerk!\" \
-    ] \
-}";
+static char *test_json_str = "{ \
+  \"scene\": 0, \
+  \"scenes\" : [ \
+    { \
+      \"nodes\" : [ 0 ] \
+    } \
+  ], \
+ \
+  \"nodes\" : [ \
+    { \
+      \"mesh\" : 0 \
+    } \
+  ], \
+ \
+  \"meshes\" : [ \
+    { \
+      \"primitives\" : [ { \
+        \"attributes\" : { \
+          \"POSITION\" : 1 \
+        }, \
+        \"indices\" : 0 \
+      } ] \
+    } \
+  ], \
+ \
+  \"buffers\" : [ \
+    { \
+      \"uri\" : \"data:application/octet-stream;base64,AAABAAIAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAA=\", \
+      \"byteLength\" : 44 \
+    } \
+  ], \
+  \"bufferViews\" : [ \
+    { \
+      \"buffer\" : 0, \
+      \"byteOffset\" : 0, \
+      \"byteLength\" : 6, \
+      \"target\" : 34963 \
+    }, \
+    { \
+      \"buffer\" : 0, \
+      \"byteOffset\" : 8, \
+      \"byteLength\" : 36, \
+      \"target\" : 34962 \
+    } \
+  ], \
+  \"accessors\" : [ \
+    { \
+      \"bufferView\" : 0, \
+      \"byteOffset\" : 0, \
+      \"componentType\" : 5123, \
+      \"count\" : 3, \
+      \"type\" : \"SCALAR\", \
+      \"max\" : [ 2 ], \
+      \"min\" : [ 0 ] \
+    }, \
+    { \
+      \"bufferView\" : 1, \
+      \"byteOffset\" : 0, \
+      \"componentType\" : 5126, \
+      \"count\" : 3, \
+      \"type\" : \"VEC3\", \
+      \"max\" : [ 1.0, 1.0, 0.0 ], \
+      \"min\" : [ 0.0, 0.0, 0.0 ] \
+    } \
+  ], \
+ \
+  \"asset\" : { \
+    \"version\" : \"2.0\" \
+  } \
+} ";
+
+//Ref: https://github.khronos.org/glTF-Tutorials/gltfTutorial/
 
 #endif

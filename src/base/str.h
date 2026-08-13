@@ -44,7 +44,8 @@ bool str8_ends_with(str8 s, str8 postfix);
 str8 str8_substr(str8 s, int64_t start_incl, int64_t end_incl);
 uint64_t str8_find_needle(str8 haystack, str8 needle);
 str8 str8_sprintf(Arena *arena, const char* format, ...);
-
+s64 str8_to_int(str8 s);
+f64 str8_to_float(str8 s);
 
 #else
 
@@ -169,6 +170,60 @@ str8 str8_sprintf(Arena *arena, const char* format, ...) {
 // TODO: str8_list API?
 // TODO: str8_path API?
 // TODO: Fuzzy finding in a str8 producing a str8_list?
+
+s64 str8_to_int(str8 s) {
+  s64 counter = 0;
+  for (s64 idx = s.count-1; idx >= 0; idx-=1) {
+    counter += (s.data[s.count-idx-1] - '0') * pwr(10,idx);
+  }
+  return counter;
+}
+
+f64 str8_to_float(str8 s) {
+  f64 counter = 0.0;
+  s64 dot_idx = -1;
+  s64 sign = 1;
+
+  if (s.count == 0) return 0.0;
+
+  // handle sign
+  u64 start = 0;
+  if (s.data[0] == '-') {
+    sign = -1;
+    start = 1;
+  } else if (s.data[0] == '+') {
+    start = 1;
+  }
+
+  // find dot index
+  for (s64 i = start; i < s.count; i++) {
+    if (s.data[i] == '.') {
+      dot_idx = i;
+      break;
+    } else if (s.data[i] == 'e' || s.data[i] == 'E') {
+      // cop out with scientific notation
+      return 0.0;
+    }
+  }
+
+  if (dot_idx == -1) {
+    counter = (f64)str8_to_int(STR8(s.data + start, s.count - start));
+  } else {
+    // integer part
+    u32 p = 0;
+    for (s64 i = (s64)dot_idx - 1; i >= (s64)start; i-=1, p+=1) {
+      counter += (s.data[i] - '0') * pwr(10, p);
+    }
+
+    // fractional part
+    p = 1;
+    for (s64 i = dot_idx + 1; i < s.count; i+=1, p+=1) {
+      counter += (s.data[i] - '0') / pwr(10, p);
+    }
+  }
+
+  return counter * sign;
+}
 
 #endif
 
