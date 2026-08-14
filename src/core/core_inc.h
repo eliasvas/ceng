@@ -5,5 +5,6 @@
 #include "input.h"
 #include "bfont.h"
 #include "json_util.h"
+#include "gltf_loader.h"
 
 #endif
