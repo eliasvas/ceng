@@ -3,9 +3,17 @@
 #include "base/base_inc.h"
 #include "core/json_util.h"
 
-
-// TODO: Start parsing the compType to get type sizing (like for index buffer s16 vs s32)
+// Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 // TODO: Make it possible to output regular Tri_Vertex's + Index info so that previous pipeline can be used
+
+// extra INFO:
+//When two or more vertex attribute accessors use the same bufferView, its byteStride MUST be defined.
+
+
+typedef enum {
+  GLTF_ARRAY_BUFFER,         // vertex buffer
+  GLTF_ELEMENT_ARRAY_BUFFER, // index buffer
+} Gltf_Buffer_Kind;
 
 // This struct will pretty much contain all the gltf
 // fields, can be used for serializing or deserializing data
@@ -19,15 +27,44 @@ typedef struct Gltf2_Info {
   s32 buffer_count;
 
   str8 *buffer_views;
+  Gltf_Buffer_Kind *buffer_view_kinds;
+  s32 *buffer_view_strides;
   s32 buffer_view_count;
 
   str8 *accessors;
   s32 accessor_count;
 
-
 } Gltf2_Info;
 
+static Gltf_Buffer_Kind gltf_get_buffer_view_kind(s32 target) {
+  if (target == 34962) return GLTF_ARRAY_BUFFER;
+  if (target == 34963) return GLTF_ELEMENT_ARRAY_BUFFER;
+  return GLTF_ARRAY_BUFFER;
+}
 
+static s32 gltf_byte_count_from_comp_type(s32 comp_type) {
+  if (comp_type == 5120) return 1; // s8
+  if (comp_type == 5121) return 1; // u8
+  if (comp_type == 5122) return 2; // s16
+  if (comp_type == 5123) return 2; // u16
+  if (comp_type == 5125) return 4; // u32
+  if (comp_type == 5126) return 4; // f32
+  return 1;
+}
+
+static s32 gltf_comp_count_from_type(str8 type) {
+  if (str8_eq(type, STR8L("SCALAR"))) return 1;
+  if (str8_eq(type, STR8L("VEC2")))   return 2;
+  if (str8_eq(type, STR8L("VEC3")))   return 3;
+  if (str8_eq(type, STR8L("VEC4")))   return 4;
+  if (str8_eq(type, STR8L("MAT2")))   return 4;
+  if (str8_eq(type, STR8L("MAT3")))   return 9;
+  if (str8_eq(type, STR8L("MAT4")))   return 16;
+
+  return 1;
+}
+
+// FIXME: Make a base64 encode/decode utility in core layer
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
   Gltf2_Info info = {};
@@ -38,14 +75,15 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
 
   // 0. Parse meshes
   Json_Element* meshes_json = json_lookup(root, STR8L("meshes_json")); assert(meshes_json);
-  info.mdata = arena_push_array(arena, Mesh_Data, json_count_children(meshes_json));
+  info.mdata_count = json_count_children(meshes_json);
+  info.mdata = arena_push_array(arena, Mesh_Data, info.mdata_count);
   s32 mesh_idx = 0;
   for (Json_Element *mesh = meshes_json->first; mesh != nullptr; mesh = mesh->next, mesh_idx+=1) {
     Json_Element* primitives_json = json_lookup(meshes_json, STR8L("primitives")); assert(primitives_json);
     for (Json_Element *prim = primitives_json->first; prim != nullptr; prim = prim->next) {
       Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
 
-      // WHY attribs_json->first->first
+      // FIXME: WHY attribs_json->first->first
       for (Json_Element *attrib = attribs_json->first->first ; attrib != nullptr; attrib = attrib->next) {
         //printf("IAM ATTRIB %.*s -> %.*s \n", STR8_VARG(attrib->label), STR8_VARG(attrib->value));
         if (str8_eq(attrib->label, STR8L("POSITION"))) {
@@ -83,16 +121,29 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
 
   // 2. Parse bufferViews
   Json_Element* buffer_views_json = json_lookup(root, STR8L("bufferViews")); assert(buffer_views_json);
-  info.buffer_views = arena_push_array(arena, str8, json_count_children(buffer_views_json));
+  s32 buffer_views_count = json_count_children(buffer_views_json);
+  info.buffer_views = arena_push_array(arena, str8, buffer_views_count);
+  info.buffer_view_kinds = arena_push_array(arena, Gltf_Buffer_Kind, buffer_views_count); 
+  info.buffer_view_strides = arena_push_array(arena, s32, buffer_views_count);
   s32 view_idx = 0;
   for (Json_Element *b= buffer_views_json->first; b != nullptr; b = b->next, view_idx+=1) {
+    // Fill buffer_view array
     Json_Element* buf_idx = json_lookup(b, STR8L("buffer")); assert(buf_idx);
     Json_Element* offset  = json_lookup(b, STR8L("byteOffset")); assert(offset);
     Json_Element* length  = json_lookup(b, STR8L("byteLength")); assert(length);
-    //Json_Element* target = json_lookup(buffer_views_json, STR8L("target")); assert(target);
-
     info.buffer_views[view_idx].data = str8_to_int(offset->value) + info.buffers[str8_to_int(buf_idx->value)].data;
     info.buffer_views[view_idx].count = str8_to_int(length->value);
+
+    // Fill buffer_view_kind array
+    Json_Element* target = json_lookup(buffer_views_json, STR8L("target")); assert(target);
+    Gltf_Buffer_Kind kind = gltf_get_buffer_view_kind(str8_to_int(target->value));
+    info.buffer_view_kinds[view_idx] = kind;
+
+    // Fill buffer_view_strides array (optional field)
+    Json_Element* stride = json_lookup(buffer_views_json, STR8L("byteStride"));
+    if (stride) {
+      info.buffer_view_strides[view_idx] = str8_to_int(stride->value);
+    }
   }
 
   // 3. Parse accessors
@@ -115,6 +166,45 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
 
   return info;
 }
+
+
+static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf2_Info info, s64 *vcount) {
+
+  s64 actual_vcount = 0;
+  for (s32 i = 0; i < info.mdata_count; i+=1) {
+    Mesh_Data *md = &info.mdata[i];
+
+    // FIXME: can't get buffer view from accessor right now
+    // should probably model the whole thing.. ughh (We lose sizing info inside accessor)
+    actual_vcount += info.accessors[md->indices_idx].count;
+  }
+  *vcount = actual_vcount;
+  printf("vcount: %ld\n", *vcount);
+  Tri_Vertex *verts = arena_push_array(arena, Tri_Vertex, actual_vcount);
+
+  s64 vert_idx = 0;
+  for (s32 i = 0; i < info.mdata_count; i+=1) {
+    Mesh_Data *md = &info.mdata[i];
+
+    s16 *indices = (s16*)info.accessors[md->indices_idx].data;
+    s64 indices_count = info.accessors[md->indices_idx].count;
+    f32 *positions = (f32*)info.accessors[md->pos_idx].data;
+
+    for (s64 idx = 0; idx < indices_count; idx+=1) {
+      s32 vidx = indices[idx];
+      v3 *vpos = (v3*)(&positions[3 * vidx]);
+      verts[vert_idx].pos = *(vpos);
+
+      // Only for testing rn
+      verts[vert_idx].color = FRZ_RED;
+      vert_idx+=1;
+    }
+  }
+
+  return verts;
+}
+
+
 
 static const unsigned char base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len)

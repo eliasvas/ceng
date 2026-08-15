@@ -14,7 +14,8 @@
 extern void platform_play_sound(const char *sound);
 
 // Just for testing
-Tri_Vertex gltf_verts[3] = {};
+Tri_Vertex *gltf_verts = nullptr;
+s64 gltf_verts_count = 0;
 
 void game_init(Game_State *gs) {
   entity_store_init();
@@ -64,23 +65,12 @@ void game_init(Game_State *gs) {
   /////////////////////////////////////////////////////////////
   /// Make this into the assert test for the json parser too1
   /////////////////////////////////////////////////////////////
-  gltf_verts[0] = (FRZ_Vertex) {.pos = v3m(-0.0, -0.5, +0.5), .uv = v2m(0,0), .color = FRZ_RED,};
-  gltf_verts[1] = (FRZ_Vertex) {.pos = v3m(+0.0, -0.5, +0.5), .uv = v2m(1,0), .color = FRZ_GREEN,};
-  gltf_verts[2] = (FRZ_Vertex) {.pos = v3m(+0.0, +0.5, +0.5), .uv = v2m(1,1), .color = FRZ_WHITE,};
-  // parse gltf and get the actual data
-
   Gltf2_Info info = gltf2_load(gs->frame_arena, test_json_str);
-  Mesh_Data *md = &info.mdata[0];
-  s16 *indices = (s16*)info.accessors[md->indices_idx].data;
-  s64 indices_count = info.accessors[md->indices_idx].count;
+  s64 vcount = 0;
+  Tri_Vertex* verts = gltf_to_basic_mesh_bundle(gs->persistent_arena, info, &vcount); assert(verts);
+  gltf_verts_count = vcount;
+  gltf_verts = verts;
 
-  f32 *positions = (f32*)info.accessors[md->pos_idx].data;
-  for (s64 i= 0; i < indices_count; i+=1) {
-    s32 vidx = indices[i];
-    v3 *vpos = (v3*)(&positions[3 * vidx]);
-
-    gltf_verts[i].pos = *(vpos);
-  }
 
 }
 
@@ -132,7 +122,7 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
   rn_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 
-  rn_imm_verts(gs->game_viewport, gltf_verts, 3, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
+  rn_imm_verts(gs->game_viewport, gltf_verts, gltf_verts_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
 }
 
 void game_render(Game_State *gs, float dt) {
