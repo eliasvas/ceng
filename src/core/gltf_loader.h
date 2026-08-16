@@ -4,16 +4,28 @@
 #include "core/json_util.h"
 
 // Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
-// TODO: Make it possible to output regular Tri_Vertex's + Index info so that previous pipeline can be used
-
-// extra INFO:
-//When two or more vertex attribute accessors use the same bufferView, its byteStride MUST be defined.
-
 
 typedef enum {
   GLTF_ARRAY_BUFFER,         // vertex buffer
   GLTF_ELEMENT_ARRAY_BUFFER, // index buffer
 } Gltf_Buffer_Kind;
+
+//typedef struct { str8 data; s64 count; s64 offset; } Gltf_Buffer;
+typedef struct {
+  s32 buf_idx;
+  s64 byte_offset;
+  s64 byte_length;
+  s64 byte_stride;
+  Gltf_Buffer_Kind kind;
+} Gltf_Buffer_View;
+
+typedef struct {
+  s32 bufv_idx;
+  s64 byte_offset;
+  s64 count;
+  s32 bytes_per_elem;
+  s32 comp_per_elem;
+} Gltf_Accessor;
 
 // This struct will pretty much contain all the gltf
 // fields, can be used for serializing or deserializing data
@@ -26,12 +38,10 @@ typedef struct Gltf2_Info {
   str8 *buffers;
   s32 buffer_count;
 
-  str8 *buffer_views;
-  Gltf_Buffer_Kind *buffer_view_kinds;
-  s32 *buffer_view_strides;
-  s32 buffer_view_count;
+  Gltf_Buffer_View *buffer_views;
+  s32 buffer_views_count;
 
-  str8 *accessors;
+  Gltf_Accessor *accessors;
   s32 accessor_count;
 
 } Gltf2_Info;
@@ -123,72 +133,76 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
   Json_Element* buffer_views_json = json_lookup(root, STR8L("bufferViews")); assert(buffer_views_json);
   s32 buffer_views_count = json_count_children(buffer_views_json);
   info.buffer_views = arena_push_array(arena, str8, buffer_views_count);
-  info.buffer_view_kinds = arena_push_array(arena, Gltf_Buffer_Kind, buffer_views_count); 
-  info.buffer_view_strides = arena_push_array(arena, s32, buffer_views_count);
   s32 view_idx = 0;
   for (Json_Element *b= buffer_views_json->first; b != nullptr; b = b->next, view_idx+=1) {
     // Fill buffer_view array
     Json_Element* buf_idx = json_lookup(b, STR8L("buffer")); assert(buf_idx);
     Json_Element* offset  = json_lookup(b, STR8L("byteOffset")); assert(offset);
     Json_Element* length  = json_lookup(b, STR8L("byteLength")); assert(length);
-    info.buffer_views[view_idx].data = str8_to_int(offset->value) + info.buffers[str8_to_int(buf_idx->value)].data;
-    info.buffer_views[view_idx].count = str8_to_int(length->value);
-
-    // Fill buffer_view_kind array
     Json_Element* target = json_lookup(buffer_views_json, STR8L("target")); assert(target);
-    Gltf_Buffer_Kind kind = gltf_get_buffer_view_kind(str8_to_int(target->value));
-    info.buffer_view_kinds[view_idx] = kind;
-
-    // Fill buffer_view_strides array (optional field)
     Json_Element* stride = json_lookup(buffer_views_json, STR8L("byteStride"));
-    if (stride) {
-      info.buffer_view_strides[view_idx] = str8_to_int(stride->value);
-    }
+
+    info.buffer_views[view_idx].buf_idx = str8_to_int(buf_idx->value);
+    info.buffer_views[view_idx].byte_offset = str8_to_int(offset->value);
+    info.buffer_views[view_idx].byte_length = str8_to_int(length->value);
+    info.buffer_views[view_idx].kind = gltf_get_buffer_view_kind(str8_to_int(target->value));
+    if (stride) info.buffer_views[view_idx].byte_stride = str8_to_int(stride->value);
+
   }
 
   // 3. Parse accessors
   Json_Element* accessors_json = json_lookup(root, STR8L("accessors")); assert(accessors_json);
-  info.accessors = arena_push_array(arena, str8, json_count_children(accessors_json));
+  info.accessors = arena_push_array(arena, Gltf_Accessor, json_count_children(accessors_json));
   s32 acc_idx = 0;
   for (Json_Element *a= accessors_json->first; a != nullptr; a = a->next, acc_idx+=1) {
     Json_Element* bufv_idx = json_lookup(a, STR8L("bufferView")); assert(bufv_idx);
     Json_Element* offset  = json_lookup(a, STR8L("byteOffset")); assert(offset);
-    //Json_Element* compType = json_lookup(a, STR8L("componentTYpe")); assert(compType);
+    Json_Element* comp_type = json_lookup(a, STR8L("componentType")); assert(comp_type);
     Json_Element* count = json_lookup(a, STR8L("count")); assert(count);
     Json_Element* type = json_lookup(a, STR8L("type")); assert(type);
     //Json_Element* max = json_lookup(a, STR8L("max")); assert(max);
     //Json_Element* min = json_lookup(a, STR8L("min")); assert(min);
 
-    info.accessors[acc_idx].data = str8_to_int(offset->value) + info.buffer_views[str8_to_int(bufv_idx->value)].data;
+    info.accessors[acc_idx].bufv_idx = str8_to_int(bufv_idx->value);
+    info.accessors[acc_idx].byte_offset = str8_to_int(offset->value);
     info.accessors[acc_idx].count = str8_to_int(count->value);
+    info.accessors[acc_idx].bytes_per_elem = gltf_byte_count_from_comp_type(str8_to_int(comp_type->value));
+    info.accessors[acc_idx].comp_per_elem = gltf_comp_count_from_type(type->value);
   }
-
 
   return info;
 }
 
+static u8* gltf_data_from_accessor(Gltf2_Info info, s32 acc_idx, s32 *stride) {
+  s32 bufv_idx = info.accessors[acc_idx].bufv_idx;
+  s32 buf_idx = info.buffer_views[bufv_idx].buf_idx;
+  u8 *buf_data = info.buffers[buf_idx].data;
+  s64 bufv_offset = info.buffer_views[bufv_idx].byte_offset;
+  s64 acc_offset = info.accessors[acc_idx].byte_offset;
+  if (stride) *(stride) = info.buffer_views[bufv_idx].byte_stride; 
+
+  return (u8*)(buf_data + bufv_offset + acc_offset);
+}
 
 static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf2_Info info, s64 *vcount) {
-
   s64 actual_vcount = 0;
   for (s32 i = 0; i < info.mdata_count; i+=1) {
     Mesh_Data *md = &info.mdata[i];
 
-    // FIXME: can't get buffer view from accessor right now
-    // should probably model the whole thing.. ughh (We lose sizing info inside accessor)
+    // FIXME: We presuppose every mesh has indices.. is that expected? check spec
     actual_vcount += info.accessors[md->indices_idx].count;
   }
   *vcount = actual_vcount;
-  printf("vcount: %ld\n", *vcount);
+
   Tri_Vertex *verts = arena_push_array(arena, Tri_Vertex, actual_vcount);
 
   s64 vert_idx = 0;
   for (s32 i = 0; i < info.mdata_count; i+=1) {
     Mesh_Data *md = &info.mdata[i];
 
-    s16 *indices = (s16*)info.accessors[md->indices_idx].data;
+    s16 *indices = (s16*)gltf_data_from_accessor(info, md->indices_idx, nullptr);
     s64 indices_count = info.accessors[md->indices_idx].count;
-    f32 *positions = (f32*)info.accessors[md->pos_idx].data;
+    f32 *positions = (f32*)gltf_data_from_accessor(info, md->pos_idx, nullptr);
 
     for (s64 idx = 0; idx < indices_count; idx+=1) {
       s32 vidx = indices[idx];
@@ -203,6 +217,7 @@ static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf2_Info info, s64 
 
   return verts;
 }
+
 
 
 
