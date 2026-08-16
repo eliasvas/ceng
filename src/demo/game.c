@@ -65,12 +65,12 @@ void game_init(Game_State *gs) {
   /////////////////////////////////////////////////////////////
   /// Make this into the assert test for the json parser too1
   /////////////////////////////////////////////////////////////
+  base_64_test(gs->frame_arena);
   Gltf2_Info info = gltf2_load(gs->frame_arena, test_json_str);
   s64 vcount = 0;
   Tri_Vertex* verts = gltf_to_basic_mesh_bundle(gs->persistent_arena, info, &vcount); assert(verts);
   gltf_verts_count = vcount;
   gltf_verts = verts;
-
 
 }
 
