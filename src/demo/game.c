@@ -25,10 +25,10 @@ void game_init(Game_State *gs) {
   hero->kind = ENTITY_KIND_HERO;
   hero->dynamic = true;
   hero->box = (Phys_Box) {
-    .pos = HMM_V3(1,4,1),
-    .col_off = HMM_V3(0,0,0),
-    .hdim = HMM_V3(0.3, 0.5, 0.3),
-    .col_hdim = HMM_V3(0.5,0.5,0.5),
+    .pos = v3m(1,4,1),
+    .col_off = v3m(0,0,0),
+    .hdim = v3m(0.3, 0.5, 0.3),
+    .col_hdim = v3m(0.5,0.5,0.5),
   };
   hero->col = v4m(0.9,0.4,0.3,1.0);
   
@@ -38,10 +38,10 @@ void game_init(Game_State *gs) {
       Entity *test = entity_store_add();
       test->dynamic = false;
       test->box = (Phys_Box) {
-        .pos = HMM_V3(width,height,1),
-        .col_off = HMM_V3(0,0,0),
-        .col_hdim = HMM_V3(0.5,0.5,0.5),
-        .hdim = HMM_V3(0.5,0.5,0.5),
+        .pos = v3m(width,height,1),
+        .col_off = v3m(0,0,0),
+        .col_hdim = v3m(0.5,0.5,0.5),
+        .hdim = v3m(0.5,0.5,0.5),
       };
       test->col = v4m(0.2,0.4,0.9,1.0);
     }
@@ -50,14 +50,14 @@ void game_init(Game_State *gs) {
   Entity *ground = entity_store_add();
   ground->dynamic = false;
   ground->box = (Phys_Box) {
-    .pos = HMM_V3(0,-1.01,0),
-    .col_off = HMM_V3(0,0,0),
-    .col_hdim = HMM_V3(4,1,4),
-    .hdim = HMM_V3(4,1,4),
+    .pos = v3m(0,-1.01,0),
+    .col_off = v3m(0,0,0),
+    .col_hdim = v3m(4,1,4),
+    .hdim = v3m(4,1,4),
   };
   ground->col = v4m(0.4,0.4,0.4,1.0);
 
-  gs->view = HMM_LookAt_RH(HMM_V3(0,8,10), HMM_V3(0,0,0), HMM_V3(0,1,0));
+  gs->view = m4_look_at(v3m(0,8,10), v3m(0,0,0), v3m(0,1,0));
 
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
@@ -76,19 +76,8 @@ void game_init(Game_State *gs) {
 
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
-  gs->proj = HMM_Perspective_RH_NO(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
 
-
-  // Camera stuff (This is wrong because we post-multiply.. FIXME)
-  v2 mouse_delta = input_get_mouse_delta(&gs->input);
-  if (input_mkey_down(&gs->input, INPUT_MOUSE_RMB)) { 
-    HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(0,1,0), mouse_delta.x*dt);
-    gs->view = HMM_Mul(gs->view, HMM_QToM4(rot_q));
-  }
-  if (input_mkey_down(&gs->input, INPUT_MOUSE_RMB)) { 
-    HMM_Quat rot_q = HMM_QFromAxisAngle_RH(HMM_V3(1,0,0), mouse_delta.y*dt);
-    gs->view = HMM_Mul(gs->view, HMM_QToM4(rot_q));
-  }
 }
 
 void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
@@ -96,8 +85,8 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   Tri_Vertex *points = arena_push_array(gs->frame_arena, Tri_Vertex, line_count_per_axis*4);
   color c1 = v4m(0.7,0.7,0.7,1);
 
-  HMM_Mat4 model = HMM_Translate(HMM_V3(0, 0, 0));
-  HMM_Mat4 mvp = HMM_Mul(HMM_Mul(gs->proj, gs->view), model);
+  m4 model = m4_translate(v3m(0, 0, 0));
+  m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
 
   s32 point_idx = 0;
 

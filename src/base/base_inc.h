@@ -11,6 +11,5 @@
 #include "easing.h"
 #include "brand.h"
 #include "time_util.h"
-#include "HandmadeMath/HandmadeMath.h"
 
 #endif

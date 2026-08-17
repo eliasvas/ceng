@@ -1,12 +1,3 @@
 [submodule "ext/stb"]
 	path = ext/stb
 	url = https://github.com/nothings/stb.git
-[submodule "ext/RGFW"]
-	path = ext/RGFW
-	url = https://github.com/ColleagueRiley/RGFW.git
-[submodule "ext/miniaudio"]
-	path = ext/miniaudio
-	url = https://github.com/mackron/miniaudio
-[submodule "ext/HandmadeMath"]
-	path = ext/HandmadeMath
-	url = https://github.com/HandmadeMath/HandmadeMath

@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 
 // dlopen/dlclose
 #include <dlfcn.h>
@@ -13,8 +14,6 @@
 #define BRAND_IMPLEMENTATION
 #define PROFILER_IMPLEMENTATION
 #include "base/base_inc.h"
-#define STB_SPRINTF_IMPLEMENTATION
-#include <stb/stb_sprintf.h>
 
 #define OGL_IMPLEMENTATION
 #include "rend/rend_inc.h"

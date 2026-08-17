@@ -181,43 +181,54 @@ INLINE m4 m4_rotate(f32 angle, v3 axis) {
 }
 
 // World-Space -> View-Space
-INLINE m4 m4_view(v3 eye, v3 target, v3 fake_up) {
-  m4 m = m4d(1.0);
-  v3 fwd  = v3_norm(v3_sub(eye, target));
-  v3 left = v3_norm(v3_cross(fake_up, fwd));
-  v3 up   = v3_cross(fwd, left);
-  // rotation
-  m.raw[0]  = left.x;
-  m.raw[4]  = left.y;
-  m.raw[8]  = left.z;
-  m.raw[1]  = up.x;
-  m.raw[5]  = up.y;
-  m.raw[9]  = up.z;
-  m.raw[2]  = fwd.x;
-  m.raw[6]  = fwd.y;
-  m.raw[10] = fwd.z;
-  // translation
-  m.raw[12] = -v3_dot(left, eye);
-  m.raw[13] = -v3_dot(up, eye);
-  m.raw[14] = -v3_dot(fwd, eye);
+INLINE m4 _m4_look_at(v3 F, v3 S, v3 U, v3 Eye) {
+  m4 m = {};
+
+  m.col[0][0] = S.x;
+  m.col[0][1] = U.x;
+  m.col[0][2] = -F.x;
+  m.col[0][3] = 0.0f;
+
+  m.col[1][0] = S.y;
+  m.col[1][1] = U.y;
+  m.col[1][2] = -F.y;
+  m.col[1][3] = 0.0f;
+
+  m.col[2][0] = S.z;
+  m.col[2][1] = U.z;
+  m.col[2][2] = -F.z;
+  m.col[2][3] = 0.0f;
+
+  m.col[3][0] = -v3_dot(S, Eye);
+  m.col[3][1] = -v3_dot(U, Eye);
+  m.col[3][2] = v3_dot(F, Eye);
+  m.col[3][3] = 1.0f;
+
   return m;
 }
+INLINE m4 m4_look_at(v3 eye, v3 center, v3 up) {
+  v3 F = v3_norm(v3_sub(center, eye));
+  v3 S = v3_norm(v3_cross(F, up));
+  v3 U = v3_cross(S, F);
+
+  return _m4_look_at(F, S, U, eye);
+}
+
 
 // View-Space -> Clip-Space
 // fovx in degrees, aspect is w/h
+// See https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluPerspective.xml
 INLINE m4 m4_persp(f32 fovx, f32 aspect, f32 near, f32 far) {
   m4 m = {};
-  f32 D2R = acos(-1.0f) / 180;
 
-  f32 tangent = tan(fovx/2 * D2R);
-  f32 right = near * tangent;
-  f32 top = right / aspect;
-  m.raw[0]  =  near / right;
-  m.raw[5]  =  near / top;
-  m.raw[10] = -(far + near) / (far - near);
-  m.raw[11] = -1;
-  m.raw[14] = -(2 * far * near) / (far - near);
-  m.raw[15] =  0;
+  float cot = 1.0f / tan(fovx / 2.0f);
+  m.col[0][0] = cot / aspect;
+  m.col[1][1] = cot;
+  m.col[2][3] = -1.0f;
+
+  m.col[2][2] = (near + far) / (near - far);
+  m.col[3][2] = (2.0f * near * far) / (near - far);
+
   return m;
 }
 
