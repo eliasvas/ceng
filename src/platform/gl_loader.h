@@ -279,7 +279,7 @@ extern int GL_loadGL(GLloadfunc proc);
 
 #include <stdio.h>
 
-const GLubyte * gluErrorString(	GLenum error);
+const GLubyte *gluErrorString(GLenum error);
 
 #if 1
 int GL_loadGL(GLloadfunc proc) {

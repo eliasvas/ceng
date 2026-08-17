@@ -3,18 +3,18 @@
 #include <assert.h>
 #include <sys/stat.h>
 
+// dlopen/dlclose
+#include <dlfcn.h>
+
+#include <SDL3/SDL.h>
+#include "gl_loader.h"
+
 #define STR_IMPLEMENTATION
 #define BRAND_IMPLEMENTATION
 #define PROFILER_IMPLEMENTATION
 #include "base/base_inc.h"
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
-
-#if (ARCH_WASM64 || ARCH_WASM32)
-#include <GLES3/gl3.h>
-#else
-#include "gl_loader.h"
-#endif
 
 #define OGL_IMPLEMENTATION
 #include "rend/rend_inc.h"
@@ -25,31 +25,12 @@
 // TODO: Stop the asset manager single module bullshit
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
-
-// DESKTOP: Because miniaudio has TOO MANY warnings when building
-// I have opted to put it in its own SILENT compilation unit (no -Wall)
-#if (ARCH_WASM64 || ARCH_WASM32)
-#define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio/miniaudio.h"
-#else
-#include "miniaudio/miniaudio.h"
-#endif
-
 #include "game.h"
 
-#define RGFW_DEBUG
-#define RGFW_IMPLEMENTATION
-#define RGFW_OPENGL
-#define RGFW_ALLOC_DROPFILES
-#define RGFW_PRINT_ERRORS
-#define RGFW_DEBUG
-#define GL_SILENCE_DEPRECATION
-#include <RGFW/RGFW.h>
 
-ma_engine ma_eng;
 // Currently we just export this to the game layer, there should be better way
 void platform_play_sound(const char *sound) {
-  ma_engine_play_sound(&ma_eng, sound, nullptr);
+  // TODO: SDL3_sound?
 }
 
 u64 platform_read_cpu_timer() {
@@ -127,48 +108,53 @@ int main(void) {
   Game_Api game_api = {};
 
   /////////////////////////////////////////////////////
-  // 0. RGFW initialization (window + OpenGL)
+  // 0. SDL3 initialization (window + OpenGL)
   /////////////////////////////////////////////////////
-  RGFW_glHints* hints = RGFW_getGlobalHints_OpenGL();
-#if (ARCH_WASM64 || ARCH_WASM32)
-  hints->major = 3;
-  hints->minor = 0;
-  hints->profile = RGFW_glES;
-#else
-  hints->major = 4;
-  hints->minor = 3;
-  //hints->profile = RGFW_glCompatibility;
-  hints->profile = RGFW_glCore;
-#endif // (ARCH_WASM64 || ARCH_WASM32)
 
-  RGFW_setGlobalHints_OpenGL(hints);
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
+      fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+      return 1;
+  }
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-  RGFW_window* win = RGFW_createWindow("window", 0, 0, 800, 600, RGFW_windowCenter | RGFW_windowNoResize | RGFW_windowHide);
-  RGFW_window_createContext_OpenGL(win, hints);
-  RGFW_window_show(win);
-  RGFW_window_setExitKey(win, RGFW_keyEscape);
-  RGFW_window_swapInterval_OpenGL(win, 1);
-  const GLubyte *version = glGetString(GL_VERSION);
-  printf("OpenGL Version: %s\n", version);
+  SDL_Window *window = SDL_CreateWindow("window", 800, 600, SDL_WINDOW_OPENGL);
+  if (!window) {
+      fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+      SDL_Quit();
+      return 1;
+  }
 
-#if !(ARCH_WASM64 || ARCH_WASM32)
-  if (GL_loadGL((GLloadfunc)RGFW_getProcAddress_OpenGL)) {
+  SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+  if (!gl_context) {
+      fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+      SDL_DestroyWindow(window);
+      SDL_Quit();
+      return 1;
+  }
+  // VSYNC I Think?
+  //SDL_GL_SetSwapInterval(1);
+
+  if (!SDL_GL_MakeCurrent(window, gl_context)) {
+      fprintf(stderr, "SDL_GL_MakeCurrent failed: %s\n", SDL_GetError());
+      SDL_GL_DestroyContext(gl_context);
+      SDL_DestroyWindow(window);
+      SDL_Quit();
+      return 1;
+  }
+
+  if (GL_loadGL((GLloadfunc)SDL_GL_GetProcAddress)) {
       printf("Failed to load OpenGL functions\n");
       return -1;
   }
-#endif // !(ARCH_WASM64 || ARCH_WASM32)
-  /////////////////////////////////////////////////////
-  // 1. miniaudio initialization
-  /////////////////////////////////////////////////////
-  ma_result result;
-  ma_engine_config engineConfig;
-  engineConfig = ma_engine_config_init();
-  result = ma_engine_init(&engineConfig, &ma_eng);
-  if (result != MA_SUCCESS) {
-      return result;
-  }
-  ma_engine_set_volume(&ma_eng, 0.05);
-  printf("miniaudio engine OK\n");
+
+  printf("OpenGL vendor:   %s\n", glGetString(GL_VENDOR));
+  printf("OpenGL renderer: %s\n", glGetString(GL_RENDERER));
+  printf("OpenGL version:  %s\n", glGetString(GL_VERSION));
+  printf("GLSL version:    %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
   /////////////////////////////////////////////////////
   // 2. Game_State initialization
@@ -197,12 +183,11 @@ int main(void) {
   /////////////////////////////////////////////////////
   // 3. Game Loop
   /////////////////////////////////////////////////////
-  while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
+
+  while (true) {
     frame_count+=1;
     u64 frame_start = platform_read_cpu_timer();
-#if !(ARCH_WASM64 || ARCH_WASM32)
     ogl_clear();
-#endif // !(ARCH_WASM64 || ARCH_WASM32)
     arena_clear(gs.frame_arena);
 
     /////////////////////////////////////////////////////
@@ -215,80 +200,52 @@ int main(void) {
     /////////////////////////////////////////////////////
     // 3.2 Handling incoming events for the frame
     /////////////////////////////////////////////////////
-    RGFW_event event = {};
-    while (RGFW_window_checkEvent(win, &event)) {
-      Input_Event_Node input_event = {};
-      switch(event.type) {
-        case RGFW_windowResized:
-          gs.wdim = v2m(event.update.w, event.update.h);
-          input_event.evt = (Input_Event){
-            .kind = INPUT_EVENT_KIND_RESIZE,
-          };
-          break;
-        case RGFW_mousePosChanged:
-          // We make the mouse bottom-left based because we like OpenGL-coords everywhere
-          v2 new_mp = v2m(event.mouse.x, gs.wdim.y - event.mouse.y);
-          input_event.evt = (Input_Event){
-            .data.mme = (Input_MouseMotion_Event) { .mouse_pos = new_mp },
-            .kind = INPUT_EVENT_KIND_MOUSEMOTION,
-          };
-          break;
-        case RGFW_keyPressed:
-        case RGFW_keyReleased:
-          if (event.key.repeat == 1) continue;
-          s32 value = event.key.value;
-          s32 scancode = 0;
-          // @TODO: More keys mapped needed here please
-          if (value >= 'A' && value <= 'Z') scancode = KEY_SCANCODE_A + (value-'A');
-          else if (value >= 'a' && value <= 'z') scancode = KEY_SCANCODE_A + (value-'a');
-          else if (value >= '0' && value <= '9') scancode = (value == '0') ? KEY_SCANCODE_0 : KEY_SCANCODE_1 + (value - '1');
-          else if (value == RGFW_keyUp) scancode = KEY_SCANCODE_UP;
-          else if (value == RGFW_keyDown) scancode = KEY_SCANCODE_DOWN;
-          else if (value == RGFW_keyLeft) scancode = KEY_SCANCODE_LEFT;
-          else if (value == RGFW_keyRight) scancode = KEY_SCANCODE_RIGHT;
-          else if (value == RGFW_keyTab) scancode = KEY_SCANCODE_TAB;
-          else if (value == RGFW_keyShiftL) scancode = KEY_SCANCODE_LSHIFT;
-          else if (value == RGFW_keyShiftR) scancode = KEY_SCANCODE_LSHIFT;
-          else if (value == RGFW_keyControlL) scancode = KEY_SCANCODE_LCTRL;
-          else if (value == RGFW_keyControlR) scancode = KEY_SCANCODE_RCTRL;
-          else if (value == RGFW_keyAltL) scancode = KEY_SCANCODE_LALT;
-          else if (value == RGFW_keyAltR) scancode = KEY_SCANCODE_RALT;
-          else if (value == RGFW_keySpace) scancode = KEY_SCANCODE_SPACE;
 
-          input_event.evt = (Input_Event){
-            .data.ke = (Input_Keeb_Event) {
-              .scancode = (Key_Scancode)scancode,
-              .is_down = (event.type == RGFW_keyPressed),
-            },
-            .kind = INPUT_EVENT_KIND_KEEB,
-          };
-          break;
-        case RGFW_mouseButtonPressed:
-        case RGFW_mouseButtonReleased:
-          b32 button_idx = event.button.value;
-          if (button_idx >= INPUT_MOUSE_COUNT) continue; // no handling
-          input_event.evt = (Input_Event){
-            .data.me = (Input_Mouse_Event) {
-              .button = (Input_Mouse_Button)(button_idx),
-              .is_down = (event.type == RGFW_mouseButtonPressed),
-            },
-            .kind = INPUT_EVENT_KIND_MOUSE,
-          };
-          break;
-        case RGFW_mouseScroll:
-          v2 scroll_amount = v2m(event.delta.x, event.delta.y);
-          input_event.evt = (Input_Event){
-            .data.mwe = (Input_MouseWheel_Event) { .wheel_delta= scroll_amount },
-            .kind = INPUT_EVENT_KIND_MOUSEWHEEL,
-          };
-          break;
-        default:
-          continue;
-          break;
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_EVENT_QUIT) {
+        exit(1);
+      }
+      Input_Event_Node input_event = {};
+      if (event.type == SDL_EVENT_QUIT) {
+        return SDL_APP_SUCCESS;
+      } else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+        // Update Game_State with new window dimensions
+        gs.wdim = v2m(event.window.data1, event.window.data2);
+        input_event.evt = (Input_Event){
+          .kind = INPUT_EVENT_KIND_RESIZE,
+        };
+      } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        v2 mouse_pos = v2m(event.motion.x, gs.wdim.y - event.motion.y);
+        input_event.evt = (Input_Event){
+          .data.mme = (Input_MouseMotion_Event) { .mouse_pos = mouse_pos },
+          .kind = INPUT_EVENT_KIND_MOUSEMOTION,
+        };
+      } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+        v2 wheel_delta = v2m(event.wheel.x, event.wheel.y);
+        input_event.evt = (Input_Event){
+          .data.mwe = (Input_MouseWheel_Event) { .wheel_delta = wheel_delta },
+          .kind = INPUT_EVENT_KIND_MOUSEWHEEL,
+        };
+      } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        input_event.evt = (Input_Event){
+          .data.me = (Input_Mouse_Event) {
+            .button = (Input_Mouse_Button)(event.button.button - 1),
+            .is_down = (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN),
+          },
+          .kind = INPUT_EVENT_KIND_MOUSE,
+        };
+      } else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+        input_event.evt = (Input_Event){
+          .data.ke = (Input_Keeb_Event) {
+            .scancode = (Key_Scancode)event.key.scancode,
+            .is_down = (event.type == SDL_EVENT_KEY_DOWN),
+          },
+          .kind = INPUT_EVENT_KIND_KEEB,
+        };
       }
       input_push_event(&gs.input, gs.frame_arena, &input_event.evt);
     }
-
     input_process_events(&gs.input);
 
     /////////////////////////////////////////////////////
@@ -316,7 +273,7 @@ int main(void) {
   // Swap the window 
   {
     TIME_BLOCK("Swap Window");
-    RGFW_window_swapBuffers_OpenGL(win);
+    SDL_GL_SwapWindow(window);
   }
 #endif // !(ARCH_WASM64 || ARCH_WASM32)
 
@@ -325,26 +282,15 @@ int main(void) {
     /////////////////////////////////////////////////////
     input_end_frame(&gs.input);
     u64 frame_end = platform_read_cpu_timer();
-#if (ARCH_WASM64 || ARCH_WASM32)
-    dt = (frame_end - frame_start) / (f64)get_nano_freq();
-    f64 wasm_target_ms = 16.66;
-    f64 sleep_ms = wasm_target_ms - (dt * 1000);
-    dt = wasm_target_ms / 1000.0;
-    gs.time_sec += wasm_target_ms / 1000.0;
-    emscripten_sleep((u32)sleep_ms);
-#else 
     dt = (frame_end - frame_start) / (f64)get_nano_freq();
     gs.time_sec += platform_get_time() - frame_start / (f64) get_nano_freq();
     //printf("fps=%f begin=%f end=%f\n", 1.0/dt, (f32)frame_start, (f32)frame_end);
     //printf("sec: %f\n", gs.time_sec);
-#endif // (ARCH_WASM64 || ARCH_WASM32)
-
   }
 
   /////////////////////////////////////////////////////
   // 4. Print profiler info + cleanup (optional)
   /////////////////////////////////////////////////////
   profiler_end_and_print();
-  RGFW_window_close(win);
   return 0;
 }

@@ -69,7 +69,7 @@ mkdir -p "$OUTPUT_DIR"
 
 CFLAGS="${CFLAGS:-} -std=gnu23"
 #@TODO: remove -lgame we NEED the reload ok?! only for release builds this bullshit
-CLIBS="-lX11 -lGL -lXrandr -lm -lgame"
+CLIBS="-lGL -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
@@ -87,15 +87,6 @@ elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
 [ $? -eq 0 ] && echo "done in ($elapsed) ✅" || { echo "failed ❌"; exit 1; }
 
 # -----------------------------
-# Build miniaudio
-# -----------------------------
-start=$(date +%s.%3N)
-echo "Building miniaudio.."
-$CC $DEBUG_FLAGS $INCLUDE_DIRS "$EXT_DIR/miniaudio/miniaudio.c" -shared -fPIC -lm -o "$OUTPUT_DIR/ma.o"
-elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
-[ $? -eq 0 ] && echo "done in ($elapsed) ✅" || { echo "failed ❌"; exit 1; }
-
-# -----------------------------
 # Build the engine executable
 # -----------------------------
 start=$(date +%s.%3N)
@@ -106,10 +97,10 @@ $CC $CFLAGS $DEBUG_FLAGS \
     -L"$OUTPUT_DIR" \
     src/core/*.c \
     src/rend/*.c \
-    src/platform/platform_rgfw.c \
-    "$OUTPUT_DIR/ma.o" \
+    src/platform/platform_sdl3.c \
     -o "$OUTPUT_DIR/ceng" \
     $CLIBS \
+    $(pkg-config --cflags --libs sdl3) \
     -Wl,-rpath,'$ORIGIN'
 popd > /dev/null
 elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
