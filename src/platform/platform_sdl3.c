@@ -8,6 +8,7 @@
 #include <dlfcn.h>
 
 #include <SDL3/SDL.h>
+
 #include "gl_loader.h"
 
 #define STR_IMPLEMENTATION
@@ -26,11 +27,260 @@
 #include "asset/asset_mgr.h"
 #include "game.h"
 
+#define USE_SDL3_IO 1
 
-// Currently we just export this to the game layer, there should be better way
-void platform_play_sound(const char *sound) {
-  // TODO: SDL3_sound?
+// @MustImplement
+#if USE_SDL3_IO
+#include <SDL3_image/SDL_image.h>
+u8* platform_img_to_raw(Arena *arena, str8 image_data, v2 *out_dim) {
+  SDL_IOStream* io = SDL_IOFromConstMem(image_data.data, image_data.count);
+  SDL_Surface* surface = IMG_Load_IO(io, true);
+  if (!surface) {
+    printf("IMG_Load_IO failed: %s\n", SDL_GetError());
+    // FIXME: Why? -> look at bfont.. when we make a font atlas, we have only CPU image data, not-png but raw.
+    // In case the surface couldn't be created we assume the image is raw and square..
+    out_dim->x = sqrt_f64(image_data.count / (sizeof(u32))); 
+    out_dim->y = out_dim->x; 
+    return image_data.data;
+  } else {
+    SDL_Surface *rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+    out_dim->x = rgba->w;
+    out_dim->y = rgba->h;
+    SDL_FlipSurface(rgba, SDL_FLIP_VERTICAL);
+    //return rgba->pixels;
+    u8 *px = arena_push_array_nz(arena, u8, sizeof(u8) * 4 * rgba->w * rgba->h);
+    M_COPY(px, rgba->pixels, sizeof(u8) * 4 * rgba->w * rgba->h);
+    SDL_DestroySurface(rgba);
+    // Is this needed too?
+    SDL_DestroySurface(surface);
+    return px;
+  }
 }
+#else // stb implementation (for porting and stuff)
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+u8* platform_img_to_raw(Arena *arena, str8 image_data, v2 *out_dim) {
+  stbi_set_flip_vertically_on_load(true);
+  s32 width = 0;
+  s32 height = 0;
+  s32 nr_channels = 0;
+  u8 *px_data = stbi_load_from_memory((u8*)image_data.data, image_data.count, &width, &height, &nr_channels, STBI_rgb_alpha);
+  if (width > 0 && height > 0) {
+    printf("dim: %d %d\n\n", width, height);
+    *out_dim = v2m(width, height);
+  } else {
+    out_dim->x = sqrt_f64(image_data.count / (sizeof(u32))); 
+    out_dim->y = out_dim->x; 
+    px_data = image_data.data;
+  } 
+  return px_data;
+}
+#endif
+
+
+#if USE_SDL3_IO
+// FIXME: Should we destroy surfaces and stuff? what about the font??
+
+#include <SDL3_ttf/SDL_ttf.h>
+Font_Info platform_load_font(Arena *arena, u8 *font_data, u32 font_byte_count, u32 atlas_width, u32 atlas_height, u32 glyph_height_in_px, u8 **bitmap) {
+  Font_Info font = {};
+
+  font.first_codepoint = 32; // ' ' 
+  font.last_codepoint = 127; // '~'
+  font.glyph_count = font.last_codepoint - font.first_codepoint+1; 
+  font.glyph_height_in_px = glyph_height_in_px;
+
+  u8 *font_bitmap = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height);
+  assert(font_bitmap);
+
+  TTF_Font *f = NULL;
+
+  f = TTF_OpenFontIO(SDL_IOFromConstMem((char*)font_data, font_byte_count), true, glyph_height_in_px);
+  if (!f) {
+      SDL_Log("Couldn't open font: %s\n", SDL_GetError());
+  }
+
+  font.ascent_px  = (f32)TTF_GetFontAscent(f);
+  font.descent_px = (f32)TTF_GetFontDescent(f);
+  s32 line_skip = TTF_GetFontLineSkip(f);
+  font.line_gap_px = (f32)line_skip - (font.ascent_px - font.descent_px);
+
+  s32 atlas_x = 0;
+  s32 atlas_y = 0;
+  s32 row_height = 0;
+
+  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx++) {
+    u32 codepoint = font.first_codepoint + glyph_idx;
+    Glyph_Info *glyph = &font.glyphs[glyph_idx];
+
+    int minx = 0;
+    int maxx = 0;
+    int miny = 0;
+    int maxy = 0;
+    int advance = 0;
+
+    // 0. Get SDL_ttf glyph metrics and TTF image for each glyph
+    bool valid = TTF_GetGlyphMetrics( f, codepoint, &minx, &maxx, &miny, &maxy, &advance);
+
+    if (!valid) {
+      // Glyph has no metrics
+      continue;
+    }
+    TTF_ImageType image_type;
+    SDL_Surface *surface = TTF_GetGlyphImage( f, codepoint, &image_type);
+    if (!surface) {
+      continue;
+    }
+    int glyph_w = surface->w;
+    int glyph_h = surface->h;
+
+    // 1. Shift to right position in atlas to get ready to write
+    if (atlas_x + glyph_w > (s32)atlas_height) {
+      atlas_y += row_height;
+      atlas_x = 0;
+      row_height = 0;
+    }
+
+    if (row_height < glyph_h) {
+      row_height = glyph_h;
+    }
+
+    // 2. Pack the glyph inside the created texture
+    for (s32 y = 0; y < glyph_h; y += 1) {
+      u32 *src = (u32 *)((u8 *)surface->pixels + y * surface->pitch);
+      for (s32 x = 0; x < glyph_w; x += 1) {
+        u32 pixel = src[x];
+        // Since tex is 32 bit monochrome, no problem here
+        u8 alpha = (u8)(pixel >> 24); 
+
+        font_bitmap[(atlas_y+y)*atlas_width + (atlas_x+x)] = alpha;
+      }
+    }
+
+    // 3. Calc the metric infos
+    glyph->r = rec(atlas_x, atlas_y, glyph_w, glyph_h);
+    glyph->dim = v2m( (f32)glyph_w, (f32)glyph_h);
+    glyph->xadvance = (f32)advance;
+    glyph->off = v2m((f32)minx,(f32)-maxy);
+    glyph->tc = rec((f32)atlas_x / (f32)atlas_width, (f32)atlas_y / (f32)atlas_height, (f32)glyph_w / (f32)atlas_width,(f32)glyph_h / (f32)atlas_height);
+
+    atlas_x += glyph_w;
+    atlas_x += 1;
+  }
+  *bitmap = font_bitmap;
+  assert(bitmap);
+
+  TTF_CloseFont(f);
+
+  return font;
+}
+#else
+
+#define STBTT_STATIC
+#define STB_TRUETYPE_IMPLEMENTATION
+#include <stb/stb_truetype.h>
+Font_Info platform_load_font(Arena *arena, u8 *font_data, u32 font_byte_count, u32 atlas_width, u32 atlas_height, u32 glyph_height_in_px, u8 **bitmap) {
+  Font_Info font = {};
+
+  font.first_codepoint = 32; // ' ' 
+  font.last_codepoint = 127; // '~'
+  font.glyph_count = font.last_codepoint - font.first_codepoint+1; 
+  font.glyph_height_in_px = glyph_height_in_px;
+
+  u8 *font_bitmap = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height);
+  stbtt_packedchar *packed_chars = arena_push_array(arena, stbtt_packedchar, font.glyph_count);
+  stbtt_aligned_quad *aligned_quads = arena_push_array(arena, stbtt_aligned_quad, font.glyph_count);
+
+  // Pack all the needed glyphs to the bitmap and get their metrics (packedchar / aligned_quad)
+  stbtt_pack_context pctx = {};
+  stbtt_PackBegin(&pctx, font_bitmap, atlas_width, atlas_height, 0, 1, nullptr);
+  stbtt_PackFontRange(&pctx, font_data, 0, glyph_height_in_px, font.first_codepoint, font.glyph_count, packed_chars);
+  stbtt_PackEnd(&pctx);
+
+
+  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
+    f32 trash_x, trash_y;
+    stbtt_GetPackedQuad(packed_chars, atlas_width, atlas_height, glyph_idx, &trash_x, &trash_y, &aligned_quads[glyph_idx], 1);
+  }
+
+  // Calculate our internal font metrics, which we will use in-engine for font rendering
+  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
+    Glyph_Info *font_glyph = &font.glyphs[glyph_idx];
+
+    stbtt_packedchar pc = packed_chars[glyph_idx];
+    font_glyph->r = (rect){
+      .x = pc.x0,
+      .y = pc.y0,
+      .w = pc.x1 - pc.x0,
+      .h = pc.y1 - pc.y0,
+    };
+    font_glyph->off = v2m(pc.xoff, pc.yoff);
+    font_glyph->xadvance = pc.xadvance;
+
+    // Is this needed?
+    font_glyph->dim = v2m(pc.x1 - pc.x0, pc.y1 - pc.y0);
+
+    // w/h = atlas_width atlas_height
+    // NOTE: Not sure if this one is needed..
+    stbtt_aligned_quad ac = aligned_quads[glyph_idx];
+    font_glyph->tc = (rect){
+      .x = ac.s0,
+      .y = ac.t0,
+      .w = ac.s1 - ac.s0,
+      .h = ac.t1 - ac.t0,
+    };
+    //printf("Loaded glyph=[%c] off=(%f, %f) dim=(%f, %f) xadv=(%.1f)\n", ' ' + glyph_idx, font_glyph->off.x, font_glyph->off.y, font_glyph->dim.x, font_glyph->dim.y, font_glyph->xadvance);
+  }
+
+  // @HACK, This is because stbtt_Pack API is made to pack glyphs so the SPACE on has
+  // no size, which means also no xadvance I think, for that reason we use the Font API to populate its xadvance..
+  stbtt_fontinfo font_info;
+  stbtt_InitFont(&font_info, font_data, stbtt_GetFontOffsetForIndex(font_data, 0));
+  f32 scale = stbtt_ScaleForPixelHeight(&font_info, glyph_height_in_px);
+  int advance, lsb;
+  u32 space_glyph_idx = ' ' - font.first_codepoint;
+  stbtt_GetCodepointHMetrics(&font_info, font.first_codepoint + space_glyph_idx, &advance, &lsb);
+  font.glyphs[space_glyph_idx].xadvance = advance * scale;
+ 
+  s32 ascent, descent, line_gap;
+  stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
+  font.ascent_px= (f32)ascent*scale;
+  font.descent_px = (f32)descent*scale;
+  font.line_gap_px = (f32)line_gap*scale;
+
+  *bitmap = font_bitmap;
+  assert(bitmap);
+
+  return font;
+}
+
+#endif
+
+#if USE_SDL3_IO
+void platform_play_sound(const char *sound) {
+  // TBA
+}
+#else
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio/miniaudio.h"
+void platform_play_sound(const char *sound) {
+  static ma_engine ma_eng;
+  static b32 ma_initialized = false;
+  if (!ma_initialized){
+    ma_result result;
+    ma_engine_config engineConfig;
+    engineConfig = ma_engine_config_init();
+    result = ma_engine_init(&engineConfig, &ma_eng);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+    ma_engine_set_volume(&ma_eng, 0.05);
+    ma_initialized = true;
+  }
+
+  ma_engine_play_sound(&ma_eng, sound, nullptr);
+}
+#endif
 
 u64 platform_read_cpu_timer() {
   return get_time_ns();
@@ -119,6 +369,10 @@ int main(void) {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  if(TTF_Init() == false) {
+      fprintf(stderr, "SDL_ttf init failed: %s\n", SDL_GetError());
+      return 1;
+  }
 
   SDL_Window *window = SDL_CreateWindow("window", 800, 600, SDL_WINDOW_OPENGL);
   if (!window) {
@@ -173,7 +427,7 @@ int main(void) {
   gs.atlas = am_load_from_data(STR8L("atlas.png"), STR8((char*)atlas_data, sizeof(atlas_data)));
   gs.atlas_sprites_per_dim = v2m(16,10);
 
-  gs.font = bfont_load_default_atlas(gs.persistent_arena, gs.frame_arena, 32, 1024, 1024);
+  gs.font = bfont_load_default_atlas(gs.persistent_arena, gs.frame_arena, 32, 256, 256);
 
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;

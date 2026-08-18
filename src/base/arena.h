@@ -2,7 +2,6 @@
 #define _ARENA_H__
 #include "helper.h"
 #include <stdarg.h>
-//#include <stb/stb_sprintf.h>
 
 #define ARENA_DEFAULT_CHUNK_SIZE KB(4)
 

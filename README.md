@@ -3,7 +3,7 @@
 ## Deps
 ```terminal
 sudo dnf install git clang clang-devel pkg-config -y
-sudo dnf install SDL3 SDL3-devel SDL3_sound SDL3_sound-devel SDL3_image SDL3_image-devel SDL3_ttf SDL3_tt-devel -y
+sudo dnf install SDL3 SDL3-devel SDL3_image SDL3_image-devel SDL3_ttf SDL3_tt-devel -y
 git lfs install
 ```
 ## Cloning

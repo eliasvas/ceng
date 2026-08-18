@@ -100,7 +100,7 @@ $CC $CFLAGS $DEBUG_FLAGS \
     src/platform/platform_sdl3.c \
     -o "$OUTPUT_DIR/ceng" \
     $CLIBS \
-    $(pkg-config --cflags --libs sdl3) \
+    $(pkg-config --cflags --libs sdl3 sdl3-image sdl3-sound sdl3-ttf) \
     -Wl,-rpath,'$ORIGIN'
 popd > /dev/null
 elapsed=$(echo "$(date +%s.%3N) - $start" | bc)

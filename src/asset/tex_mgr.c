@@ -4,8 +4,12 @@
 // Maybe we could inject this in platform layer with macro
 Asset_Mgr g_am = {};
 
+extern u8* platform_img_to_raw(Arena *arena, str8 image_data_png, v2 *out_dim);
+
+#if 0
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+#endif
 
 Tex_Mgr* tex_mgr_init(Asset_Mgr *parent) {
   Tex_Mgr *tm = arena_push_array(parent->arena, Tex_Mgr, 1);
@@ -44,14 +48,13 @@ Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_path, str8 asset_data) 
 
   Ogl_Tex tex = {};
   if (asset_data.count > 0) {
-    // 0. Load via stb_image
-    stbi_set_flip_vertically_on_load(true);
-    s32 width, height, nr_channels;
-    u8 *px_data = stbi_load_from_memory((u8*)asset_data.data, asset_data.count, 
-        &width, &height, &nr_channels, STBI_rgb_alpha);
+    // 0. Load via SDL_Image
+    v2 img_dim = {};
+    u8 *px_data = platform_img_to_raw(mgr->parent->tarena, asset_data, &img_dim);
+
 
     // 1. Make the (internal) Ogl_Tex
-    tex = ogl_tex_make(px_data, width, height, 
+    tex = ogl_tex_make(px_data, img_dim.x, img_dim.y, 
         OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   } else {
     // In case we provide empty data, the user can make an ogl_tex

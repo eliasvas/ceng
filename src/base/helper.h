@@ -293,7 +293,7 @@ static f64 pwr(double b, int e) {
 // TODO: add memcpy and memcmp here please!
 
 // FIXME: NO STD LIBRARY PLEASE
-#define M_COPY(dest, src, n) memcpy(dest, src,n);
+#define M_COPY(dest, src, n) memcpy(dest, src,n)
 
 #if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
 #include <sanitizer/asan_interface.h>

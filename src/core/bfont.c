@@ -1,113 +1,37 @@
-#define STBTT_STATIC
-#define STB_TRUETYPE_IMPLEMENTATION
-#include <stb/stb_truetype.h>
-
-// int stbi_write_png_compression_level = 0;
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb/stb_image_write.h>
 
 #include "bfont.h"
 
 #include "base/base_inc.h"
 #include "rend/rend_inc.h"
 
+
 // By default we just embed ProggyClean - Ugly AF but for now it'll do!
 static const u8 default_font_data[] = {
 #embed "../../data/ProggyClean.ttf"
 };
 
-void png_stbi_write_func(void *context, void *data, int size) {
-  str8 *pinfo = (str8*)context;
-  memcpy(pinfo->data+pinfo->count, data, size);
-  pinfo->count += size;
-}
+extern Font_Info platform_load_font(Arena *arena, u8 *font_data, u32 font_byte_count, u32 atlas_width, u32 atlas_height, u32 glyph_height_in_px, u8 **bitmap);
 
 // FIXME: persistent arena can be used for temporary allocations you know!
 Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
-  Font_Info font = {};
 
-  font.first_codepoint = 32; // ' ' 
-  font.last_codepoint = 127; // '~'
-  font.glyph_count = font.last_codepoint - font.first_codepoint+1; 
-  font.glyph_height_in_px = glyph_height_in_px;
-
-  u8 *font_bitmap = (u8*)arena_push_array(arena, u8, sizeof(u8)*atlas_width*atlas_height);
-  stbtt_packedchar *packed_chars = arena_push_array(arena, stbtt_packedchar, font.glyph_count);
-  stbtt_aligned_quad *aligned_quads = arena_push_array(arena, stbtt_aligned_quad, font.glyph_count);
-
-  // Pack all the needed glyphs to the bitmap and get their metrics (packedchar / aligned_quad)
-  stbtt_pack_context pctx = {};
-  stbtt_PackBegin(&pctx, font_bitmap, atlas_width, atlas_height, 0, 1, nullptr);
-  stbtt_PackFontRange(&pctx, default_font_data, 0, glyph_height_in_px, font.first_codepoint, font.glyph_count, packed_chars);
-  stbtt_PackEnd(&pctx);
-
-
-  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
-    f32 trash_x, trash_y;
-    stbtt_GetPackedQuad(packed_chars, atlas_width, atlas_height, glyph_idx, &trash_x, &trash_y, &aligned_quads[glyph_idx], 1);
-  }
-
-  // Calculate our internal font metrics, which we will use in-engine for font rendering
-  for (s32 glyph_idx = 0; glyph_idx < font.glyph_count; glyph_idx+=1) {
-    Glyph_Info *font_glyph = &font.glyphs[glyph_idx];
-
-    stbtt_packedchar pc = packed_chars[glyph_idx];
-    font_glyph->r = (rect){
-      .x = pc.x0,
-      .y = pc.y0,
-      .w = pc.x1 - pc.x0,
-      .h = pc.y1 - pc.y0,
-    };
-    font_glyph->off = v2m(pc.xoff, pc.yoff);
-    font_glyph->xadvance = pc.xadvance;
-
-    // Is this needed?
-    font_glyph->dim = v2m(pc.x1 - pc.x0, pc.y1 - pc.y0);
-
-    // w/h = atlas_width atlas_height
-    // NOTE: Not sure if this one is needed..
-    stbtt_aligned_quad ac = aligned_quads[glyph_idx];
-    font_glyph->tc = (rect){
-      .x = ac.s0,
-      .y = ac.t0,
-      .w = ac.s1 - ac.s0,
-      .h = ac.t1 - ac.t0,
-    };
-    //printf("Loaded glyph=[%c] off=(%f, %f) dim=(%f, %f) xadv=(%.1f)\n", ' ' + glyph_idx, font_glyph->off.x, font_glyph->off.y, font_glyph->dim.x, font_glyph->dim.y, font_glyph->xadvance);
-  }
-
-  // @HACK, This is because stbtt_Pack API is made to pack glyphs so the SPACE on has
-  // no size, which means also no xadvance I think, for that reason we use the Font API to populate its xadvance..
-  stbtt_fontinfo font_info;
-  stbtt_InitFont(&font_info, default_font_data, stbtt_GetFontOffsetForIndex(default_font_data, 0));
-  f32 scale = stbtt_ScaleForPixelHeight(&font_info, glyph_height_in_px);
-  int advance, lsb;
-  u32 space_glyph_idx = ' ' - font.first_codepoint;
-  stbtt_GetCodepointHMetrics(&font_info, font.first_codepoint + space_glyph_idx, &advance, &lsb);
-  font.glyphs[space_glyph_idx].xadvance = advance * scale;
- 
-  s32 ascent, descent, line_gap;
-  stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
-  font.ascent_px= (f32)ascent*scale;
-  font.descent_px = (f32)descent*scale;
-  font.line_gap_px = (f32)line_gap*scale;
+  u8 *font_bitmap = nullptr;
+  Font_Info font = platform_load_font(arena, (u8*)default_font_data, sizeof(default_font_data), atlas_width, atlas_height, glyph_height_in_px, &font_bitmap);
 
   // Transform to RGBA
   u64 temp_arena_pos_start = arena_get_current_pos(temp_arena);
-  u8 *font_bitmap_rgba = (u8*)arena_push_array(temp_arena, u8, sizeof(u8)*atlas_width*atlas_height*4);
-  for (u32 i = 0; i < atlas_width*atlas_height; i+=1) {
-    for (u32 j = 0; j < 4; j+=1) {
-      font_bitmap_rgba[4*i + j] = font_bitmap[i];
+  u8 *font_bitmap_rgba = (u8*)arena_push_array(temp_arena, u8, sizeof(u32)*atlas_width*atlas_height);
+  for (u32 i = 0; i < atlas_width; i+=1) {
+    for (u32 j = 0; j < atlas_height; j+=1) {
+      for (u32 comp = 0; comp < 4; comp+=1) {
+        font_bitmap_rgba[4*(i + (atlas_height - 1 - j) * atlas_width) + comp] = font_bitmap[i + j *atlas_width];
+      }
     }
   }
 
-  str8 ctx = (str8) {
-    .data = arena_push_array(temp_arena, u8, sizeof(u32)*atlas_width *atlas_height + 1024),
-    .count = 0,
-  };
-  stbi_write_png_to_func(png_stbi_write_func, &ctx, atlas_width, atlas_height, 4, font_bitmap_rgba, atlas_width*sizeof(u32));
   font.tex_dim = v2m(atlas_width, atlas_height);
-  font.tex_id = am_load_from_data(STR8L("fa.png"), STR8(ctx.data, ctx.count));
+  font.tex_id = am_load_from_data(STR8L("fa.png"), STR8(font_bitmap_rgba, sizeof(u32)*atlas_width*atlas_height));
+  //font.tex_id = am_load_from_data(STR8L("fa.png"), STR8(font_bitmap_rgba, sizeof(u32)*atlas_width*atlas_height));
   arena_reset_to_pos(temp_arena, temp_arena_pos_start);
 
   return font;
