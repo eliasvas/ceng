@@ -5,10 +5,9 @@
 #include "base/base_inc.h"
 #include "core/core_inc.h"
 
-// Major inspiration: https://jorenjoestar.github.io/post/serialization_for_games/ 
+// Generation scheme taken from here, I think? https://bitsquid.blogspot.com/2014/08/building-data-oriented-entity-system.html
 
-// HACK
-extern void platform_play_sound(const char *sound);
+// TODO: Read this about serialization: https://jorenjoestar.github.io/post/serialization_for_games/ 
 
 typedef struct {
  v3 pos;
@@ -31,8 +30,15 @@ typedef enum {
 }Entity_Kind;
 
 typedef u64 Entity_Id;
+
+
+typedef struct  {
+  u32 index; // index to entity array
+  u32 generation; // destroyed entities w/ same ID count 
+} Entity_ID;
+
 typedef struct {
-  Entity_Id id;
+  Entity_ID id;
   color col;
 
   b32 dynamic;
@@ -46,12 +52,25 @@ typedef struct {
   Entity_Kind kind;
 } Entity;
 
+#define ENTITIES_PER_CHUNK 1024
+typedef struct Entity_Chunk Entity_Chunk;
+struct Entity_Chunk {
+  Entity e[ENTITIES_PER_CHUNK];
+  u32 gen[ENTITIES_PER_CHUNK];
+  b32 alive[ENTITIES_PER_CHUNK];
+  u32 *reuse_index_stack;
+  s64 count;
+
+  Entity_Chunk *next;
+};
+
+
 typedef struct Entity_Node Entity_Node;
 struct Entity_Node {
   Entity_Node *hash_next;
   Entity_Node *hash_prev;
 
-  Entity e;
+  Entity *e;
 };
 
 typedef struct Entity_Hash_Slot Entity_Hash_Slot;
@@ -60,7 +79,6 @@ struct Entity_Hash_Slot {
   Entity_Node *hash_last;
 };
 
-
 // TODO: Make this a hash structure
 typedef struct Entity_Store {
   Arena *entity_arena;
@@ -68,18 +86,18 @@ typedef struct Entity_Store {
 
   // We need two maps one for id->entity and another for coords->entity
   Entity_Hash_Slot *slots;
-  u32 slot_count;
+  u64 slot_count;
+
+  Entity_Chunk *entities;
 
   // More stuff
 } Entity_Store;
 
-u64 entity_hash_id(Entity_Store *store, u64 entity_id);
 Entity* entity_store_add(Entity_Store *store);
 void entity_store_init(Entity_Store *store);
-Entity *entity_store_find(Entity_Store *store, Entity_Id id);
-b32 entity_collides(Entity_Store *store, Entity_Id id, v3 candidate_pos);
+u64 entity_hash_id(Entity_Store *store, Entity_ID id);
+b32 entity_collides(Entity_Store *store, Entity_ID id, v3 candidate_pos);
 
 void entity_store_update_render(Game_State *gs, f32 dt);
-
 
 #endif
