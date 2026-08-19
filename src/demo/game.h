@@ -4,8 +4,8 @@
 #include "base/base_inc.h"
 #include "core/core_inc.h"
 
-// TODO: Input should be a pointer right??
-// Allocated along with game state!
+typedef struct Game_State Game_State;
+#include "entity.h"
 
 typedef struct {
   s32 current_sine_sample; // not needed
@@ -17,7 +17,7 @@ typedef struct {
   u64 samples_requested;
 } Game_Audio_Output_Buffer;
 
-typedef struct {
+struct Game_State {
   Arena *persistent_arena; // For persistent allocations
   Arena *frame_arena; // For per-frame allocations
   rect game_viewport;
@@ -30,10 +30,8 @@ typedef struct {
   Game_Audio_Output_Buffer audio_out;
   b32 request_reload;
 
-#ifdef SOFT_REND
-  Ogl_Tex g_backbuffer;
-  u32* pixels;
-#endif
+  // Game specific stuff
+  Entity_Store* entity_store;
 
   // Loaded Asset resources (TODO: Asset system)
   Asset_Id atlas;
@@ -44,7 +42,7 @@ typedef struct {
   m4 view;
   m4 proj;
 
-} Game_State;
+};
 
 void game_init(Game_State *gs);
 void game_update(Game_State *gs, f32 dt);

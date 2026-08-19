@@ -3,12 +3,11 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <stdlib.h>
-
 // dlopen/dlclose
 #include <dlfcn.h>
 
 #include <SDL3/SDL.h>
-
+#define USE_SDL3_IO 1
 #include "gl_loader.h"
 
 #define STR_IMPLEMENTATION
@@ -22,12 +21,11 @@
 #define INPUT_IMPLEMENTATION
 #include "core/input.h"
 
-// TODO: Stop the asset manager single module bullshit
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
+
 #include "game.h"
 
-#define USE_SDL3_IO 1
 
 // @MustImplement
 #if USE_SDL3_IO
