@@ -25,8 +25,9 @@ typedef struct {
 
 typedef enum {
   ENTITY_KIND_HERO,
-  ENTITY_KIND_ENEMY,
   ENTITY_KIND_WALL,
+  ENTITY_KIND_COIN,
+  ENTITY_KIND_ENEMY,
   ENTITY_KIND_BULLET,
 }Entity_Kind;
 
@@ -36,9 +37,6 @@ typedef struct  {
 } Entity_ID;
 
 typedef struct Entity Entity;
-typedef void (*entity_update_fn) (Game_State *gs, Entity *e, f32 dt);
-typedef void (*entity_draw_fn) (Game_State *gs, Entity *e);
-
 struct Entity {
   Entity_ID id;
   color col;
@@ -52,10 +50,6 @@ struct Entity {
   v3 dash_dir;
 
   Entity_Kind kind;
-
-  // @NoSerialize (Should be inferred by kind, maybe make a helper)
-  entity_update_fn update_fn;
-  entity_draw_fn draw_fn;
 };
 
 #define ENTITIES_PER_CHUNK 1024

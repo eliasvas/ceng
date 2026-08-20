@@ -80,7 +80,6 @@ start=$(date +%s.%3N)
 echo "Building gamelib.."
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
-"$ENGINE_DIR"/src/gui/*.c \
 "$ENGINE_DIR"/src/asset/*.c \
 -o "$OUTPUT_DIR/libgame.so"
 elapsed=$(echo "$(date +%s.%3N) - $start" | bc)
@@ -97,6 +96,7 @@ $CC $CFLAGS $DEBUG_FLAGS \
     -L"$OUTPUT_DIR" \
     src/core/*.c \
     src/rend/*.c \
+    "$ENGINE_DIR"/src/gui/*.c \
     src/platform/platform_sdl3.c \
     -o "$OUTPUT_DIR/ceng" \
     $CLIBS \

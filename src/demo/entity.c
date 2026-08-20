@@ -86,23 +86,6 @@ b32 entity_collides(Entity_Store *store, Entity_ID id, v3 candidate_pos) {
   return false;
 }
 
-void entity_store_update_render(Game_State *gs, f32 dt) {
-  Entity_Store *store = gs->entity_store;
-  // Update all the entities
-  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
-    Entity *e = &store->entities->e[idx];
-    e->update_fn(gs, e, dt);
-  }
-
-  // Draw all the entities
-  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
-    Entity *e = &store->entities->e[idx];
-    e->draw_fn(gs, e);
-  }
-  // Cleanup to-be-deleted entities
-  // TBA TBA TBA TBA TBA
-}
-
 ////////////////////////////////////////////
 // Hero Entity
 ////////////////////////////////////////////
@@ -118,6 +101,9 @@ void update_hero(Game_State *gs, Entity *e, f32 dt) {
   f32 speed = 5.0;
   e->box.vel.x = move_dir.x * speed;
   e->box.vel.z = move_dir.z * speed;
+
+  // For reload testing
+  //e->col = col(1,1,1,1);
 
   // Dash logic
   if (e->dash_timer <= 0 && input_key_pressed(&gs->input, KEY_SCANCODE_LSHIFT)) {
@@ -181,8 +167,6 @@ Entity *setup_hero(Entity *e, v3 pos) {
     .col_hdim = v3m(0.5,0.5,0.5),
   };
   e->col = v4m(0.9,0.4,0.3,1.0);
-  e->update_fn = update_hero;
-  e->draw_fn   = draw_hero;
   return e;
 }
 
@@ -221,7 +205,50 @@ Entity *setup_wall(Entity *e, v3 pos) {
     .hdim = v3m(0.5,0.5,0.5),
   };
   e->col = v4m(0.2,0.4,0.9,1.0);
-  e->update_fn = update_wall;
-  e->draw_fn   = draw_wall;
   return e;
+}
+
+
+void entity_store_update_render(Game_State *gs, f32 dt) {
+  Entity_Store *store = gs->entity_store;
+  // Update all the entities
+  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
+    Entity *e = &store->entities->e[idx];
+    //e->update_fn(gs, e, dt);
+    switch(e->kind) {
+      case ENTITY_KIND_HERO:
+        update_hero(gs, e, dt);
+        break;
+      case ENTITY_KIND_WALL:
+        update_wall(gs, e, dt);
+        break;
+      case ENTITY_KIND_COIN:
+      case ENTITY_KIND_BULLET:
+      case ENTITY_KIND_ENEMY:
+      default:
+        break;
+    }
+  }
+
+  // Draw all the entities
+  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
+    Entity *e = &store->entities->e[idx];
+    //e->update_fn(gs, e, dt);
+    switch(e->kind) {
+      case ENTITY_KIND_HERO:
+        draw_hero(gs, e);
+        break;
+      case ENTITY_KIND_WALL:
+        draw_wall(gs, e);
+        break;
+      case ENTITY_KIND_COIN:
+      case ENTITY_KIND_BULLET:
+      case ENTITY_KIND_ENEMY:
+      default:
+        break;
+    }
+  }
+  //for (s64 idx = 0; idx < store->entities->count; idx+=1) { Entity *e = &store->entities->e[idx]; e->draw_fn(gs, e); }
+  // Cleanup to-be-deleted entities
+  // TBA TBA TBA TBA TBA
 }

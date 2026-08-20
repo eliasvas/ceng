@@ -445,7 +445,7 @@ int main(void) {
     // 3.1 Reloading logic (happens once every second/target_frames)
     /////////////////////////////////////////////////////
     if (frame_count % 60 == 0) {
-      platform_try_reload_gamelib(&gs, &game_api, true);
+      platform_try_reload_gamelib(&gs, &game_api, false);
     }
 
     /////////////////////////////////////////////////////

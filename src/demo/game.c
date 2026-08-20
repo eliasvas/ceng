@@ -39,12 +39,12 @@ void game_init(Game_State *gs) {
 
   gs->view = m4_look_at(v3m(0,8,10), v3m(0,0,0), v3m(0,1,0));
 
-
   gui_init(gs->frame_arena, &gs->font, &gs->input);
 
   /////////////////////////////////////////////////////////////
   /// Make this into the assert test for the json parser too1
   /////////////////////////////////////////////////////////////
+  // This needs to be inside the asset system else it will not be reloaded!
   base_64_test(gs->frame_arena);
   Gltf2_Info info = gltf2_load(gs->frame_arena, test_json_str);
   s64 vcount = 0;
