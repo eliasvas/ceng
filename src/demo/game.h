@@ -7,6 +7,9 @@
 typedef struct Game_State Game_State;
 #include "entity.h"
 
+typedef struct Particle_Mgr Particle_Mgr;
+#include "particle/particle_inc.h"
+
 typedef struct {
   s32 current_sine_sample; // not needed
   s32 sample_rate;
@@ -31,7 +34,8 @@ struct Game_State {
   b32 request_reload;
 
   // Game specific stuff
-  Entity_Store* entity_store;
+  Entity_Store *entity_store;
+  Particle_Mgr *pmgr;
 
   // Loaded Asset resources (TODO: Asset system)
   Asset_Id atlas;

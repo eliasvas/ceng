@@ -145,7 +145,7 @@ void draw_hero(Game_State *gs, Entity *e) {
   // Render le cube
   m4 model = m4_mult(m4_translate(e->box.pos),m4_scale(v3_multf(e->box.hdim, 2.0f)));
   m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
-  rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, e->col);
+  r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, e->col);
 
   // Render le collider
   m4 model_collider = m4_mult(m4_translate(e->box.col_off), 
@@ -153,7 +153,7 @@ void draw_hero(Game_State *gs, Entity *e) {
       m4_scale(v3_multf(e->box.col_hdim, 2.0f)))
   );
   m4 mvp_collider = m4_mult(m4_mult(gs->proj, gs->view), model_collider);
-  rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp_collider,
+  r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp_collider,
       v4m(e->dynamic,e->dynamic,e->dynamic,1));
 }
 
@@ -183,7 +183,7 @@ void draw_wall(Game_State *gs, Entity *e) {
   // Render le cube
   m4 model = m4_mult(m4_translate(e->box.pos),m4_scale(v3_multf(e->box.hdim, 2.0f)));
   m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
-  rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, e->col);
+  r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, e->col);
 
   // Render le collider
   m4 model_collider = m4_mult(m4_translate(e->box.col_off), 
@@ -191,7 +191,7 @@ void draw_wall(Game_State *gs, Entity *e) {
       m4_scale(v3_multf(e->box.col_hdim, 2.0f)))
   );
   m4 mvp_collider = m4_mult(m4_mult(gs->proj, gs->view), model_collider);
-  rn_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp_collider,
+  r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&mvp_collider,
       v4m(e->dynamic,e->dynamic,e->dynamic,1));
 }
 

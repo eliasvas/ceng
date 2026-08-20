@@ -18,6 +18,8 @@ s64 gltf_verts_count = 0;
 void game_init(Game_State *gs) {
   gs->entity_store = arena_push_array(gs->persistent_arena, Entity_Store, 1);
   entity_store_init(gs->entity_store);
+  gs->pmgr = arena_push_array(gs->persistent_arena, Particle_Mgr, 1);
+  particle_mgr_init(gs->pmgr, gs->persistent_arena);
 
   // Make the hero
   Entity *hero = setup_hero(entity_store_add(gs->entity_store), v3m(1,4,1));
@@ -27,6 +29,9 @@ void game_init(Game_State *gs) {
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
       setup_wall(entity_store_add(gs->entity_store), v3m(width,height,1));
+      Particle_Emitter *emitter = particle_mgr_new_emitter(gs->pmgr);
+      emitter->pos = v3m(width, height, 1);
+      emitter->sec_per_particle = 0.1;
     }
   }
 
@@ -57,6 +62,7 @@ void game_init(Game_State *gs) {
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+  particle_mgr_update(gs, gs->pmgr, dt);
 
 }
 
@@ -70,7 +76,6 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
 
   s32 point_idx = 0;
 
-#if 1
   for (s32 line_x = 0; line_x < line_count_per_axis; line_x +=1) {
     v3 start = v3m(-cell_count/2.0,0, line_x - cell_count/2.0);
     v3 end   = v3m(+cell_count/2.0,0, line_x - cell_count/2.0);
@@ -78,7 +83,6 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
     points[point_idx++] = (Tri_Vertex) {.pos = start, .color = c1};
     points[point_idx++] = (Tri_Vertex) {.pos = end, .color = c1};
   }
-#endif
 
   for (s32 line_z = 0; line_z < line_count_per_axis; line_z +=1) {
     v3 start = v3m(line_z - cell_count/2.0, 0,-cell_count/2.0);
@@ -89,9 +93,9 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   }
 
   assert(point_idx == line_count_per_axis*4);
-  rn_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
+  r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 
-  rn_imm_verts(gs->game_viewport, gltf_verts, gltf_verts_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
+  r3d_imm_verts(gs->game_viewport, gltf_verts, gltf_verts_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
 }
 
 void game_render(Game_State *gs, float dt) {
@@ -100,6 +104,14 @@ void game_render(Game_State *gs, float dt) {
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
   entity_store_update_render(gs, dt);
+  particle_mgr_render(gs, gs->pmgr);
+
+
+  // TODO: particles
+  // Draw an xy-face, needed for basic particle system
+  m4 model = m4_translate(v3m(0, 4, 4));
+  m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
+  r3d_imm_xy_face(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, col(1,1,1,0.4));
 
   // Simple test for quad rendernig
 #if 0

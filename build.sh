@@ -96,6 +96,7 @@ $CC $CFLAGS $DEBUG_FLAGS \
     -L"$OUTPUT_DIR" \
     src/core/*.c \
     src/rend/*.c \
+    src/particle/*.c \
     "$ENGINE_DIR"/src/gui/*.c \
     src/platform/platform_sdl3.c \
     -o "$OUTPUT_DIR/ceng" \

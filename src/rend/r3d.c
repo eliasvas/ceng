@@ -80,7 +80,7 @@ void r3d_try_load_shaders() {
   }
 }
 
-void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp) {
+void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp) {
   //u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
   //buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
 
@@ -100,7 +100,21 @@ void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Typ
   //arena_reset_to_pos(__frame_arena, arena_prev_pos);
 }
 
-  void rn_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
+  // FIXME: This is INSANELY slow, especially for particles!
+  // FIXME: Probably cancel any rotation (M33) to be user facing right?
+  void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
+    Tri_Vertex cube_verts[6] = {
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
+      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
+      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
+    };
+    r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
+  }
+
+  void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
     Tri_Vertex cube_verts[36] = {
       (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
       (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
@@ -139,6 +153,6 @@ void rn_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Typ
       (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
       (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
     };
-    rn_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
+    r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
   }
 
