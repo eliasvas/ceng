@@ -26,18 +26,20 @@ typedef struct {
 typedef enum {
   ENTITY_KIND_HERO,
   ENTITY_KIND_ENEMY,
+  ENTITY_KIND_WALL,
   ENTITY_KIND_BULLET,
 }Entity_Kind;
-
-typedef u64 Entity_Id;
-
 
 typedef struct  {
   u32 index; // index to entity array
   u32 generation; // destroyed entities w/ same ID count 
 } Entity_ID;
 
-typedef struct {
+typedef struct Entity Entity;
+typedef void (*entity_update_fn) (Game_State *gs, Entity *e, f32 dt);
+typedef void (*entity_draw_fn) (Game_State *gs, Entity *e);
+
+struct Entity {
   Entity_ID id;
   color col;
 
@@ -50,7 +52,11 @@ typedef struct {
   v3 dash_dir;
 
   Entity_Kind kind;
-} Entity;
+
+  // @NoSerialize (Should be inferred by kind, maybe make a helper)
+  entity_update_fn update_fn;
+  entity_draw_fn draw_fn;
+};
 
 #define ENTITIES_PER_CHUNK 1024
 typedef struct Entity_Chunk Entity_Chunk;
@@ -63,7 +69,6 @@ struct Entity_Chunk {
 
   Entity_Chunk *next;
 };
-
 
 typedef struct Entity_Node Entity_Node;
 struct Entity_Node {
@@ -97,7 +102,9 @@ Entity* entity_store_add(Entity_Store *store);
 void entity_store_init(Entity_Store *store);
 u64 entity_hash_id(Entity_Store *store, Entity_ID id);
 b32 entity_collides(Entity_Store *store, Entity_ID id, v3 candidate_pos);
-
 void entity_store_update_render(Game_State *gs, f32 dt);
+
+Entity *setup_hero(Entity *e, v3 pos);
+Entity *setup_wall(Entity *e, v3 pos);
 
 #endif

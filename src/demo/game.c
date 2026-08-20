@@ -9,8 +9,6 @@
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
 
-
-
 extern void platform_play_sound(const char *sound);
 
 // Just for testing
@@ -22,40 +20,22 @@ void game_init(Game_State *gs) {
   entity_store_init(gs->entity_store);
 
   // Make the hero
-  Entity *hero = entity_store_add(gs->entity_store);
-  hero->kind = ENTITY_KIND_HERO;
-  hero->dynamic = true;
-  hero->box = (Phys_Box) {
-    .pos = v3m(1,4,1),
-    .col_off = v3m(0,0,0),
-    .hdim = v3m(0.3, 0.5, 0.3),
-    .col_hdim = v3m(0.5,0.5,0.5),
-  };
-  hero->col = v4m(0.9,0.4,0.3,1.0);
-  // Make a test
+  Entity *hero = setup_hero(entity_store_add(gs->entity_store), v3m(1,4,1));
+  assert(hero);
+
+  // Make the pillars
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
-      Entity *test = entity_store_add(gs->entity_store);
-      test->dynamic = false;
-      test->box = (Phys_Box) {
-        .pos = v3m(width,height,1),
-        .col_off = v3m(0,0,0),
-        .col_hdim = v3m(0.5,0.5,0.5),
-        .hdim = v3m(0.5,0.5,0.5),
-      };
-      test->col = v4m(0.2,0.4,0.9,1.0);
+      setup_wall(entity_store_add(gs->entity_store), v3m(width,height,1));
     }
   }
 
-  Entity *ground = entity_store_add(gs->entity_store);
-  ground->dynamic = false;
-  ground->box = (Phys_Box) {
-    .pos = v3m(0,-1.01,0),
-    .col_off = v3m(0,0,0),
-    .col_hdim = v3m(4,1,4),
-    .hdim = v3m(4,1,4),
-  };
+  // Make the ground
+  Entity *ground = setup_wall(entity_store_add(gs->entity_store), v3m(0,-1.01,0));
+  ground->box.col_hdim = v3m(4,1,4),
+  ground->box.hdim = v3m(4,1,4),
   ground->col = v4m(0.4,0.4,0.4,1.0);
+
 
   gs->view = m4_look_at(v3m(0,8,10), v3m(0,0,0), v3m(0,1,0));
 
