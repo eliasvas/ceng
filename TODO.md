@@ -4,11 +4,11 @@
     - Regular image support
     - Unicode support
     - More widgets?
+    - Keyboard Navigation..
 
 ## Entity
-    - Entity deletion?????
-    - Implement the reuse logic for staled entity indices
     - Signals
+    - Implement the reuse logic for staled entity indices
     - Entity tree, maybe use a stack? Not sure if needed for now
     - Serialization: https://jorenjoestar.github.io/post/serialization_for_games/ 
 
@@ -26,6 +26,9 @@
 ## Particles
     - Simple CPU particles
     - https://alextardif.com/Particles.html
+
+## Graphics
+    - Shadows!!!!
 
 ## demo
     - What about it..

@@ -29,9 +29,11 @@ void game_init(Game_State *gs) {
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
       setup_wall(entity_store_add(gs->entity_store), v3m(width,height,1));
+#if 0
       Particle_Emitter *emitter = particle_mgr_new_emitter(gs->pmgr);
       emitter->pos = v3m(width, height, 1);
       emitter->sec_per_particle = 0.1;
+#endif
     }
   }
 
@@ -63,6 +65,14 @@ void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
   particle_mgr_update(gs, gs->pmgr, dt);
+
+  // Make a test coin if none exists
+  if (entity_store_count_entities(gs->entity_store, ENTITY_KIND_COIN) == 0) {
+    Entity *test_coin = setup_coin(
+        entity_store_add(gs->entity_store), v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0)
+    );
+    assert(test_coin);
+  }
 
 }
 
@@ -107,11 +117,13 @@ void game_render(Game_State *gs, float dt) {
   particle_mgr_render(gs, gs->pmgr);
 
 
+#if 0
   // TODO: particles
   // Draw an xy-face, needed for basic particle system
   m4 model = m4_translate(v3m(0, 4, 4));
   m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
   r3d_imm_xy_face(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, col(1,1,1,0.4));
+#endif
 
   // Simple test for quad rendernig
 #if 0

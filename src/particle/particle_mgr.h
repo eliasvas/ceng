@@ -33,6 +33,7 @@ struct Particle_Emitter {
   v3 vel;
   v4 col;
   v3 hdim;
+  f32 lifespan;
 
   Particle_Emitter *next;
   Particle_Emitter *prev;

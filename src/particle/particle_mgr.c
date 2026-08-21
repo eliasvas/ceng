@@ -40,6 +40,7 @@ Particle_Emitter *particle_mgr_new_emitter(Particle_Mgr *pmgr) {
   emitter->particle_life_min = 0.4;
   emitter->particle_life_max = 3.4;
   emitter->sec_per_particle = 0.1;
+  emitter->lifespan = F32_MAX;
   
   return emitter;
 }
@@ -51,9 +52,11 @@ void particle_mgr_kill_emitter(Particle_Mgr *pmgr, Particle_Emitter *emitter) {
 
 void particle_mgr_update(Game_State *gs, Particle_Mgr *pmgr, f32 dt) {
   // Spawn the new particles from the emitters
-  for (Particle_Emitter *emitter = pmgr->emitter_first; emitter != nullptr; emitter=emitter->next) {
+  for (Particle_Emitter *emitter = pmgr->emitter_first; emitter != nullptr;) {
+    Particle_Emitter *next = emitter->next;
+
     emitter->sec_counter += dt;
-    if (emitter->sec_counter > emitter->sec_per_particle) {
+    while (emitter->sec_counter > emitter->sec_per_particle) {
       emitter->sec_counter -= emitter->sec_per_particle;
       Particle *p = particle_mgr_new_particle(pmgr);
 
@@ -64,6 +67,12 @@ void particle_mgr_update(Game_State *gs, Particle_Mgr *pmgr, f32 dt) {
       p->hdim = v3_multf(emitter->hdim, 0.8*brand_f01()+0.5);
       p->lifespan = brand_frange(emitter->particle_life_min, emitter->particle_life_max);
     }
+
+    emitter->lifespan -= dt;
+    if (emitter->lifespan <= 0) {
+      particle_mgr_kill_emitter(pmgr, emitter);
+    }
+    emitter = next;
   }
 
   for (s64 particle_idx = 0; particle_idx < pmgr->particle_next_idx; particle_idx+=1) {

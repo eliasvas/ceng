@@ -58,7 +58,8 @@ struct Entity_Chunk {
   Entity e[ENTITIES_PER_CHUNK];
   u32 gen[ENTITIES_PER_CHUNK];
   b32 alive[ENTITIES_PER_CHUNK];
-  u32 *reuse_index_stack;
+  b32 next_idx[ENTITIES_PER_CHUNK];
+  s64 first_free_idx;
   s64 count;
 
   Entity_Chunk *next;
@@ -93,12 +94,14 @@ typedef struct Entity_Store {
 } Entity_Store;
 
 Entity* entity_store_add(Entity_Store *store);
+Entity* entity_store_remove(Entity_Store *store, Entity_ID id);
 void entity_store_init(Entity_Store *store);
+u32 entity_store_count_entities(Entity_Store *store, Entity_Kind kind);
 u64 entity_hash_id(Entity_Store *store, Entity_ID id);
-b32 entity_collides(Entity_Store *store, Entity_ID id, v3 candidate_pos);
 void entity_store_update_render(Game_State *gs, f32 dt);
 
 Entity *setup_hero(Entity *e, v3 pos);
 Entity *setup_wall(Entity *e, v3 pos);
+Entity *setup_coin(Entity *e, v3 pos);
 
 #endif
