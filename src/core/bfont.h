@@ -31,7 +31,7 @@ typedef struct {
   v2 tex_dim;
 }Font_Info;
 
-Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height);
+Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height);
 void bfont_flip_bitmap(u8 *bitmap, s32 width, s32 height);
 f32 bfont_measure_text_width(Font_Info *font_info, str8 text, f32 scale);
 f32 bfont_measure_text_height(Font_Info *font_info, str8 text, f32 scale);

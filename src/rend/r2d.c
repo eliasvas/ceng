@@ -223,12 +223,12 @@ void r2d_begin(Arena *arena, rect dummy_viewport) {
 
 void r2d_flush_verts(R2D_Pass *pass, Batch_Vertex *vertices, s32 vcount,  Ogl_Tex **tex_cache) {
   if (vcount <= 0) return;
-  u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
+  Temp_Arena temp = get_scratch(0,0);
 
   // set the textures
   for (s32 i = 0; i < OGL_MAX_ACTIVE_TEXTURES; i+=1) {
     if (tex_cache[i] != nullptr) {
-      buf sampler_name = arena_sprintf(__frame_arena, "u_tex[%d]", i);
+      buf sampler_name = arena_sprintf(temp.arena, "u_tex[%d]", i);
       batch_bundle.textures[i] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = *tex_cache[i],};
     } else {
       batch_bundle.textures[i] = (Ogl_Tex_Slot){};
@@ -250,11 +250,7 @@ void r2d_flush_verts(R2D_Pass *pass, Batch_Vertex *vertices, s32 vcount,  Ogl_Te
 
   ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, vcount);
 
-  arena_reset_to_pos(__frame_arena, arena_prev_pos);
-
-
-  //for (s32 i = 0; i < OGL_MAX_ACTIVE_TEXTURES; i+=1) { batch_bundle.textures[i] = (Ogl_Tex_Slot){}; }
-  //M_ZERO(*tex_cache, sizeof(tex_cache[0]) * OGL_MAX_ACTIVE_TEXTURES);
+  release_scratch(temp);
 }
 
 void r2d_flush_all() {

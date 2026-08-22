@@ -135,7 +135,7 @@ void update_hero(Game_State *gs, Entity *e, f32 dt) {
   e->box.vel.z = move_dir.z * speed;
 
   // For reload testing
-  //e->col = col(1,1,1,1);
+  //e->col = col(1,0,0,1);
 
   // Dash logic
   if (e->dash_timer <= 0 && input_key_pressed(&gs->input, KEY_SCANCODE_LSHIFT)) {

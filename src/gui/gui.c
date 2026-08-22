@@ -361,8 +361,8 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
     // 1.2 If we have an overflow for this axis, calculate how much size every child is willing to lose + overall size
     if (children_size > parent_size) {
       f32 needed_size = children_size - parent_size;
-      u64 arena_pos = arena_get_current_pos(ctx.temp_arena);
-      f32 *available_sizes = arena_push_array(ctx.temp_arena, f32, node->child_count);
+      Temp_Arena temp = get_scratch(0,0);
+      f32 *available_sizes = arena_push_array(temp.arena, f32, node->child_count);
 
       f32 available_size_sum = 0;
       s32 child_idx = 0;
@@ -381,7 +381,7 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
         child->fixed_size.raw[axis] -= needed_size * (available_sizes[child_idx] / available_size_sum);
         child_idx+=1;
       }
-      arena_reset_to_pos(ctx.temp_arena, arena_pos);
+      release_scratch(temp);
     }
   } 
 

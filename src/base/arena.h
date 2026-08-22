@@ -13,19 +13,49 @@ typedef struct {
   u64 committed;
 } Arena;
 
+typedef struct {
+  Arena *arena;
+  u64 original_pos;
+} Temp_Arena;
+
+#define arena_push_array(arena, s, count) arena_push((arena), sizeof(s)*(count))
+#define arena_push_array_nz(arena, s, count) arena_push_nz((arena), sizeof(s)*(count))
+
+#define arena_push_struct(arena, s) arena_push_array(arena, s, 1)
+#define arena_push_struct_nz(arena, s) arena_push_array_nz(arena, s, 1)
+
 // AFAIK only C23 feature, we do C99 now :|
 // static_assert(sizeof(Arena) < ARENA_DEFAULT_CHUNK_SIZE);
 
-static void arena_align_forward(Arena *arena) {
+#ifndef ARENA_IMPLEMENTATION
+  u64 arena_get_current_pos(Arena *arena);
+  void arena_align_forward(Arena *arena);
+  void arena_destroy(Arena *arena);
+  void* arena_push_nz(Arena *arena, u64 size_in_bytes);
+  void* arena_push(Arena *arena, u64 size_in_bytes);
+  void arena_pop(Arena *arena, u64 bytes_to_pop);
+  void arena_reset_to_pos(Arena *arena, u64 pos);
+  u64 arena_get_current_pos(Arena *arena);
+  void arena_clear(Arena *arena);
+  Arena* arena_make(u64 size_in_bytes);
+  buf arena_sprintf(Arena *arena, const char* format, ...);
+  Temp_Arena temp_arena_begin(Arena *arena);
+  void temp_arena_end(Temp_Arena ta);
+  void scratch_init(u64 size);
+  Temp_Arena get_scratch(Arena **conflicts, u64 conflict_count);
+  void release_scratch(Temp_Arena ta);
+#else
+
+void arena_align_forward(Arena *arena) {
   arena->current = align_pow2(UINT_FROM_PTR(arena->backing_memory) + arena->current, arena->alignment) - UINT_FROM_PTR(arena->backing_memory);
 }
 
-static void arena_destroy(Arena *arena) {
+void arena_destroy(Arena *arena) {
   ASAN_UNPOISON_MEMORY_REGION(arena->backing_memory, arena->reserved);
   M_RELEASE(arena->backing_memory, arena->reserved);
 }
 
-static void* arena_push_nz(Arena *arena, u64 size_in_bytes) {
+void* arena_push_nz(Arena *arena, u64 size_in_bytes) {
   // Check if current allocation fits inside whole arena, return nullptr, TODO: we should do the linked list of arenas here sometime
   u64 remaining_reserved_bytes = arena->reserved - arena->current;
   assert(size_in_bytes <= remaining_reserved_bytes && "Allocation exceeding Arena reserved space");
@@ -56,41 +86,34 @@ static void* arena_push_nz(Arena *arena, u64 size_in_bytes) {
   return ret;
 }
 
-static void * arena_push(Arena *arena, u64 size_in_bytes) {
+void *arena_push(Arena *arena, u64 size_in_bytes) {
   void *bytes = arena_push_nz(arena, size_in_bytes);
   M_ZERO(bytes, size_in_bytes);
   return bytes;
 }
 
 // maybe we should use M_RELEASE(base, bytes) if we exceed a committed chunk boundary??
-static void arena_pop(Arena *arena, u64 bytes_to_pop) {
+void arena_pop(Arena *arena, u64 bytes_to_pop) {
   arena->current -= bytes_to_pop;
 }
 
-static void arena_reset_to_pos(Arena *arena, u64 pos) {
+void arena_reset_to_pos(Arena *arena, u64 pos) {
   assert(arena->current >= pos);
   arena->current = pos;
 }
 
-static u64 arena_get_current_pos(Arena *arena) {
+u64 arena_get_current_pos(Arena *arena) {
   return arena->current;
 }
 
-#define arena_push_array(arena, s, count) arena_push((arena), sizeof(s)*(count))
-#define arena_push_array_nz(arena, s, count) arena_push_nz((arena), sizeof(s)*(count))
-
-#define arena_push_struct(arena, s) arena_push_array(arena, s, 1)
-#define arena_push_struct_nz(arena, s) arena_push_array_nz(arena, s, 1)
-
-
 // TODO: Maybe we should also mem_release if we crossed committed chunk boundaries
-static void arena_clear(Arena *arena) {
+void arena_clear(Arena *arena) {
   arena->current = sizeof(Arena);
   arena_align_forward(arena);
 }
 
 #include "stdio.h"
-static Arena* arena_make_with_alignment(u64 size_in_bytes, u64 alignment) {
+Arena* arena_make_with_alignment(u64 size_in_bytes, u64 alignment) {
   u64 size_to_alloc = (size_in_bytes < ARENA_DEFAULT_CHUNK_SIZE) ? ARENA_DEFAULT_CHUNK_SIZE : size_in_bytes;
 
   // Reserve the whole memory and Commit only the first chunk
@@ -110,14 +133,14 @@ static Arena* arena_make_with_alignment(u64 size_in_bytes, u64 alignment) {
   return arena;
 }
 
-static Arena* arena_make(u64 size_in_bytes) {
+Arena* arena_make(u64 size_in_bytes) {
   return arena_make_with_alignment(size_in_bytes, 64);
 }
 
 // Here we allocated the null terminator but don't return
 // the actual size, its a bit obfuscated if we wanna pop
 // right after, we could leak 1 byte for each pop..
-static buf arena_sprintf(Arena *arena, const char* format, ...) {
+buf arena_sprintf(Arena *arena, const char* format, ...) {
   va_list args;
   va_start(args, format);
 
@@ -135,6 +158,49 @@ static buf arena_sprintf(Arena *arena, const char* format, ...) {
 
   return buf_make(mem, size-1);
 }
+
+
+Temp_Arena temp_arena_begin(Arena *arena) {
+  u64 pos = arena_get_current_pos(arena);
+  Temp_Arena ta = (Temp_Arena){.arena = arena, .original_pos = pos,};
+  return ta;
+}
+
+void temp_arena_end(Temp_Arena ta) {
+  arena_reset_to_pos(ta.arena, ta.original_pos);
+}
+
+
+thread_local Arena *arena_scratch[2]; // These need to be initialized
+Temp_Arena get_scratch(Arena **conflicts, u64 conflict_count) {
+  Arena *arena = nullptr;
+  u32 selected_idx = 0;
+  while (!arena && selected_idx < array_count(arena_scratch)) {
+    b32 found = true;
+    for (u64 conflict_idx = 0; conflict_idx < conflict_count; conflict_idx+=1) {
+      Arena *c = conflicts[conflict_idx];
+      if (c == arena_scratch[selected_idx]){
+        selected_idx+=1;
+        found = false;
+        break;
+      }
+    }
+    if (found) arena = arena_scratch[selected_idx];
+  }
+  return temp_arena_begin(arena);
+}
+
+void release_scratch(Temp_Arena ta) {
+  temp_arena_end(ta);
+}
+
+void scratch_init(u64 size) {
+  for (u64 i = 0; i < array_count(arena_scratch); i+=1) {
+    arena_scratch[i] = arena_make(size);
+  }
+}
+
+#endif
 
 #if 0
   // Arena test

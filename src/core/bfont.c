@@ -13,14 +13,14 @@ static const u8 default_font_data[] = {
 extern Font_Info platform_load_font(Arena *arena, u8 *font_data, u32 font_byte_count, u32 atlas_width, u32 atlas_height, u32 glyph_height_in_px, u8 **bitmap);
 
 // FIXME: persistent arena can be used for temporary allocations you know!
-Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
+Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height) {
 
   u8 *font_bitmap = nullptr;
   Font_Info font = platform_load_font(arena, (u8*)default_font_data, sizeof(default_font_data), atlas_width, atlas_height, glyph_height_in_px, &font_bitmap);
 
   // Transform to RGBA
-  u64 temp_arena_pos_start = arena_get_current_pos(temp_arena);
-  u8 *font_bitmap_rgba = (u8*)arena_push_array(temp_arena, u8, sizeof(u32)*atlas_width*atlas_height);
+  Temp_Arena temp = get_scratch(0,0);
+  u8 *font_bitmap_rgba = (u8*)arena_push_array(temp.arena, u8, sizeof(u32)*atlas_width*atlas_height);
   for (u32 i = 0; i < atlas_width; i+=1) {
     for (u32 j = 0; j < atlas_height; j+=1) {
       for (u32 comp = 0; comp < 4; comp+=1) {
@@ -32,7 +32,7 @@ Font_Info bfont_load_default_atlas(Arena *arena, Arena *temp_arena, u32 glyph_he
   font.tex_dim = v2m(atlas_width, atlas_height);
   font.tex_id = am_load_from_data(STR8L("fa.png"), STR8(font_bitmap_rgba, sizeof(u32)*atlas_width*atlas_height));
   //font.tex_id = am_load_from_data(STR8L("fa.png"), STR8(font_bitmap_rgba, sizeof(u32)*atlas_width*atlas_height));
-  arena_reset_to_pos(temp_arena, temp_arena_pos_start);
+  release_scratch(temp);
 
   return font;
 }

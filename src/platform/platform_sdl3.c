@@ -13,6 +13,7 @@
 #define STR_IMPLEMENTATION
 #define BRAND_IMPLEMENTATION
 #define PROFILER_IMPLEMENTATION
+#define ARENA_IMPLEMENTATION 
 #include "base/base_inc.h"
 
 #define OGL_IMPLEMENTATION
@@ -351,8 +352,8 @@ int main(void) {
   BRAND_SEED(time(0));
 
   Game_State gs = {};
-
   Game_Api game_api = {};
+  scratch_init(MB(100));
 
   /////////////////////////////////////////////////////
   // 0. SDL3 initialization (window + OpenGL)
@@ -425,7 +426,7 @@ int main(void) {
   gs.atlas = am_load_from_data(STR8L("atlas.png"), STR8((char*)atlas_data, sizeof(atlas_data)));
   gs.atlas_sprites_per_dim = v2m(16,10);
 
-  gs.font = bfont_load_default_atlas(gs.persistent_arena, gs.frame_arena, 32, 256, 256);
+  gs.font = bfont_load_default_atlas(gs.persistent_arena, 32, 256, 256);
 
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;
