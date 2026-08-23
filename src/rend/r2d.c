@@ -17,14 +17,14 @@ static R2D_Pass_List __render_passes;
 const char* batch_vs = R"(#version 460 core
 layout(location=0) in vec4 src_rect;
 layout(location=1) in vec4 dst_rect;
-layout(location=2) in vec4 v_color;
-layout(location=3) in int tidx;
-layout(location=4) in float v_rot_rad;
-layout(location=5) in float corner_radius;
-layout(location=6) in float softness;
+layout(location=2) in vec4 clip_rect;
+layout(location=3) in vec4 v_color;
+layout(location=4) in int tidx;
+layout(location=5) in float v_rot_rad;
+layout(location=6) in float corner_radius;
+layout(location=7) in float softness;
 
 layout (std140) uniform BatchUbo { mat4 view_proj; };
-
 
 vec2 vertices[4] = vec2[](
   vec2(-0.5,+0.5),
@@ -45,42 +45,37 @@ vec2 tex_coords[4] = vec2[](
 mat2 rotate2d(float angle) { return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)); }
 
 out Vertex_Data {
+  vec4 clip_rect;
   vec4 color;
   vec2 tc;
 
   flat int tidx;
-  vec2 dst_pos;
+  vec2 center_pos;
   vec2 dst_hdim;
+  vec2 frag_pos;
   float corner_radius;
   float softness;
 } vdata;
 
 void main() { 
-  vec2 pos_offset = dst_rect.xy;
-  vec2 dim = dst_rect.zw;
-
-  vec2 pos = vertices[gl_VertexID]; // [-0.5, 0.5] range
-  pos *= dim; // scale
+  vec2 pos = vertices[gl_VertexID]*dst_rect.zw;
   vec2 local_pos = pos;
-
   pos = rotate2d(v_rot_rad) * pos; // rotate
-
-  pos += dim/2.0; // += hdim so that its centered on upper-left corner
-  pos += pos_offset; // translate
-  
-
+  pos += dst_rect.zw/2.0; // += hdim so that its centered on upper-left corner
+  pos += dst_rect.xy; // translate
 	gl_Position = view_proj * vec4(pos, 0.0, 1.0);
-
   vdata.color = v_color;
 
   vec2 uv = tex_coords[gl_VertexID];
   vdata.tc = src_rect.xy + uv * src_rect.zw;
 
-  vdata.dst_pos = local_pos;
-  vdata.dst_hdim = dim / 2.0;
+  vdata.center_pos = local_pos;
+  vdata.dst_hdim = dst_rect.zw/ 2.0;
   vdata.corner_radius = corner_radius;
   vdata.softness = softness;
   vdata.tidx = tidx;
+  vdata.clip_rect = clip_rect;
+  vdata.frag_pos = pos;
 }
 )";
 
@@ -95,20 +90,34 @@ float sd_rect(vec2 p, vec2 hdim, float corner_radius) {
 uniform sampler2D u_tex[4];
 
 in Vertex_Data {
+  vec4 clip_rect;
   vec4 color;
   vec2 tc;
 
   flat int tidx;
-  vec2 dst_pos;
+  vec2 center_pos;
   vec2 dst_hdim;
+  vec2 frag_pos;
   float corner_radius;
   float softness;
 } vdata;
 
 void main() {
-  float d = sd_rect(vdata.dst_pos, vdata.dst_hdim, vdata.corner_radius);
+  // SDF
+  float d = sd_rect(vdata.center_pos, vdata.dst_hdim, vdata.corner_radius);
   float edge = 1.0 - smoothstep(0.0, vdata.softness, d);
 
+  // clipping
+  vec2 clip_min = vdata.clip_rect.xy;
+  vec2 clip_max = clip_min + vdata.clip_rect.zw;
+  if (vdata.frag_pos.x < clip_min.x ||
+      vdata.frag_pos.y < clip_min.y ||
+      vdata.frag_pos.x > clip_max.x ||
+      vdata.frag_pos.y > clip_max.y) {
+      discard;
+  }
+
+  // texturing/color mixing
   if (vdata.tidx == 0) {
     vec2 tc = vdata.tc / textureSize(u_tex[0], 0).xy;
     out_color = edge * vdata.color * texture(u_tex[0], tc);
@@ -180,11 +189,12 @@ void r2d_try_load_shaders() {
           .vattribs = {
             [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect),       .stride = sizeof(Batch_Vertex), .instanced = true, },
             [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),          .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [3] = { .location = 3, .type = OGL_DATA_TYPE_INT, .offset = offsetof(Batch_Vertex, tidx),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [4] = { .location = 4, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [5] = { .location = 5, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, corner_radius),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
-            [6] = { .location = 6, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, softness),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, clip_rect),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),          .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [4] = { .location = 4, .type = OGL_DATA_TYPE_INT, .offset = offsetof(Batch_Vertex, tidx),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [5] = { .location = 5, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),        .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [6] = { .location = 6, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, corner_radius),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [7] = { .location = 7, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, softness),       .stride = sizeof(Batch_Vertex),.instanced = true,  },
           },
         },
       },
@@ -267,6 +277,7 @@ void r2d_flush_all() {
       Batch_Vertex v = (Batch_Vertex){
         .src_rect = *(v4*)&q->src_rect,
         .dst_rect = *(v4*)&q->dst_rect,
+        .clip_rect = *(v4*)&q->clip_rect,
         .color = q->c,
         .rot_rad = DEG2RAD(q->rot_deg),
         .corner_radius = q->corner_radius,

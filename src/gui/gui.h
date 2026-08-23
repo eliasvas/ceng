@@ -125,13 +125,7 @@ typedef struct {
   Gui_Box *box;
 }Gui_Signal;
 
-
-// Interface that we should provide (for now)
-void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 baseline_pos, f32 scale, color col, bool draw_box);
-
 void gui_init(Arena *tarena, Font_Info *font, Input *input);
-
-
 Gui_Box *gui_nil_box();
 Gui_Signal gui_button(str8 label);
 Gui_Signal gui_pane(str8 label);

@@ -235,8 +235,6 @@ Gui_Signal gui_spacer(Gui_Axis layout_axis, Gui_Size size) {
 }
 
 Gui_Signal gui_pane(str8 label) {
-  //u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y);
-  //u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_X |GUI_BOX_FLAG_VIEW_CLAMP_Y);
   u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_CLIP | GUI_BOX_FLAG_SCROLLABLE);
   Gui_Box *box = gui_box_make(label, flags);
   return gui_signal_from_box(box);
@@ -271,8 +269,8 @@ void gui_begin(rect viewport, f32 dt) {
   // TODO: ROOTBOX should finally be the whole screen space and this rect should be in user-code
   gui_set_next_fixed_x(5);
   gui_set_next_fixed_y(10);
-  gui_set_next_fixed_width(300);
-  gui_set_next_fixed_height(300);
+  gui_set_next_fixed_width(200);
+  gui_set_next_fixed_height(200);
   //ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
   ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX);
 
@@ -466,7 +464,8 @@ void gui_render(Gui_Box *root) {
   // 1. Draw the Regular box
   if (root->flags & GUI_BOX_FLAG_DRAW_BOX) {
     R_Quad quad = (R_Quad) {
-        .dst_rect = clip_rect,
+        .dst_rect = root->final_rect,
+        .clip_rect = clip_rect,
         .softness = root->softness,
         .corner_radius = root->corner_radius,
         .c = v4_add(root->bg_color, v4m(0.2 * root->hot_t, 0.2*root->active_t,0,0)),
@@ -550,7 +549,7 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
   gui_set_next_bg_color(v4_multf(gui_top_bg_color(), 1.2));
 
   str8 scroll_region_text = str8_sprintf(ctx.temp_arena, "%.*s_region", (int)s.count, s.data);
-	Gui_Box *scroll_region = gui_box_make(scroll_region_text, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y | GUI_BOX_FLAG_ALLOW_OVERFLOW_Y);
+	Gui_Box *scroll_region = gui_box_make(scroll_region_text, GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_SCROLLABLE | GUI_BOX_FLAG_VIEW_CLAMP_Y | GUI_BOX_FLAG_ALLOW_OVERFLOW_Y | GUI_BOX_FLAG_CLIP);
 
   f32 scroll_region_dim = (axis == GUI_AXIS_Y) ? scroll_region->final_rect.h : scroll_region->final_rect.w;
   f32 visible_items =  scroll_region_dim / (f32)sdata->item_px;

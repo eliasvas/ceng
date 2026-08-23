@@ -166,7 +166,7 @@ void game_render(Game_State *gs, float dt) {
   gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);
 
   static Gui_Scroll_Data sdata = {
-    .item_px = 60, // FIXME change this to 60 to see some weird stuff..
+    .item_px = 30, // FIXME change this to 60 to see some weird stuff..
     .item_count = 8,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
@@ -177,15 +177,14 @@ void game_render(Game_State *gs, float dt) {
 
   Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
   assert(scroll_list.box);
-  //gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 100.0, 0.0});
-  gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
+  gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 400.0, 1.0});
     if (gui_button(STR8L("AAAA")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
     gui_button(STR8L("BBBB"));
     gui_button(STR8L("CCCC"));
     gui_button(STR8L("DDDD"));
     gui_button(STR8L("EEEE"));
     gui_button(STR8L("FFFF"));
-    gui_button(STR8L("GGGG"));
+    gui_button(STR8L("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"));
     gui_button(STR8L("HHHH"));
     gui_pop_pref_width();
   gui_scroll_list_end(STR8L("MyScrollTest"));
