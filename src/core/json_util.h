@@ -339,6 +339,7 @@ static char *test_json_str = "{ \
           \"POSITION\" : 1 \
         }, \
         \"indices\" : 0 \
+        \"material\" : 0 \
       } ] \
     } \
   ], \
@@ -383,7 +384,21 @@ static char *test_json_str = "{ \
       \"min\" : [ 0.0, 0.0, 0.0 ] \
     } \
   ], \
- \
+  \"materials\": [\
+    {\
+      \"pbrMetallicRoughness\": {\
+        \"baseColorFactor\": [\
+          0.2,\
+          0.3,\
+          0.9,\
+          1.0\
+        ],\
+        \"metallicFactor\": 0.0\
+      },\
+      \"emissiveFactor\": [ 0.0, 0.0, 0.0 ],\
+      \"name\": \"Material_001-effect\"\
+    }\
+  ],\
   \"asset\" : { \
     \"version\" : \"2.0\" \
   } \

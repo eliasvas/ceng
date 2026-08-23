@@ -28,10 +28,21 @@ typedef struct {
   s32 comp_per_elem;
 } Gltf_Accessor;
 
+typedef struct {
+  v4 base_color_factor;
+  f32 metallic_factor;
+} Gltf_Material_PBR;
+
+typedef struct {
+  Gltf_Material_PBR pbr;
+  v3 emissive_factor;
+} Gltf_Material;
+
 // This struct will pretty much contain all the gltf
 // fields, can be used for serializing or deserializing data
-typedef struct Mesh_Data {s32 pos_idx; s32 indices_idx;} Mesh_Data;
-typedef struct Gltf2_Info {
+typedef struct Mesh_Data {s32 pos_idx; s32 indices_idx; s32 material_idx;} Mesh_Data;
+// Meshes are arrays of mesh primitives
+typedef struct {
 
   Mesh_Data *mdata;
   s32 mdata_count;
@@ -40,12 +51,15 @@ typedef struct Gltf2_Info {
   s32 buffer_count;
 
   Gltf_Buffer_View *buffer_views;
-  s32 buffer_views_count;
+  s32 buffer_view_count;
 
   Gltf_Accessor *accessors;
   s32 accessor_count;
 
-} Gltf2_Info;
+  Gltf_Material *materials;
+  s32 material_count;
+
+} Gltf_Info;
 
 static Gltf_Buffer_Kind gltf_get_buffer_view_kind(s32 target) {
   if (target == 34962) return GLTF_ARRAY_BUFFER;
@@ -75,10 +89,30 @@ static s32 gltf_comp_count_from_type(str8 type) {
   return 1;
 }
 
+
+static v3 json_parse_vec3(Json_Element *root) {
+  return (root && root->first) ?
+    v3m(
+        str8_to_float(root->first->value), 
+        str8_to_float(root->first->next->value),
+        str8_to_float(root->first->next->next->value)
+    ) : v3m(0,0,0);
+}
+
+static v4 json_parse_vec4(Json_Element *root) {
+  return (root && root->first) ?
+    v4m(
+        str8_to_float(root->first->value), 
+        str8_to_float(root->first->next->value),
+        str8_to_float(root->first->next->next->value),
+        str8_to_float(root->first->next->next->next->value)
+    ) : v4m(0,0,0,0);
+}
+
 // FIXME: Make a base64 encode/decode utility in core layer
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
-static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
-  Gltf2_Info info = {};
+static Gltf_Info gltf_load(Arena *arena, char *json_data) {
+  Gltf_Info info = {};
 
   Json_Element *root = json_parse(arena, json_data);
   Json_Element* scene = json_lookup(root, STR8L("scene"));
@@ -103,6 +137,8 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
       }
       Json_Element* indices = json_lookup(attribs_json, STR8L("indices")); assert(indices);
       info.mdata[mesh_idx].indices_idx = str8_to_int(indices->value);
+      Json_Element* materials = json_lookup(attribs_json, STR8L("materials")); assert(indices);
+      info.mdata[mesh_idx].material_idx = str8_to_int(materials->value);
     }
   }
 
@@ -128,8 +164,8 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
 
   // 2. Parse bufferViews
   Json_Element* buffer_views_json = json_lookup(root, STR8L("bufferViews")); assert(buffer_views_json);
-  s32 buffer_views_count = json_count_children(buffer_views_json);
-  info.buffer_views = arena_push_array(arena, str8, buffer_views_count);
+  s32 buffer_view_count = json_count_children(buffer_views_json);
+  info.buffer_views = arena_push_array(arena, str8, buffer_view_count);
   s32 view_idx = 0;
   for (Json_Element *b= buffer_views_json->first; b != nullptr; b = b->next, view_idx+=1) {
     // Fill buffer_view array
@@ -167,10 +203,30 @@ static Gltf2_Info gltf2_load(Arena *arena, char *json_data) {
     info.accessors[acc_idx].comp_per_elem = gltf_comp_count_from_type(type->value);
   }
 
+  // 3. Parse materials
+  Json_Element* materials_json = json_lookup(root, STR8L("materials")); assert(materials_json);
+  info.materials = arena_push_array(arena, Gltf_Material, json_count_children(materials_json));
+  s32 material_idx = 0;
+  for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
+    Json_Element* name = json_lookup(m, STR8L("name")); assert(name);
+    printf("Material parsed: %.*s\n", STR8_VARG(name->value));
+    Json_Element* emissive_factor = json_lookup(m, STR8L("emissiveFactor"));
+    info.materials[material_idx].emissive_factor = json_parse_vec3(emissive_factor);
+
+    Json_Element* pbr_mr = json_lookup(m, STR8L("pbrMetallicRoughness"));
+    if (pbr_mr) {
+      Json_Element* bcf = json_lookup(pbr_mr, STR8L("baseColorFactor"));
+      info.materials[material_idx].pbr.base_color_factor = json_parse_vec4(bcf);
+
+      Json_Element* mf = json_lookup(pbr_mr, STR8L("metallicFactor"));
+      info.materials[material_idx].pbr.metallic_factor = str8_to_float(mf->value);
+    }
+  }
+
   return info;
 }
 
-static u8* gltf_data_from_accessor(Gltf2_Info info, s32 acc_idx, s32 *stride) {
+static u8* gltf_data_from_accessor(Gltf_Info info, s32 acc_idx, s32 *stride) {
   s32 bufv_idx = info.accessors[acc_idx].bufv_idx;
   s32 buf_idx = info.buffer_views[bufv_idx].buf_idx;
   u8 *buf_data = info.buffers[buf_idx].data;
@@ -181,7 +237,7 @@ static u8* gltf_data_from_accessor(Gltf2_Info info, s32 acc_idx, s32 *stride) {
   return (u8*)(buf_data + bufv_offset + acc_offset);
 }
 
-static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf2_Info info, s64 *vcount) {
+static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf_Info info, s64 *vcount) {
   s64 actual_vcount = 0;
   for (s32 i = 0; i < info.mdata_count; i+=1) {
     Mesh_Data *md = &info.mdata[i];
@@ -206,8 +262,7 @@ static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf2_Info info, s64 
       v3 *vpos = (v3*)(&positions[3 * vidx]);
       verts[vert_idx].pos = *(vpos);
 
-      // Only for testing rn
-      verts[vert_idx].color = FRZ_RED;
+      verts[vert_idx].color = info.materials[md->material_idx].pbr.base_color_factor;
       vert_idx+=1;
     }
   }

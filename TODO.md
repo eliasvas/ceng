@@ -1,5 +1,4 @@
 ## Gui
-    - GUI box clipping???? I always forget this I think? I Forgot
     - Animations!
     - Regular image support
     - Unicode support
