@@ -38,14 +38,40 @@ typedef struct {
   v3 emissive_factor;
 } Gltf_Material;
 
-// This struct will pretty much contain all the gltf
-// fields, can be used for serializing or deserializing data
-typedef struct Mesh_Data {s32 pos_idx; s32 indices_idx; s32 material_idx;} Mesh_Data;
+#define GLTF_PROPERTY_NOT_SPECIFIED (-1)
+static b32 gltf_is_property_specified(s32 property_idx) {
+  return (property_idx != GLTF_PROPERTY_NOT_SPECIFIED);
+}
+
+#define GLTF_MAX_ATTRIB_N 4
+typedef struct {
+  s32 pos_idx;
+  s32 norm_idx;
+  s32 tang_idx;
+  // e.g TEXCOORD_0, TEXCOORD_1 etc.
+  s32 texcoord_idx[GLTF_MAX_ATTRIB_N];
+  s32 col_idx[GLTF_MAX_ATTRIB_N];
+  s32 joints_idx[GLTF_MAX_ATTRIB_N];
+  s32 weights_idx[GLTF_MAX_ATTRIB_N];
+} Gltf_Attribs; 
+
+typedef struct {
+  Gltf_Attribs attribs;
+  s32 indices_idx;
+  s32 material_idx;
+  s32 mode;
+} Gltf_Prim;
+
+typedef struct {
+  Gltf_Prim *prims;
+  s32 prim_count;
+} Gltf_Mesh;
+
+
 // Meshes are arrays of mesh primitives
 typedef struct {
-
-  Mesh_Data *mdata;
-  s32 mdata_count;
+  Gltf_Mesh *meshes;
+  s32 mesh_count;
 
   str8 *buffers;
   s32 buffer_count;
@@ -60,6 +86,51 @@ typedef struct {
   s32 material_count;
 
 } Gltf_Info;
+
+
+
+static Gltf_Prim default_prim = (Gltf_Prim) {
+  .attribs = {
+    .pos_idx = GLTF_PROPERTY_NOT_SPECIFIED,
+    .norm_idx = GLTF_PROPERTY_NOT_SPECIFIED,
+    .tang_idx = GLTF_PROPERTY_NOT_SPECIFIED,
+    .texcoord_idx[0] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .texcoord_idx[1] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .texcoord_idx[2] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .texcoord_idx[3] = GLTF_PROPERTY_NOT_SPECIFIED,
+
+    .col_idx[0] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .col_idx[1] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .col_idx[2] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .col_idx[3] = GLTF_PROPERTY_NOT_SPECIFIED,
+
+    .joints_idx[0] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .joints_idx[1] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .joints_idx[2] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .joints_idx[3] = GLTF_PROPERTY_NOT_SPECIFIED,
+
+    .weights_idx[0] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .weights_idx[1] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .weights_idx[2] = GLTF_PROPERTY_NOT_SPECIFIED,
+    .weights_idx[3] = GLTF_PROPERTY_NOT_SPECIFIED,
+  },
+  .indices_idx = GLTF_PROPERTY_NOT_SPECIFIED,
+  .material_idx = 0,
+  .mode = 4,
+};
+
+static s32 ogl_prim_type_from_gltf_prim_mode(s32 mode) {
+  switch(mode) {
+    case 0:  return OGL_PRIM_TYPE_POINT;
+    case 1:  return OGL_PRIM_TYPE_LINE;
+    case 2:  return OGL_PRIM_TYPE_LINE_LOOP;
+    case 3:  return OGL_PRIM_TYPE_LINE_STRIP;
+    case 4:  return OGL_PRIM_TYPE_TRIANGLE;
+    case 5:  return OGL_PRIM_TYPE_TRIANGLE_STRIP;
+    case 6:  return OGL_PRIM_TYPE_TRIANGLE_FAN;
+    default: return OGL_PRIM_TYPE_TRIANGLE;
+  }
+}
 
 static Gltf_Buffer_Kind gltf_get_buffer_view_kind(s32 target) {
   if (target == 34962) return GLTF_ARRAY_BUFFER;
@@ -120,25 +191,42 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
 
   // 0. Parse meshes
   Json_Element* meshes_json = json_lookup(root, STR8L("meshes_json")); assert(meshes_json);
-  info.mdata_count = json_count_children(meshes_json);
-  info.mdata = arena_push_array(arena, Mesh_Data, info.mdata_count);
+  info.mesh_count = json_count_children(meshes_json);
+  info.meshes = arena_push_array(arena, Gltf_Mesh, info.mesh_count);
   s32 mesh_idx = 0;
   for (Json_Element *mesh = meshes_json->first; mesh != nullptr; mesh = mesh->next, mesh_idx+=1) {
     Json_Element* primitives_json = json_lookup(meshes_json, STR8L("primitives")); assert(primitives_json);
-    for (Json_Element *prim = primitives_json->first; prim != nullptr; prim = prim->next) {
-      Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
+
+    info.meshes[mesh_idx].prim_count = json_count_children(primitives_json);
+    info.meshes[mesh_idx].prims = arena_push_array(arena, Gltf_Prim, info.meshes[mesh_idx].prim_count);
+
+    s32 prim_idx = 0;
+    for (Json_Element *prim = primitives_json->first; prim != nullptr; prim = prim->next, prim_idx+=1) {
+      Gltf_Prim *primitive = &info.meshes[mesh_idx].prims[prim_idx];
+      *primitive = default_prim;
 
       // FIXME: WHY attribs_json->first->first
+      Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
       for (Json_Element *attrib = attribs_json->first->first ; attrib != nullptr; attrib = attrib->next) {
         //printf("IAM ATTRIB %.*s -> %.*s \n", STR8_VARG(attrib->label), STR8_VARG(attrib->value));
+        Gltf_Attribs *attribs = &primitive->attribs;
         if (str8_eq(attrib->label, STR8L("POSITION"))) {
-          info.mdata[mesh_idx].pos_idx = str8_to_int(attrib->value);
+          attribs->pos_idx = str8_to_int(attrib->value);
+        } else if (str8_eq(attrib->label, STR8L("NORMAL"))) {
+          attribs->norm_idx = str8_to_int(attrib->value);
         }
+        // TODO: Add more attributes!
+        // .....
+        // .....
+        // .....
       }
-      Json_Element* indices = json_lookup(attribs_json, STR8L("indices")); assert(indices);
-      info.mdata[mesh_idx].indices_idx = str8_to_int(indices->value);
-      Json_Element* materials = json_lookup(attribs_json, STR8L("materials")); assert(indices);
-      info.mdata[mesh_idx].material_idx = str8_to_int(materials->value);
+
+      Json_Element* indices = json_lookup(attribs_json, STR8L("indices"));
+      if (indices) primitive->indices_idx = str8_to_int(indices->value);
+      Json_Element* materials = json_lookup(attribs_json, STR8L("materials"));
+      if (materials) primitive->material_idx = str8_to_int(materials->value);
+      Json_Element* mode = json_lookup(attribs_json, STR8L("mode"));
+      if (mode) primitive->mode = str8_to_int(mode->value);
     }
   }
 
@@ -203,9 +291,10 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
     info.accessors[acc_idx].comp_per_elem = gltf_comp_count_from_type(type->value);
   }
 
-  // 3. Parse materials
+  // 3. Parse materials (In case no material specified we allocate one, the default empty material)
   Json_Element* materials_json = json_lookup(root, STR8L("materials")); assert(materials_json);
-  info.materials = arena_push_array(arena, Gltf_Material, json_count_children(materials_json));
+  info.material_count = (materials_json) ? json_count_children(materials_json) : 1;
+  info.materials = arena_push_array(arena, Gltf_Material, info.material_count); 
   s32 material_idx = 0;
   for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
     Json_Element* name = json_lookup(m, STR8L("name")); assert(name);
@@ -239,31 +328,50 @@ static u8* gltf_data_from_accessor(Gltf_Info info, s32 acc_idx, s32 *stride) {
 
 static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf_Info info, s64 *vcount) {
   s64 actual_vcount = 0;
-  for (s32 i = 0; i < info.mdata_count; i+=1) {
-    Mesh_Data *md = &info.mdata[i];
+  for (s32 i = 0; i < info.mesh_count; i+=1) {
+    Gltf_Mesh *mesh = &info.meshes[i];
 
-    // FIXME: We presuppose every mesh has indices.. is that expected? check spec
-    actual_vcount += info.accessors[md->indices_idx].count;
+    // add either the count of indices or the count of position to final mesh vertex count
+    for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
+      Gltf_Prim *primitive = &mesh->prims[prim_idx];
+      actual_vcount += (gltf_is_property_specified(primitive->indices_idx)) ? 
+        info.accessors[mesh->prims[prim_idx].indices_idx].count : 
+        info.accessors[mesh->prims[prim_idx].attribs.pos_idx].count;
+    }
   }
   *vcount = actual_vcount;
 
   Tri_Vertex *verts = arena_push_array(arena, Tri_Vertex, actual_vcount);
 
   s64 vert_idx = 0;
-  for (s32 i = 0; i < info.mdata_count; i+=1) {
-    Mesh_Data *md = &info.mdata[i];
+  for (s32 i = 0; i < info.mesh_count; i+=1) {
+    Gltf_Mesh *mesh = &info.meshes[i];
 
-    s16 *indices = (s16*)gltf_data_from_accessor(info, md->indices_idx, nullptr);
-    s64 indices_count = info.accessors[md->indices_idx].count;
-    f32 *positions = (f32*)gltf_data_from_accessor(info, md->pos_idx, nullptr);
+    for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
+      s16 *indices = (s16*)gltf_data_from_accessor(info, mesh->prims[prim_idx].indices_idx, nullptr);
+      s64 indices_count = info.accessors[mesh->prims[prim_idx].indices_idx].count;
+      f32 *positions = (f32*)gltf_data_from_accessor(info, mesh->prims[prim_idx].attribs.pos_idx, nullptr);
 
-    for (s64 idx = 0; idx < indices_count; idx+=1) {
-      s32 vidx = indices[idx];
-      v3 *vpos = (v3*)(&positions[3 * vidx]);
-      verts[vert_idx].pos = *(vpos);
+      if (indices_count > 0) { // In case of index-based primitive
+        for (s64 idx = 0; idx < indices_count; idx+=1) {
+          s32 vidx = indices[idx];
+          v3 *vpos = (v3*)(&positions[3 * vidx]);
+          verts[vert_idx].pos = *(vpos);
 
-      verts[vert_idx].color = info.materials[md->material_idx].pbr.base_color_factor;
-      vert_idx+=1;
+          verts[vert_idx].color = info.materials[mesh->prims[prim_idx].material_idx].pbr.base_color_factor;
+          vert_idx+=1;
+        }
+      } else { // In case of vertex-only primitive
+        s64 vertices_count = info.accessors[mesh->prims[prim_idx].attribs.pos_idx].count;
+        for (s64 idx = 0; idx < vertices_count; idx+=1) {
+          s32 vidx = idx; 
+          v3 *vpos = (v3*)(&positions[3 * vidx]);
+          verts[vert_idx].pos = *(vpos);
+
+          verts[vert_idx].color = info.materials[mesh->prims[prim_idx].material_idx].pbr.base_color_factor;
+          vert_idx+=1;
+        }
+      }
     }
   }
 

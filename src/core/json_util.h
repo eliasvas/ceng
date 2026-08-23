@@ -340,6 +340,7 @@ static char *test_json_str = "{ \
         }, \
         \"indices\" : 0 \
         \"material\" : 0 \
+        \"mode\" : 4 \
       } ] \
     } \
   ], \
