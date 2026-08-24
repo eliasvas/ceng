@@ -38,6 +38,7 @@ struct Game_State {
   Particle_Mgr *pmgr;
 
   // Loaded Asset resources (TODO: Asset system)
+  Asset_Id model_asset_id;
   Asset_Id atlas;
   v2 atlas_sprites_per_dim;
   Font_Info font;

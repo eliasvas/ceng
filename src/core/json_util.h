@@ -54,7 +54,7 @@ static Json_Token json_tok_get(Json_Tokens tokens, u32 idx) {
   return (idx >= tokens.count) ? (Json_Token){} : tokens.tokens[idx];
 }
 
-static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
+static Json_Tokens json_tokenize(Arena *arena, str8 json_str) {
     Json_Tokens tokens = {};
 
     // We pre-parse the Json one time to get the token count :/
@@ -66,9 +66,9 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
     }
 
     int count = 0;
-    for (u32 i = 0; i < cstr_count(json_str); i+=count) {
+    for (u32 i = 0; i < json_str.count; i+=count) {
         Json_Token token = {};
-        char *c = &json_str[i];
+        char *c = (char*)&json_str.data[i];
         count = 1;
         switch (c[0]) {
            case ',':
@@ -144,6 +144,11 @@ static Json_Tokens json_tokenize(Arena *arena, char *json_str) {
     }
 
     return tokens;
+}
+
+
+static Json_Tokens json_tokenize_cstr(Arena *arena, char *json_str) {
+  return json_tokenize(arena, STR8(json_str, cstr_count(json_str)));
 }
 
 static void json_tok_print(Json_Tokens tokens) {
@@ -311,7 +316,7 @@ static Json_Element *json_parse_tokens(Arena *arena, Json_Tokens tokens) {
   return e;
 }
 
-static Json_Element *json_parse(Arena *arena, char *json_str) {
+static Json_Element *json_parse(Arena *arena, str8 json_str) {
   Json_Tokens tokens = json_tokenize(arena, json_str);
   Json_Element *root = json_parse_tokens(arena, tokens);
 

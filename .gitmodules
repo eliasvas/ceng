@@ -1,0 +1,3 @@
+[submodule "data/gltf-sample-models"]
+	path = data/gltf-sample-models
+	url = https://github.com/khronosgroup/gltf-sample-models

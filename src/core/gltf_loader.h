@@ -182,20 +182,20 @@ static v4 json_parse_vec4(Json_Element *root) {
 
 // FIXME: Make a base64 encode/decode utility in core layer
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
-static Gltf_Info gltf_load(Arena *arena, char *json_data) {
+static Gltf_Info gltf_load(Arena *arena, str8 json_data) {
   Gltf_Info info = {};
 
   Json_Element *root = json_parse(arena, json_data);
-  Json_Element* scene = json_lookup(root, STR8L("scene"));
-  assert(str8_eq(scene->label, STR8L("scene")) && str8_to_int(scene->value) == 0);
+  //Json_Element* scene = json_lookup(root, STR8L("scene"));
+  //assert(str8_eq(scene->label, STR8L("scene")) && str8_to_int(scene->value) == 0);
 
   // 0. Parse meshes
-  Json_Element* meshes_json = json_lookup(root, STR8L("meshes_json")); assert(meshes_json);
+  Json_Element* meshes_json = json_lookup(root, STR8L("meshes")); assert(meshes_json);
   info.mesh_count = json_count_children(meshes_json);
   info.meshes = arena_push_array(arena, Gltf_Mesh, info.mesh_count);
   s32 mesh_idx = 0;
   for (Json_Element *mesh = meshes_json->first; mesh != nullptr; mesh = mesh->next, mesh_idx+=1) {
-    Json_Element* primitives_json = json_lookup(meshes_json, STR8L("primitives")); assert(primitives_json);
+    Json_Element* primitives_json = json_lookup(mesh, STR8L("primitives")); assert(primitives_json);
 
     info.meshes[mesh_idx].prim_count = json_count_children(primitives_json);
     info.meshes[mesh_idx].prims = arena_push_array(arena, Gltf_Prim, info.meshes[mesh_idx].prim_count);
@@ -205,9 +205,8 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
       Gltf_Prim *primitive = &info.meshes[mesh_idx].prims[prim_idx];
       *primitive = default_prim;
 
-      // FIXME: WHY attribs_json->first->first
       Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
-      for (Json_Element *attrib = attribs_json->first->first ; attrib != nullptr; attrib = attrib->next) {
+      for (Json_Element *attrib = attribs_json->first ; attrib != nullptr; attrib = attrib->next) {
         //printf("IAM ATTRIB %.*s -> %.*s \n", STR8_VARG(attrib->label), STR8_VARG(attrib->value));
         Gltf_Attribs *attribs = &primitive->attribs;
         if (str8_eq(attrib->label, STR8L("POSITION"))) {
@@ -221,11 +220,11 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
         // .....
       }
 
-      Json_Element* indices = json_lookup(attribs_json, STR8L("indices"));
+      Json_Element* indices = json_lookup(prim, STR8L("indices"));
       if (indices) primitive->indices_idx = str8_to_int(indices->value);
-      Json_Element* materials = json_lookup(attribs_json, STR8L("materials"));
+      Json_Element* materials = json_lookup(prim, STR8L("materials"));
       if (materials) primitive->material_idx = str8_to_int(materials->value);
-      Json_Element* mode = json_lookup(attribs_json, STR8L("mode"));
+      Json_Element* mode = json_lookup(prim, STR8L("mode"));
       if (mode) primitive->mode = str8_to_int(mode->value);
     }
   }
@@ -246,28 +245,28 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
 
 
     // aren't buffers always the length of the 'uri' string?
-    //printf("len %.*s buf: %ld\n", STR8_VARG(byte_len->value), info.buffers[buf_idx].count);
+    // printf("len %.*s buf: %ld\n", STR8_VARG(byte_len->value), info.buffers[buf_idx].count);
     //assert(str8_to_int(byte_len->value) == buffers[buf_idx].count);
   }
 
   // 2. Parse bufferViews
   Json_Element* buffer_views_json = json_lookup(root, STR8L("bufferViews")); assert(buffer_views_json);
   s32 buffer_view_count = json_count_children(buffer_views_json);
-  info.buffer_views = arena_push_array(arena, str8, buffer_view_count);
+  info.buffer_views = arena_push_array(arena, Gltf_Buffer_View, buffer_view_count);
   s32 view_idx = 0;
   for (Json_Element *b= buffer_views_json->first; b != nullptr; b = b->next, view_idx+=1) {
     // Fill buffer_view array
     Json_Element* buf_idx = json_lookup(b, STR8L("buffer")); assert(buf_idx);
-    Json_Element* offset  = json_lookup(b, STR8L("byteOffset")); assert(offset);
+    Json_Element* offset  = json_lookup(b, STR8L("byteOffset"));
     Json_Element* length  = json_lookup(b, STR8L("byteLength")); assert(length);
-    Json_Element* target = json_lookup(buffer_views_json, STR8L("target")); assert(target);
-    Json_Element* stride = json_lookup(buffer_views_json, STR8L("byteStride"));
+    Json_Element* target = json_lookup(b, STR8L("target"));
+    Json_Element* stride = json_lookup(b, STR8L("byteStride"));
 
     info.buffer_views[view_idx].buf_idx = str8_to_int(buf_idx->value);
-    info.buffer_views[view_idx].byte_offset = str8_to_int(offset->value);
+    info.buffer_views[view_idx].byte_offset = (offset) ? str8_to_int(offset->value) : 0;
     info.buffer_views[view_idx].byte_length = str8_to_int(length->value);
-    info.buffer_views[view_idx].kind = gltf_get_buffer_view_kind(str8_to_int(target->value));
-    if (stride) info.buffer_views[view_idx].byte_stride = str8_to_int(stride->value);
+    info.buffer_views[view_idx].kind = (target) ? gltf_get_buffer_view_kind(str8_to_int(target->value)) : 0;
+    info.buffer_views[view_idx].byte_stride = (stride) ? str8_to_int(stride->value) : 0;
 
   }
 
@@ -277,7 +276,7 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
   s32 acc_idx = 0;
   for (Json_Element *a= accessors_json->first; a != nullptr; a = a->next, acc_idx+=1) {
     Json_Element* bufv_idx = json_lookup(a, STR8L("bufferView")); assert(bufv_idx);
-    Json_Element* offset  = json_lookup(a, STR8L("byteOffset")); assert(offset);
+    Json_Element* offset  = json_lookup(a, STR8L("byteOffset"));
     Json_Element* comp_type = json_lookup(a, STR8L("componentType")); assert(comp_type);
     Json_Element* count = json_lookup(a, STR8L("count")); assert(count);
     Json_Element* type = json_lookup(a, STR8L("type")); assert(type);
@@ -285,30 +284,36 @@ static Gltf_Info gltf_load(Arena *arena, char *json_data) {
     //Json_Element* min = json_lookup(a, STR8L("min")); assert(min);
 
     info.accessors[acc_idx].bufv_idx = str8_to_int(bufv_idx->value);
-    info.accessors[acc_idx].byte_offset = str8_to_int(offset->value);
+    info.accessors[acc_idx].byte_offset = (offset) ? str8_to_int(offset->value) : 0;
     info.accessors[acc_idx].count = str8_to_int(count->value);
     info.accessors[acc_idx].bytes_per_elem = gltf_byte_count_from_comp_type(str8_to_int(comp_type->value));
     info.accessors[acc_idx].comp_per_elem = gltf_comp_count_from_type(type->value);
   }
 
   // 3. Parse materials (In case no material specified we allocate one, the default empty material)
-  Json_Element* materials_json = json_lookup(root, STR8L("materials")); assert(materials_json);
+  Json_Element* materials_json = json_lookup(root, STR8L("materials"));
   info.material_count = (materials_json) ? json_count_children(materials_json) : 1;
   info.materials = arena_push_array(arena, Gltf_Material, info.material_count); 
-  s32 material_idx = 0;
-  for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
-    Json_Element* name = json_lookup(m, STR8L("name")); assert(name);
-    printf("Material parsed: %.*s\n", STR8_VARG(name->value));
-    Json_Element* emissive_factor = json_lookup(m, STR8L("emissiveFactor"));
-    info.materials[material_idx].emissive_factor = json_parse_vec3(emissive_factor);
+  if (materials_json) {
+    s32 material_idx = 0;
+    for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
+      Json_Element* name = json_lookup(m, STR8L("name")); assert(name);
+      printf("Material parsed: %.*s\n", STR8_VARG(name->value));
+      Json_Element* emissive_factor = json_lookup(m, STR8L("emissiveFactor"));
+      info.materials[material_idx].emissive_factor = json_parse_vec3(emissive_factor);
 
-    Json_Element* pbr_mr = json_lookup(m, STR8L("pbrMetallicRoughness"));
-    if (pbr_mr) {
-      Json_Element* bcf = json_lookup(pbr_mr, STR8L("baseColorFactor"));
-      info.materials[material_idx].pbr.base_color_factor = json_parse_vec4(bcf);
+      Json_Element* pbr_mr = json_lookup(m, STR8L("pbrMetallicRoughness"));
+      if (pbr_mr) {
+        Json_Element* bcf = json_lookup(pbr_mr, STR8L("baseColorFactor"));
+        if (bcf) {
+          info.materials[material_idx].pbr.base_color_factor = json_parse_vec4(bcf);
+        }
 
-      Json_Element* mf = json_lookup(pbr_mr, STR8L("metallicFactor"));
-      info.materials[material_idx].pbr.metallic_factor = str8_to_float(mf->value);
+        Json_Element* mf = json_lookup(pbr_mr, STR8L("metallicFactor"));
+        if (mf) {
+          info.materials[material_idx].pbr.metallic_factor = str8_to_float(mf->value);
+        }
+      }
     }
   }
 
@@ -348,11 +353,12 @@ static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf_Info info, s64 *
     Gltf_Mesh *mesh = &info.meshes[i];
 
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
-      s16 *indices = (s16*)gltf_data_from_accessor(info, mesh->prims[prim_idx].indices_idx, nullptr);
-      s64 indices_count = info.accessors[mesh->prims[prim_idx].indices_idx].count;
       f32 *positions = (f32*)gltf_data_from_accessor(info, mesh->prims[prim_idx].attribs.pos_idx, nullptr);
+      b32 index_data_available = gltf_is_property_specified(mesh->prims[prim_idx].indices_idx);
 
-      if (indices_count > 0) { // In case of index-based primitive
+      if (index_data_available) { // In case of index-based primitive
+        s16 *indices = (s16*)gltf_data_from_accessor(info, mesh->prims[prim_idx].indices_idx, nullptr);
+        s64 indices_count = info.accessors[mesh->prims[prim_idx].indices_idx].count;
         for (s64 idx = 0; idx < indices_count; idx+=1) {
           s32 vidx = indices[idx];
           v3 *vpos = (v3*)(&positions[3 * vidx]);

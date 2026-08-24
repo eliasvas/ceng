@@ -5,7 +5,7 @@ Model_Mgr* model_mgr_init(Asset_Mgr *parent) {
   Model_Mgr *mm = arena_push_array(parent->arena, Model_Mgr, 1);
 
 
-  Gltf_Info info = gltf_load(parent->tarena, test_json_str);
+  Gltf_Info info = gltf_load(parent->tarena, STR8(test_json_str, cstr_count(test_json_str)));
   s64 vcount = 0;
   Tri_Vertex* verts = gltf_to_basic_mesh_bundle(parent->arena, info, &vcount);
 
@@ -39,23 +39,19 @@ Model_Info *model_mgr_get(Model_Mgr *mgr, Asset_Id id) {
 
 Asset_Id model_mgr_load_from_data(Model_Mgr *mgr, str8 asset_path, str8 asset_data) { 
   Asset_Id id = asset_id_from_path(asset_path); 
+  Gltf_Info info = gltf_load(mgr->parent->tarena, asset_data);
+  s64 vcount = 0;
+  Tri_Vertex* verts = gltf_to_basic_mesh_bundle(mgr->parent->arena, info, &vcount);
 
-  Model_Info tex = {};
-  if (asset_data.count > 0) {
-    // 0. Load via SDL_Image
-    //v2 img_dim = {};
-    //u8 *px_data = platform_img_to_raw(mgr->parent->tarena, asset_data, &img_dim);
-    // 1. Make the (internal) Model_Info
-    //tex = ogl_tex_make(px_data, img_dim.x, img_dim.y, OGL_TEX_FORMAT_RGBA8U, (Model_Info_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
-  } else {
-    // In case we provide empty data, the user can make an ogl_tex
-    tex = (Model_Info){};
-  }
-  
+  Model_Info data = (Model_Info) {
+    .verts = verts,
+    .vert_count = vcount,
+  };
+
 
   // 2. Make a node and hook to hasmap
   Model_Node *node = arena_push_array(mgr->parent->arena, Model_Node, 1);
-  node->data = tex;
+  node->data = data;
   node->id = id;
   s64 slot_idx = (node->id.id % mgr->slot_count);
   dll_push_back(mgr->slots[slot_idx].first, mgr->slots[slot_idx].last, node);

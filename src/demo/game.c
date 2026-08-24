@@ -92,7 +92,7 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
   r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 
-  Model_Info *mi = (Model_Info*)am_get(asset_id_from_path(STR8L("invalid.gltf")));
+  Model_Info *mi = (Model_Info*)am_get(asset_id_from_path(STR8L("model.gltf")));
   r3d_imm_verts(gs->game_viewport, mi->verts, mi->vert_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
 }
 
