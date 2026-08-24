@@ -1,5 +1,5 @@
 ## Gui
-    - Animations!
+    - Better animations
     - Regular image support
     - Unicode support
     - More widgets?

@@ -11,10 +11,6 @@
 
 extern void platform_play_sound(const char *sound);
 
-// Just for testing
-Tri_Vertex *gltf_verts = nullptr;
-s64 gltf_verts_count = 0;
-
 void game_init(Game_State *gs) {
   gs->entity_store = arena_push_array(gs->persistent_arena, Entity_Store, 1);
   entity_store_init(gs->entity_store);
@@ -48,17 +44,8 @@ void game_init(Game_State *gs) {
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
 
-  /////////////////////////////////////////////////////////////
-  /// Make this into the assert test for the json parser too1
-  /////////////////////////////////////////////////////////////
-  // This needs to be inside the asset system else it will not be reloaded!
+  // Base64 test.. no reason
   base_64_test(gs->frame_arena);
-  Gltf_Info info = gltf_load(gs->frame_arena, test_json_str);
-  s64 vcount = 0;
-  Tri_Vertex* verts = gltf_to_basic_mesh_bundle(gs->persistent_arena, info, &vcount); assert(verts);
-  gltf_verts_count = vcount;
-  gltf_verts = verts;
-
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -105,7 +92,8 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
   r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 
-  r3d_imm_verts(gs->game_viewport, gltf_verts, gltf_verts_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
+  Model_Info *mi = (Model_Info*)am_get(asset_id_from_path(STR8L("invalid.gltf")));
+  r3d_imm_verts(gs->game_viewport, mi->verts, mi->vert_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp);
 }
 
 void game_render(Game_State *gs, float dt) {

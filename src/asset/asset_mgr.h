@@ -15,13 +15,15 @@ static Asset_Id asset_id_from_path(str8 path) {
 }
 
 Ogl_Tex *tex_mgr_get(Tex_Mgr *mgr, Asset_Id id);
+Model_Info *model_mgr_get(Model_Mgr *mgr, Asset_Id id);
 static Asset_Handle am_get(Asset_Id id) {
   switch(id.kind) {
     case ASSET_KIND_TEX:
       return (Asset_Handle)tex_mgr_get(g_am.tm, id);
+    case ASSET_KIND_MODEL:
+      return (Asset_Handle)model_mgr_get(g_am.mm, id);
     case ASSET_KIND_FONT:
     case ASSET_KIND_AUDIO:
-    case ASSET_KIND_MODEL:
     default:
       printf("YOYOYOYOOYO\n");
       return (Asset_Handle){};
@@ -29,15 +31,17 @@ static Asset_Handle am_get(Asset_Id id) {
 }
 
 Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_path, str8 asset_data);
+Asset_Id model_mgr_load_from_data(Model_Mgr *mgr, str8 asset_path, str8 asset_data);
 static Asset_Id am_load_from_data(str8 asset_path, str8 asset_data) {
   Asset_Id id = asset_id_from_path(asset_path);
 
   switch(id.kind) {
     case ASSET_KIND_TEX:
       return tex_mgr_load_from_data(g_am.tm, asset_path, asset_data);
+    case ASSET_KIND_MODEL:
+      return model_mgr_load_from_data(g_am.mm, asset_path, asset_data);
     case ASSET_KIND_FONT:
     case ASSET_KIND_AUDIO:
-    case ASSET_KIND_MODEL:
     default:
       printf("YOYOYOYOOYO\n");
       return (Asset_Id){};
@@ -45,12 +49,14 @@ static Asset_Id am_load_from_data(str8 asset_path, str8 asset_data) {
 }
 
 Tex_Mgr* tex_mgr_init(Asset_Mgr *parent);
+Model_Mgr* model_mgr_init(Asset_Mgr *parent);
 static void am_init(Arena *arena, Arena *tarena) {
   g_am.arena = arena;
   g_am.tarena = tarena;
 
   // Initialize texture manager
   g_am.tm = tex_mgr_init(&g_am);
+  g_am.mm = model_mgr_init(&g_am);
 }
 
 

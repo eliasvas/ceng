@@ -25,30 +25,35 @@ typedef struct {
 // Tex_Mgr types
 ///////////////////////////////
 
-// TODO: make this into a macro we gonna have a lot of these bois
-typedef struct Tex_Node Tex_Node;
-struct Tex_Node {
-  Ogl_Tex data;
-  Asset_Id id;
+#define ASSET_TYPE_DEF(Name, DataType) \
+  typedef struct Name##_Node Name##_Node; \
+  struct Name##_Node { \
+    DataType data; \
+    Asset_Id id; \
+    Name##_Node *next; \
+    Name##_Node *prev; \
+  }; \
+  typedef struct { \
+    struct Name##_Node *first; \
+    struct Name##_Node *last; \
+  } Name##_Node_Hash_Slot; \
+  struct Asset_Mgr; \
+  typedef struct { \
+    Name##_Node_Hash_Slot *slots; \
+    s64 slot_count; \
+    DataType default_value; \
+    struct Asset_Mgr *parent; \
+  } Name##_Mgr; \
 
-  Tex_Node *next;
-  Tex_Node *prev;
-};
+struct Ogl_Tex;
+ASSET_TYPE_DEF(Tex, Ogl_Tex);
+
 
 typedef struct {
-  Tex_Node *first;
-  Tex_Node *last;
-} Tex_Node_Hash_Slot;
-
-struct Asset_Mgr;
-typedef struct {
-  Tex_Node_Hash_Slot *slots;
-  s64 slot_count;
-
-  Ogl_Tex default_value;
-
-  struct Asset_Mgr *parent;
-} Tex_Mgr;
+  Tri_Vertex *verts;
+  s64 vert_count;
+} Model_Info;
+ASSET_TYPE_DEF(Model, Model_Info);
 
 ///////////////////////////////
 // Asset_Mgr types
@@ -60,6 +65,7 @@ struct Asset_Mgr {
   Arena *tarena;
 
   Tex_Mgr *tm;
+  Model_Mgr *mm;
 };
 
 #endif
