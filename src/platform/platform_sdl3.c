@@ -427,15 +427,7 @@ int main(void) {
   gs.atlas = am_load_from_data(STR8L("atlas.png"), STR8((char*)atlas_data, sizeof(atlas_data)));
   gs.atlas_sprites_per_dim = v2m(16,10);
 
-#if 0
-  // Load a gltf model
-  static const u8 gltf_model_data[] = {
-#embed "../../data/gltf-sample-models/2.0/Box/glTF-Embedded/Box.gltf"
-  };
-  //gs.model_asset_id = am_load_from_data(STR8L("model.gltf"), STR8((char*)gltf_model_data, sizeof(gltf_model_data)));
-#endif
-
-
+  gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/BoxTextured/glTF/BoxTextured.gltf"));
 
   gs.font = bfont_load_default_atlas(gs.persistent_arena, 32, 256, 256);
 

@@ -80,6 +80,11 @@ void r3d_try_load_shaders() {
   }
 }
 
+void r3d_imm_change_tex(Ogl_Tex *tex) {
+  //Ogl_Tex *texture = ((Ogl_Tex*)am_get(tex));
+  tri_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("u_tex"), .tex = *(tex),};
+}
+
 void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp) {
   //u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
   //buf sampler_name = arena_sprintf(__frame_arena, "u_tex");

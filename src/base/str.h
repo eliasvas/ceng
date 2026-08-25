@@ -35,7 +35,7 @@ typedef struct {
 #ifndef STR_IMPLEMENTATION
 
 int64_t cstr_count(const char *s);
-str8 str8_from_cstr(const char *cstr);
+char* cstr_from_str8(Arena *arena, str8 s);
 str8 upper_from_str8(Arena *arena, str8 base);
 str8 lower_from_str8(Arena *arena, str8 base);
 bool str8_eq(str8 left, str8 right);
@@ -43,9 +43,13 @@ bool str8_starts_with(str8 s, str8 prefix);
 bool str8_ends_with(str8 s, str8 postfix);
 str8 str8_substr(str8 s, int64_t start_incl, int64_t end_incl);
 uint64_t str8_find_needle(str8 haystack, str8 needle);
+uint64_t str8_find_char(str8 haystack, char needle, b32 backward_search);
 str8 str8_sprintf(Arena *arena, const char* format, ...);
 s64 str8_to_int(str8 s);
 f64 str8_to_float(str8 s);
+str8 str8_extract_path(str8 file_path);
+str8 str8_extract_filename(str8 file_path);
+str8 str8_concat(Arena *arena, str8 a, str8 b);
 
 #else
 
@@ -122,6 +126,17 @@ uint64_t str8_find_needle(str8 haystack, str8 needle) {
   for (int64_t i = 0; i < haystack.count - needle.count + 1; i+=1) {
     str8 haystack_candidate = STR8(&haystack.data[i], needle.count);
     if (str8_eq(haystack_candidate, needle)) return (uint64_t)i;
+  }
+
+  return (uint64_t)STR8_NO_MATCH;
+}
+
+uint64_t str8_find_char(str8 haystack, char needle, b32 backward_search) {
+  int64_t start_idx = (backward_search) ? haystack.count-1 : 0;
+  int64_t end_idx = (backward_search) ? 0 : haystack.count;
+  int64_t step = (backward_search) ? -1 : 1;
+  for (int64_t i = start_idx; labs(i - end_idx-step) != 0; i+=step) {
+    if (haystack.data[i] == needle) return i;
   }
 
   return (uint64_t)STR8_NO_MATCH;
@@ -225,6 +240,35 @@ f64 str8_to_float(str8 s) {
   return counter * sign;
 }
 
-#endif
+char* cstr_from_str8(Arena *arena, str8 s) {
+  char *buffer = arena_push_array_nz(arena, char, s.count+1);
+  for (s32 idx = 0; idx < s.count; idx+=1) {
+    // FIXME: make a memcpy oK?
+    buffer[idx] = s.data[idx];
+  }
+  s.data[s.count] = '\0';
 
-#endif
+  return buffer;
+}
+
+// FIXME: We need a real str8 path api
+str8 str8_extract_path(str8 file_path) {
+  // FIXME: Why are paths always with '/'?
+  // support delimeter with all path separatos
+  s64 last_slash_idx = maximum(0,str8_find_char(file_path, '/', true));
+  return str8_substr(file_path, 0, last_slash_idx);
+}
+
+str8 str8_extract_filename(str8 file_path) {
+uint64_t str8_find_needle(str8 haystack, str8 needle);
+  s64 last_slash_idx = maximum(0,str8_find_char(file_path, '/', true));
+  return str8_substr(file_path, last_slash_idx+1, file_path.count-1);
+}
+
+str8 str8_concat(Arena *arena, str8 a, str8 b) {
+  return str8_sprintf(arena, "%.*s%.*s", STR8_VARG(a), STR8_VARG(b));
+}
+
+#endif // STR_IMPLEMENTATION
+
+#endif // STR_H__

@@ -52,6 +52,8 @@ ASSET_TYPE_DEF(Tex, Ogl_Tex);
 typedef struct {
   Tri_Vertex *verts;
   s64 vert_count;
+
+  Asset_Id tex_id;
 } Model_Info;
 ASSET_TYPE_DEF(Model, Model_Info);
 

@@ -343,9 +343,9 @@ static char *test_json_str = "{ \
         \"attributes\" : { \
           \"POSITION\" : 1 \
         }, \
-        \"indices\" : 0 \
-        \"material\" : 0 \
-        \"mode\" : 4 \
+        \"indices\" : 0, \
+        \"material\" : 0, \
+        \"mode\" : 4, \
       } ] \
     } \
   ], \

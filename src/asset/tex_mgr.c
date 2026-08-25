@@ -43,8 +43,8 @@ Ogl_Tex *tex_mgr_get(Tex_Mgr *mgr, Asset_Id id) {
   return (tex) ? tex : &(mgr->default_value);
 }
 
-Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_path, str8 asset_data) { // maybe pass this as argument we got from am_load_from_data(..)
-  Asset_Id id = asset_id_from_path(asset_path); 
+Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_fullpath, str8 asset_data) { // maybe pass this as argument we got from am_load_from_data(..)
+  Asset_Id id = asset_id_from_path(asset_fullpath); 
 
   Ogl_Tex tex = {};
   if (asset_data.count > 0) {
@@ -71,4 +71,14 @@ Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_path, str8 asset_data) 
 
   // 3. Return the id
   return id;
+}
+
+Asset_Id tex_mgr_load_from_fullpath(Tex_Mgr *mgr, str8 asset_fullpath) { 
+  char* path = cstr_from_str8(mgr->parent->tarena, asset_fullpath);
+  u32 count = 0;
+  u8 *data = (u8*)read_whole_file_binary(path, &count);
+  str8 asset_data = STR8(data, count);
+
+  str8 file = str8_extract_filename(asset_fullpath);
+  return tex_mgr_load_from_data(mgr, file, asset_data);
 }

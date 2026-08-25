@@ -5,7 +5,7 @@ Model_Mgr* model_mgr_init(Asset_Mgr *parent) {
   Model_Mgr *mm = arena_push_array(parent->arena, Model_Mgr, 1);
 
 
-  Gltf_Info info = gltf_load(parent->tarena, STR8(test_json_str, cstr_count(test_json_str)));
+  Gltf_Info info = gltf_load(parent->tarena, (str8){},STR8(test_json_str, cstr_count(test_json_str)));
   s64 vcount = 0;
   Tri_Vertex* verts = gltf_to_basic_mesh_bundle(parent->arena, info, &vcount);
 
@@ -37,15 +37,28 @@ Model_Info *model_mgr_get(Model_Mgr *mgr, Asset_Id id) {
   return (tex) ? tex : &(mgr->default_value);
 }
 
-Asset_Id model_mgr_load_from_data(Model_Mgr *mgr, str8 asset_path, str8 asset_data) { 
-  Asset_Id id = asset_id_from_path(asset_path); 
-  Gltf_Info info = gltf_load(mgr->parent->tarena, asset_data);
+Asset_Id model_mgr_load_from_fullpath(Model_Mgr *mgr, str8 asset_fullpath) { 
+  char* path = cstr_from_str8(mgr->parent->tarena, asset_fullpath);
+  u32 count = 0;
+  u8 *data = (u8*)read_whole_file_binary(path, &count);
+  str8 asset_data = STR8(data, count);
+
+  //str8 file = str8_extract_filename(asset_fullpath);
+  return model_mgr_load_from_data(mgr, asset_fullpath, asset_data);
+}
+
+Asset_Id model_mgr_load_from_data(Model_Mgr *mgr, str8 asset_fullpath, str8 asset_data) { 
+  str8 dir = str8_extract_path(asset_fullpath);
+  str8 file = str8_extract_filename(asset_fullpath);
+  Asset_Id id = asset_id_from_path(file); 
+  Gltf_Info info = gltf_load(mgr->parent->tarena, dir, asset_data);
   s64 vcount = 0;
   Tri_Vertex* verts = gltf_to_basic_mesh_bundle(mgr->parent->arena, info, &vcount);
 
   Model_Info data = (Model_Info) {
     .verts = verts,
     .vert_count = vcount,
+    .tex_id = (info.image_count) ? info.images[0].id : (Asset_Id){0, ASSET_KIND_TEX},
   };
 
 

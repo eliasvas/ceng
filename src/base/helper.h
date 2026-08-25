@@ -434,5 +434,21 @@ static buf buf_lcut(buf b, buf delim) {
 
 #define MAKE_STR(s) ((buf){s, cstr_count(s)})
 
+#include "stdio.h"
+#include "stdlib.h"
+static char * read_whole_file_binary(char *filename, u32 *size) {
+    FILE *f = fopen(filename, "rb");
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+	*size = fsize;
+    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
+
+    char *string = (char*)malloc(fsize);
+    fread(string, 1, fsize, f);
+    fclose(f);
+
+    return (char*)string;
+}
 
 #endif

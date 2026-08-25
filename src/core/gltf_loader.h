@@ -4,6 +4,8 @@
 #include "core/json_util.h"
 #include "core/base64.h"
 
+// FIXME: embedded images don't currently work
+
 // Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 
 typedef enum {
@@ -27,6 +29,23 @@ typedef struct {
   s32 bytes_per_elem;
   s32 comp_per_elem;
 } Gltf_Accessor;
+
+typedef struct {
+  Asset_Id id;
+} Gltf_Image;
+
+typedef struct {
+  s32 min_id;
+  s32 mag_id;
+  s32 wrap_s_id;
+  s32 wrap_t_id;
+} Gltf_Sampler;
+
+
+typedef struct {
+  s32 sampler_idx;
+  s32 image_idx;
+} Gltf_Texture;
 
 typedef struct {
   v4 base_color_factor;
@@ -81,6 +100,15 @@ typedef struct {
 
   Gltf_Accessor *accessors;
   s32 accessor_count;
+
+  Gltf_Image *images;
+  s32 image_count;
+
+  Gltf_Sampler *samplers;
+  s32 sampler_count;
+
+  Gltf_Texture *textures;
+  s32 texture_count;
 
   Gltf_Material *materials;
   s32 material_count;
@@ -182,7 +210,7 @@ static v4 json_parse_vec4(Json_Element *root) {
 
 // FIXME: Make a base64 encode/decode utility in core layer
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
-static Gltf_Info gltf_load(Arena *arena, str8 json_data) {
+static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   Gltf_Info info = {};
 
   Json_Element *root = json_parse(arena, json_data);
@@ -213,6 +241,8 @@ static Gltf_Info gltf_load(Arena *arena, str8 json_data) {
           attribs->pos_idx = str8_to_int(attrib->value);
         } else if (str8_eq(attrib->label, STR8L("NORMAL"))) {
           attribs->norm_idx = str8_to_int(attrib->value);
+        } else if (str8_eq(attrib->label, STR8L("TEXCOORD_0"))) {
+          attribs->texcoord_idx[0] = str8_to_int(attrib->value);
         }
         // TODO: Add more attributes!
         // .....
@@ -235,13 +265,27 @@ static Gltf_Info gltf_load(Arena *arena, str8 json_data) {
   info.buffers = arena_push_array(arena, str8, json_count_children(buffers_json));
   s32 buf_idx = 0;
   for (Json_Element *b= buffers_json->first; b != nullptr; b = b->next, buf_idx+=1) {
-    Json_Element* data = json_lookup(b, STR8L("uri")); assert(data);
+    Json_Element* uri = json_lookup(b, STR8L("uri")); assert(uri);
     Json_Element* byte_len = json_lookup(b, STR8L("byteLength")); assert(byte_len);
 
-    info.buffers[buf_idx] = str8_substr(data->value, str8_find_needle(data->value, STR8L(","))+1, data->value.count); 
+    info.buffers[buf_idx] = str8_substr(uri->value, str8_find_needle(uri->value, STR8L(","))+1, uri->value.count); 
 
-    info.buffers[buf_idx] = my_base64_decode(arena, info.buffers[buf_idx]);
-    assert(info.buffers[buf_idx].count == (s32)str8_to_int(byte_len->value));
+    if (str8_ends_with(uri->value, STR8L(".bin"))) {
+      str8 bin_fullpath = str8_concat(arena, dir, uri->value);
+      printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
+      Temp_Arena temp = get_scratch(0,0);
+      char* bin_fullpath_cstr = cstr_from_str8(temp.arena, bin_fullpath);
+      u32 count = 0;
+      // FIXME: leak
+      u8 *bin_data = (u8*)read_whole_file_binary(bin_fullpath_cstr, &count);
+      assert(bin_data);
+      release_scratch(temp);
+      info.buffers[buf_idx] = STR8(bin_data, count);
+    } else {
+      info.buffers[buf_idx] = my_base64_decode(arena, info.buffers[buf_idx]);
+    }
+
+
 
 
     // aren't buffers always the length of the 'uri' string?
@@ -290,10 +334,76 @@ static Gltf_Info gltf_load(Arena *arena, str8 json_data) {
     info.accessors[acc_idx].comp_per_elem = gltf_comp_count_from_type(type->value);
   }
 
-  // 3. Parse materials (In case no material specified we allocate one, the default empty material)
+  // 3. Parse Images
+  Json_Element* images_json = json_lookup(root, STR8L("images"));
+  info.image_count = (images_json) ? json_count_children(images_json) : 0;
+  info.images = arena_push_array(arena, Gltf_Image, info.image_count); 
+  if (images_json) {
+    s32 image_idx = 0;
+    for (Json_Element *i= images_json->first; i != nullptr; i = i->next, image_idx+=1) {
+      Json_Element* uri = json_lookup(i, STR8L("uri"));
+
+      // Read the image data
+      str8 img_fullpath = str8_concat(arena, dir, uri->value);
+      printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
+      Temp_Arena temp = get_scratch(0,0);
+      char* img_fullpath_cstr = cstr_from_str8(temp.arena, img_fullpath);
+      u32 count = 0;
+      // FIXME: leak
+      u8 *img_data = (u8*)read_whole_file_binary(img_fullpath_cstr, &count);
+      assert(img_data);
+      release_scratch(temp);
+
+      // Make a new texture asset from said data
+      // FIXME: Only .png supported.. uri->value must end in .png
+      // FIXME: We can't really modify sampler stuff with this asset system.. f-fix?
+      Asset_Id id = tex_mgr_load_from_data(g_am.tm, uri->value, STR8(img_data, count));
+      info.images[image_idx] = (Gltf_Image){id};
+    }
+  }
+  // 3. Parse Samplers
+  Json_Element* samplers_json = json_lookup(root, STR8L("samplers"));
+  info.sampler_count = (samplers_json) ? json_count_children(samplers_json) : 0;
+  info.samplers = arena_push_array(arena, Gltf_Sampler, info.sampler_count); 
+  if (samplers_json) {
+    s32 sampler_idx = 0;
+    for (Json_Element *s= samplers_json->first; s != nullptr; s = s->next, sampler_idx+=1) {
+      Json_Element *mag = json_lookup(s, STR8L("magFilter"));
+      if (mag) info.samplers[sampler_idx].mag_id = str8_to_int(mag->value);
+
+      Json_Element *minif = json_lookup(s, STR8L("minFilter"));
+      if (minif) info.samplers[sampler_idx].min_id = str8_to_int(minif->value);
+
+      Json_Element *wrap_s = json_lookup(s, STR8L("wrapS"));
+      if (wrap_s) info.samplers[sampler_idx].wrap_s_id = str8_to_int(wrap_s->value);
+
+      Json_Element *wrap_t = json_lookup(s, STR8L("wrapT"));
+      if (wrap_t) info.samplers[sampler_idx].wrap_s_id = str8_to_int(wrap_t->value);
+    }
+  }
+  // 3. Parse Textures
+  Json_Element* textures_json = json_lookup(root, STR8L("textures"));
+  info.texture_count = (textures_json) ? json_count_children(textures_json) : 0;
+  info.textures = arena_push_array(arena, Gltf_Texture, info.texture_count); 
+  if (textures_json) {
+    s32 texture_idx = 0;
+    for (Json_Element *t= textures_json->first; t != nullptr; t = t->next, texture_idx+=1) {
+      Json_Element *sampler = json_lookup(t, STR8L("sampler"));
+      if (sampler) info.textures[texture_idx].sampler_idx = str8_to_int(sampler->value);
+      Json_Element *source = json_lookup(t, STR8L("source"));
+      if (sampler) info.textures[texture_idx].image_idx = str8_to_int(source->value);
+
+    }
+  }
+
+  // 4. Parse materials (In case no material specified we allocate one, the default empty material)
   Json_Element* materials_json = json_lookup(root, STR8L("materials"));
   info.material_count = (materials_json) ? json_count_children(materials_json) : 1;
   info.materials = arena_push_array(arena, Gltf_Material, info.material_count); 
+
+  // FIXME: remove dis
+  info.materials[0].pbr.base_color_factor = v4m(1,1,1,1);
+
   if (materials_json) {
     s32 material_idx = 0;
     for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
@@ -354,6 +464,7 @@ static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf_Info info, s64 *
 
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
       f32 *positions = (f32*)gltf_data_from_accessor(info, mesh->prims[prim_idx].attribs.pos_idx, nullptr);
+      f32 *texcoords = (f32*)gltf_data_from_accessor(info, mesh->prims[prim_idx].attribs.texcoord_idx[0], nullptr);
       b32 index_data_available = gltf_is_property_specified(mesh->prims[prim_idx].indices_idx);
 
       if (index_data_available) { // In case of index-based primitive
@@ -362,7 +473,9 @@ static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf_Info info, s64 *
         for (s64 idx = 0; idx < indices_count; idx+=1) {
           s32 vidx = indices[idx];
           v3 *vpos = (v3*)(&positions[3 * vidx]);
+          v2 *tc = (v2*)(&texcoords[2 * vidx]);
           verts[vert_idx].pos = *(vpos);
+          verts[vert_idx].uv = *(tc);
 
           verts[vert_idx].color = info.materials[mesh->prims[prim_idx].material_idx].pbr.base_color_factor;
           vert_idx+=1;

@@ -48,6 +48,27 @@ static Asset_Id am_load_from_data(str8 asset_path, str8 asset_data) {
   }
 }
 
+
+Asset_Id tex_mgr_load_from_fullpath(Tex_Mgr *mgr, str8 asset_path);
+Asset_Id model_mgr_load_from_fullpath(Model_Mgr *mgr, str8 asset_path);
+static Asset_Id am_load_from_fullpath(str8 asset_path) {
+  str8 file = str8_extract_filename(asset_path);
+  Asset_Id id = asset_id_from_path(file);
+  assert(id.kind == ASSET_KIND_MODEL);
+
+  switch(id.kind) {
+    case ASSET_KIND_TEX:
+      return tex_mgr_load_from_fullpath(g_am.tm, asset_path);
+    case ASSET_KIND_MODEL:
+      return model_mgr_load_from_fullpath(g_am.mm, asset_path);
+    case ASSET_KIND_FONT:
+    case ASSET_KIND_AUDIO:
+    default:
+      printf("1YOYOYOYOOYO\n");
+      return (Asset_Id){};
+  }
+}
+
 Tex_Mgr* tex_mgr_init(Asset_Mgr *parent);
 Model_Mgr* model_mgr_init(Asset_Mgr *parent);
 static void am_init(Arena *arena, Arena *tarena) {

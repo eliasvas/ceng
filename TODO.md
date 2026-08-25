@@ -16,18 +16,23 @@
     - NLERP
 
 ## GLTF
-    - Load primitives correctly (currently we presuppose each mesh has one primitive)
+    - Embedded textures (base64 + jpeg/png)
     - Skeletal Animations (prereq Quaternions)
 
 ## Physics
     - Integrate Box3D
 
 ## Particles
-    - Simple CPU particles
+    - Keep adding stuff.. rn its very simple
     - https://alextardif.com/Particles.html
 
 ## Graphics
     - Shadows!!!!
+    - Immediate mode API is dogshit, texture specific API is criminal almost OpenGL level
+
+## Assets
+    - With current handling textures can't be customized (e.g different magFilter)
+    - Discerning asset type based on asset tag suffix is VERY bad and sad
 
 ## demo
-    - What about it..
+    - There is a game? what??
