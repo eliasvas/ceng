@@ -41,19 +41,30 @@ typedef struct {
   s32 wrap_t_id;
 } Gltf_Sampler;
 
-
 typedef struct {
   s32 sampler_idx;
   s32 image_idx;
 } Gltf_Texture;
 
 typedef struct {
+  s32 index;
+  s32 tex_coord;
+  b32 active;
+} Gltf_Material_Tex_Info; 
+
+typedef struct {
   v4 base_color_factor;
+  Gltf_Material_Tex_Info base_color_texture;
   f32 metallic_factor;
+  f32 roughness_factor;
+  Gltf_Material_Tex_Info metallic_roughness_texture;
 } Gltf_Material_PBR;
 
 typedef struct {
   Gltf_Material_PBR pbr;
+  Gltf_Material_Tex_Info normal_texture;
+  Gltf_Material_Tex_Info emissive_texture;
+  Gltf_Material_Tex_Info occlusion_texture;
   v3 emissive_factor;
 } Gltf_Material;
 
@@ -147,6 +158,7 @@ static Gltf_Prim default_prim = (Gltf_Prim) {
   .mode = 4,
 };
 
+
 static s32 ogl_prim_type_from_gltf_prim_mode(s32 mode) {
   switch(mode) {
     case 0:  return OGL_PRIM_TYPE_POINT;
@@ -188,24 +200,57 @@ static s32 gltf_comp_count_from_type(str8 type) {
   return 1;
 }
 
-
-static v3 json_parse_vec3(Json_Element *root) {
-  return (root && root->first) ?
-    v3m(
-        str8_to_float(root->first->value), 
-        str8_to_float(root->first->next->value),
-        str8_to_float(root->first->next->next->value)
-    ) : v3m(0,0,0);
+static Gltf_Material_Tex_Info json_parse_tex_info(Json_Element *root, str8 path) {
+  Gltf_Material_Tex_Info info = {};
+  Json_Element *bct = json_lookup(root, path);
+  if (bct) {
+    Json_Element *index = json_lookup(bct, STR8L("index"));
+    if (index) info.index = str8_to_int(index->value);
+    Json_Element *tex_coord = json_lookup(bct, STR8L("texCoord"));
+    if (tex_coord) info.tex_coord = str8_to_int(tex_coord->value);
+    if (index || tex_coord) info.active = true;
+  }
+  return info;
 }
 
-static v4 json_parse_vec4(Json_Element *root) {
-  return (root && root->first) ?
+static s32 json_parse_int(Json_Element *root, str8 path, s32 def) {
+  Json_Element *node = json_lookup(root, path);
+  return (node) ? str8_to_int(node->value) : def;
+}
+
+static f32 json_parse_float(Json_Element *root, str8 path, f32 def) {
+  Json_Element *node = json_lookup(root, path);
+  return (node) ? str8_to_float(node->value) : def;
+}
+
+static v2 json_parse_vec2(Json_Element *root, str8 path, v2 def) {
+  Json_Element *node = json_lookup(root, path);
+  return (node && node->first) ?
+    v2m(
+        str8_to_float(node->first->value), 
+        str8_to_float(node->first->next->value)
+    ) : def;
+}
+
+static v3 json_parse_vec3(Json_Element *root, str8 path, v3 def) {
+  Json_Element *node = json_lookup(root, path);
+  return (node && node->first) ?
+    v3m(
+        str8_to_float(node->first->value), 
+        str8_to_float(node->first->next->value),
+        str8_to_float(node->first->next->next->value)
+    ) : def;
+}
+
+static v4 json_parse_vec4(Json_Element *root, str8 path, v4 def) {
+  Json_Element *node = json_lookup(root, path);
+  return (node && node->first) ?
     v4m(
-        str8_to_float(root->first->value), 
-        str8_to_float(root->first->next->value),
-        str8_to_float(root->first->next->next->value),
-        str8_to_float(root->first->next->next->next->value)
-    ) : v4m(0,0,0,0);
+        str8_to_float(node->first->value), 
+        str8_to_float(node->first->next->value),
+        str8_to_float(node->first->next->next->value),
+        str8_to_float(node->first->next->next->next->value)
+    ) : def;
 }
 
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
@@ -248,13 +293,9 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         // .....
         // .....
       }
-
-      Json_Element* indices = json_lookup(prim, STR8L("indices"));
-      if (indices) primitive->indices_idx = str8_to_int(indices->value);
-      Json_Element* materials = json_lookup(prim, STR8L("materials"));
-      if (materials) primitive->material_idx = str8_to_int(materials->value);
-      Json_Element* mode = json_lookup(prim, STR8L("mode"));
-      if (mode) primitive->mode = str8_to_int(mode->value);
+      primitive->indices_idx = json_parse_int(prim, STR8L("indices"), GLTF_PROPERTY_NOT_SPECIFIED);
+      primitive->material_idx = json_parse_int(prim, STR8L("materials"), GLTF_PROPERTY_NOT_SPECIFIED);
+      primitive->mode = json_parse_int(prim, STR8L("mode"), 4);
     }
   }
 
@@ -271,7 +312,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
     if (str8_ends_with(uri->value, STR8L(".bin"))) {
       str8 bin_fullpath = str8_concat(arena, dir, uri->value);
-      printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
+      //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
       Temp_Arena temp = get_scratch(0,0);
       char* bin_fullpath_cstr = cstr_from_str8(temp.arena, bin_fullpath);
       u32 count = 0;
@@ -291,19 +332,13 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   info.buffer_views = arena_push_array(arena, Gltf_Buffer_View, buffer_view_count);
   s32 view_idx = 0;
   for (Json_Element *b= buffer_views_json->first; b != nullptr; b = b->next, view_idx+=1) {
-    // Fill buffer_view array
-    Json_Element* buf_idx = json_lookup(b, STR8L("buffer")); assert(buf_idx);
-    Json_Element* offset  = json_lookup(b, STR8L("byteOffset"));
-    Json_Element* length  = json_lookup(b, STR8L("byteLength")); assert(length);
-    Json_Element* target = json_lookup(b, STR8L("target"));
-    Json_Element* stride = json_lookup(b, STR8L("byteStride"));
+    Gltf_Buffer_View *view = &info.buffer_views[view_idx];
 
-    info.buffer_views[view_idx].buf_idx = str8_to_int(buf_idx->value);
-    info.buffer_views[view_idx].byte_offset = (offset) ? str8_to_int(offset->value) : 0;
-    info.buffer_views[view_idx].byte_length = str8_to_int(length->value);
-    info.buffer_views[view_idx].kind = (target) ? gltf_get_buffer_view_kind(str8_to_int(target->value)) : 0;
-    info.buffer_views[view_idx].byte_stride = (stride) ? str8_to_int(stride->value) : 0;
-
+    view->buf_idx = json_parse_int(b, STR8L("buffer"), 0);
+    view->byte_offset = json_parse_int(b, STR8L("byteOffset"), 0);
+    view->byte_length = json_parse_int(b, STR8L("byteLength"), 0);
+    view->kind = gltf_get_buffer_view_kind(json_parse_int(b, STR8L("target"), 0));
+    view->byte_stride = json_parse_int(b, STR8L("byteStride"), 0);
   }
 
   // 3. Parse accessors
@@ -311,19 +346,15 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   info.accessors = arena_push_array(arena, Gltf_Accessor, json_count_children(accessors_json));
   s32 acc_idx = 0;
   for (Json_Element *a= accessors_json->first; a != nullptr; a = a->next, acc_idx+=1) {
-    Json_Element* bufv_idx = json_lookup(a, STR8L("bufferView")); assert(bufv_idx);
-    Json_Element* offset  = json_lookup(a, STR8L("byteOffset"));
-    Json_Element* comp_type = json_lookup(a, STR8L("componentType")); assert(comp_type);
-    Json_Element* count = json_lookup(a, STR8L("count")); assert(count);
-    Json_Element* type = json_lookup(a, STR8L("type")); assert(type);
-    //Json_Element* max = json_lookup(a, STR8L("max")); assert(max);
-    //Json_Element* min = json_lookup(a, STR8L("min")); assert(min);
+    Gltf_Accessor *accessor = &info.accessors[acc_idx];
 
-    info.accessors[acc_idx].bufv_idx = str8_to_int(bufv_idx->value);
-    info.accessors[acc_idx].byte_offset = (offset) ? str8_to_int(offset->value) : 0;
-    info.accessors[acc_idx].count = str8_to_int(count->value);
-    info.accessors[acc_idx].bytes_per_elem = gltf_byte_count_from_comp_type(str8_to_int(comp_type->value));
-    info.accessors[acc_idx].comp_per_elem = gltf_comp_count_from_type(type->value);
+    accessor->bufv_idx = json_parse_int(a, STR8L("bufferView"), 0);
+    accessor->byte_offset = json_parse_int(a, STR8L("byteOffset"), 0);
+    accessor->bytes_per_elem = gltf_byte_count_from_comp_type(json_parse_int(a, STR8L("componentType"), 0));
+    accessor->count = json_parse_int(a, STR8L("count"), 0);
+
+    Json_Element* type = json_lookup(a, STR8L("type")); assert(type);
+    accessor->comp_per_elem = gltf_comp_count_from_type(type->value);
   }
 
   // 3. Parse Images
@@ -346,7 +377,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       } else {
         // Read the image data
         str8 img_fullpath = str8_concat(arena, dir, uri->value);
-        printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
+        //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
         Temp_Arena temp = get_scratch(0,0);
         char* img_fullpath_cstr = cstr_from_str8(temp.arena, img_fullpath);
         // FIXME: leak
@@ -368,18 +399,13 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   info.samplers = arena_push_array(arena, Gltf_Sampler, info.sampler_count); 
   if (samplers_json) {
     s32 sampler_idx = 0;
-    for (Json_Element *s= samplers_json->first; s != nullptr; s = s->next, sampler_idx+=1) {
-      Json_Element *mag = json_lookup(s, STR8L("magFilter"));
-      if (mag) info.samplers[sampler_idx].mag_id = str8_to_int(mag->value);
-
-      Json_Element *minif = json_lookup(s, STR8L("minFilter"));
-      if (minif) info.samplers[sampler_idx].min_id = str8_to_int(minif->value);
-
-      Json_Element *wrap_s = json_lookup(s, STR8L("wrapS"));
-      if (wrap_s) info.samplers[sampler_idx].wrap_s_id = str8_to_int(wrap_s->value);
-
-      Json_Element *wrap_t = json_lookup(s, STR8L("wrapT"));
-      if (wrap_t) info.samplers[sampler_idx].wrap_s_id = str8_to_int(wrap_t->value);
+    for (Json_Element *s = samplers_json->first; s != nullptr; s = s->next, sampler_idx+=1) {
+      Gltf_Sampler *sampler = &info.samplers[sampler_idx];
+      //FIXME: Make conversions for all these fields when time comes
+      sampler->mag_id = json_parse_int(s, STR8L("magFilter"), 0);
+      sampler->min_id = json_parse_int(s, STR8L("minFilter"), 0);
+      sampler->wrap_s_id = json_parse_int(s, STR8L("wrapS"), 0);
+      sampler->wrap_t_id = json_parse_int(s, STR8L("wrapT"), 0);
     }
   }
   // 3. Parse Textures
@@ -389,11 +415,9 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   if (textures_json) {
     s32 texture_idx = 0;
     for (Json_Element *t= textures_json->first; t != nullptr; t = t->next, texture_idx+=1) {
-      Json_Element *sampler = json_lookup(t, STR8L("sampler"));
-      if (sampler) info.textures[texture_idx].sampler_idx = str8_to_int(sampler->value);
-      Json_Element *source = json_lookup(t, STR8L("source"));
-      if (sampler) info.textures[texture_idx].image_idx = str8_to_int(source->value);
-
+      Gltf_Texture *texture = &info.textures[texture_idx];
+      texture->sampler_idx = json_parse_int(t, STR8L("sampler"), 0);
+      texture->image_idx = json_parse_int(t, STR8L("source"), 0);
     }
   }
 
@@ -402,29 +426,27 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   info.material_count = (materials_json) ? json_count_children(materials_json) : 1;
   info.materials = arena_push_array(arena, Gltf_Material, info.material_count); 
 
-  // FIXME: remove dis
-  info.materials[0].pbr.base_color_factor = v4m(1,1,1,1);
 
   if (materials_json) {
     s32 material_idx = 0;
     for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
       Json_Element* name = json_lookup(m, STR8L("name")); assert(name);
-      printf("Material parsed: %.*s\n", STR8_VARG(name->value));
-      Json_Element* emissive_factor = json_lookup(m, STR8L("emissiveFactor"));
-      info.materials[material_idx].emissive_factor = json_parse_vec3(emissive_factor);
+      Gltf_Material *material = &info.materials[material_idx];
 
       Json_Element* pbr_mr = json_lookup(m, STR8L("pbrMetallicRoughness"));
       if (pbr_mr) {
-        Json_Element* bcf = json_lookup(pbr_mr, STR8L("baseColorFactor"));
-        if (bcf) {
-          info.materials[material_idx].pbr.base_color_factor = json_parse_vec4(bcf);
-        }
+        material->pbr.base_color_factor = json_parse_vec4(pbr_mr, STR8L("baseColorFactor"), v4_one);
+        material->pbr.metallic_factor = json_parse_float(pbr_mr, STR8L("metallicFactor"), 1.0);
+        material->pbr.roughness_factor = json_parse_float(pbr_mr, STR8L("roughnessFactor"), 1.0);
 
-        Json_Element* mf = json_lookup(pbr_mr, STR8L("metallicFactor"));
-        if (mf) {
-          info.materials[material_idx].pbr.metallic_factor = str8_to_float(mf->value);
-        }
+        material->pbr.base_color_texture = json_parse_tex_info(pbr_mr, STR8L("baseColorTexture"));
+        material->pbr.metallic_roughness_texture = json_parse_tex_info(pbr_mr, STR8L("metallicRoughnessTexture"));
       }
+
+      material->emissive_factor = json_parse_vec3(m, STR8L("emissive_factor"), v3_zero);
+      material->normal_texture = json_parse_tex_info(m, STR8L("normalTexture"));
+      material->emissive_texture = json_parse_tex_info(m, STR8L("emissiveTexture"));
+      material->occlusion_texture = json_parse_tex_info(m, STR8L("occlusionTexture"));
     }
   }
 

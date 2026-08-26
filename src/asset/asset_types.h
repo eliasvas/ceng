@@ -21,6 +21,34 @@ typedef struct {
   Asset_Kind kind;
 } Asset_Id;
 
+
+
+#if 0
+typedef struct Asset_Node Asset_Node;
+struct Asset_Node {
+  union {
+    Ogl_Tex data;
+  };
+
+  Asset_Id id;
+  Asset_Node *next;
+  Asset_Node *prev;
+};
+
+typedef struct {
+  struct Asset_Node *first;
+  struct Asset_Node *last;
+} Asset_Node_Hash_Slot;
+
+struct Asset_Cache;
+typedef struct {
+  Asset_Node_Hash_Slot *slots;
+  s64 slot_count;
+  Asset_Node default_value;
+  struct Asset_Cache *parent;
+} Asset_Cache;
+#endif
+
 ///////////////////////////////
 // Tex_Mgr types
 ///////////////////////////////

@@ -35,6 +35,8 @@
 ## Assets
     - With current handling textures can't be customized (e.g different magFilter)
     - Discerning asset type based on asset tag suffix is VERY bad and sad
+    - Maybe asset should be discriminated union, so we don't have code duplication..
+    - Do we need RenderBundle to be an asset?
 
 ## demo
     - There is a game? what??

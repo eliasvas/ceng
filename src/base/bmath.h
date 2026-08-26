@@ -55,6 +55,8 @@ typedef union v2
     f32 raw[2];
 }v2;
 
+#define v2_zero ((v2){{0, 0}})
+#define v2_one ((v2){{1, 1}})
 #define v2m(x, y)   ((v2){{x, y}})
 INLINE v2  v2_add(v2 a, v2 b)          { return v2m(a.x+b.x,a.y+b.y); }
 INLINE v2  v2_sub(v2 a, v2 b)          { return v2m(a.x-b.x,a.y-b.y); }
@@ -76,6 +78,8 @@ typedef union v3
     f32 raw[3];
 }v3;
 
+#define v3_zero ((v3){{0, 0, 0}})
+#define v3_one ((v3){{1, 1, 1}})
 #define v3m(x, y, z)   ((v3){{x, y, z}})
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
@@ -100,6 +104,8 @@ typedef union v4
     f32 raw[4];
 }v4;
 
+#define v4_zero ((v4){{0, 0, 0, 0}})
+#define v4_one ((v4){{1, 1, 1, 1}})
 #define v4m(x, y, z, w)   ((v4){{x, y, z, w}})
 INLINE v4  v4m_3(v3 a)                { return v4m(a.x,a.y,a.z,1); } // THIS SUCKS
 INLINE v3  v3m_4(v4 a)                { return v3m(a.x,a.y,a.z); } // should be up SUCKS

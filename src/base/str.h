@@ -247,7 +247,6 @@ char* cstr_from_str8(Arena *arena, str8 s) {
     buffer[idx] = s.data[idx];
   }
   buffer[s.count] = '\0';
-  printf("final string: [%s]\n", buffer);
 
   return buffer;
 }

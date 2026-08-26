@@ -58,9 +58,11 @@ Asset_Id model_mgr_load_from_data(Model_Mgr *mgr, str8 asset_fullpath, str8 asse
   Model_Info data = (Model_Info) {
     .verts = verts,
     .vert_count = vcount,
-    .tex_id = (info.image_count) ? info.images[0].id : (Asset_Id){0, ASSET_KIND_TEX},
+    .tex_id = (Asset_Id){0, ASSET_KIND_TEX},
   };
-
+  if (info.image_count > 0 && info.texture_count >0 && info.material_count > 0) {
+    data.tex_id = info.images[info.textures[info.materials[0].pbr.base_color_texture.index].image_idx].id;
+  } 
 
   // 2. Make a node and hook to hasmap
   Model_Node *node = arena_push_array(mgr->parent->arena, Model_Node, 1);
