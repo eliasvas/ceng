@@ -208,7 +208,6 @@ static v4 json_parse_vec4(Json_Element *root) {
     ) : v4m(0,0,0,0);
 }
 
-// FIXME: Make a base64 encode/decode utility in core layer
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   Gltf_Info info = {};
@@ -284,13 +283,6 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     } else {
       info.buffers[buf_idx] = my_base64_decode(arena, info.buffers[buf_idx]);
     }
-
-
-
-
-    // aren't buffers always the length of the 'uri' string?
-    // printf("len %.*s buf: %ld\n", STR8_VARG(byte_len->value), info.buffers[buf_idx].count);
-    //assert(str8_to_int(byte_len->value) == buffers[buf_idx].count);
   }
 
   // 2. Parse bufferViews
@@ -343,16 +335,25 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     for (Json_Element *i= images_json->first; i != nullptr; i = i->next, image_idx+=1) {
       Json_Element* uri = json_lookup(i, STR8L("uri"));
 
-      // Read the image data
-      str8 img_fullpath = str8_concat(arena, dir, uri->value);
-      printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
-      Temp_Arena temp = get_scratch(0,0);
-      char* img_fullpath_cstr = cstr_from_str8(temp.arena, img_fullpath);
+      char *img_data;
       u32 count = 0;
-      // FIXME: leak
-      u8 *img_data = (u8*)read_whole_file_binary(img_fullpath_cstr, &count);
-      assert(img_data);
-      release_scratch(temp);
+
+      if (str8_starts_with(uri->value, STR8L("data"))) {
+        str8 img_b64_data = str8_substr(uri->value, str8_find_needle(uri->value, STR8L(","))+1, uri->value.count); 
+        str8 decoded = my_base64_decode(arena, img_b64_data);
+        count = decoded.count;
+        img_data = (char*)decoded.data;
+      } else {
+        // Read the image data
+        str8 img_fullpath = str8_concat(arena, dir, uri->value);
+        printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
+        Temp_Arena temp = get_scratch(0,0);
+        char* img_fullpath_cstr = cstr_from_str8(temp.arena, img_fullpath);
+        // FIXME: leak
+        img_data = (char*)read_whole_file_binary(img_fullpath_cstr, &count);
+        assert(img_data);
+        release_scratch(temp);
+      }
 
       // Make a new texture asset from said data
       // FIXME: Only .png supported.. uri->value must end in .png

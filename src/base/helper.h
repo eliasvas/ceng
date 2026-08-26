@@ -436,7 +436,7 @@ static buf buf_lcut(buf b, buf delim) {
 
 #include "stdio.h"
 #include "stdlib.h"
-static char * read_whole_file_binary(char *filename, u32 *size) {
+static char *read_whole_file_binary(char *filename, u32 *size) {
     FILE *f = fopen(filename, "rb");
 
     fseek(f, 0, SEEK_END);

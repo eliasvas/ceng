@@ -246,7 +246,8 @@ char* cstr_from_str8(Arena *arena, str8 s) {
     // FIXME: make a memcpy oK?
     buffer[idx] = s.data[idx];
   }
-  s.data[s.count] = '\0';
+  buffer[s.count] = '\0';
+  printf("final string: [%s]\n", buffer);
 
   return buffer;
 }

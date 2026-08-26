@@ -427,7 +427,7 @@ int main(void) {
   gs.atlas = am_load_from_data(STR8L("atlas.png"), STR8((char*)atlas_data, sizeof(atlas_data)));
   gs.atlas_sprites_per_dim = v2m(16,10);
 
-  gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/BoxTextured/glTF/BoxTextured.gltf"));
+  gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Avocado/glTF/Avocado.gltf"));
 
   gs.font = bfont_load_default_atlas(gs.persistent_arena, 32, 256, 256);
 
