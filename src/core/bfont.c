@@ -89,7 +89,7 @@ s64 bfont_count_glyphs_until_width(Font_Info *font_info, str8 text, f32 scale, f
 
 void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 pos, f32 scale, color col, bool draw_bounding_box) {
   rect tr = bfont_calc_text_rect(font_info, text, pos, scale);
-  Ogl_Tex *font_tex = (Ogl_Tex*)am_get(font_info->tex_id);
+  Ogl_Tex *font_tex = AM_GET(font_info->tex_id, tex);
 
   if (draw_bounding_box) {
     R_Quad quad = (R_Quad) {

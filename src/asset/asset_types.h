@@ -22,13 +22,23 @@ typedef struct {
 } Asset_Id;
 
 
+typedef struct {
+  Tri_Vertex *verts;
+  s64 vert_count;
 
-#if 0
+  Asset_Id tex_id;
+} Model_Info;
+struct Ogl_Tex;
+
+
 typedef struct Asset_Node Asset_Node;
 struct Asset_Node {
-  union {
-    Ogl_Tex data;
-  };
+  //union {
+    Ogl_Tex tex;
+    Model_Info model;
+    // Font font
+    // Render_Bundle?
+  //};
 
   Asset_Id id;
   Asset_Node *next;
@@ -45,9 +55,9 @@ typedef struct {
   Asset_Node_Hash_Slot *slots;
   s64 slot_count;
   Asset_Node default_value;
-  struct Asset_Cache *parent;
+  struct Asset_Mgr *parent;
 } Asset_Cache;
-#endif
+
 
 ///////////////////////////////
 // Tex_Mgr types
@@ -76,13 +86,6 @@ typedef struct {
 struct Ogl_Tex;
 ASSET_TYPE_DEF(Tex, Ogl_Tex);
 
-
-typedef struct {
-  Tri_Vertex *verts;
-  s64 vert_count;
-
-  Asset_Id tex_id;
-} Model_Info;
 ASSET_TYPE_DEF(Model, Model_Info);
 
 ///////////////////////////////
@@ -94,8 +97,7 @@ struct Asset_Mgr {
   Arena *arena;
   Arena *tarena;
 
-  Tex_Mgr *tm;
-  Model_Mgr *mm;
+  Asset_Cache *cache;
 };
 
 #endif

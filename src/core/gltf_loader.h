@@ -386,10 +386,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         release_scratch(temp);
       }
 
-      // Make a new texture asset from said data
-      // FIXME: Only .png supported.. uri->value must end in .png
-      // FIXME: We can't really modify sampler stuff with this asset system.. f-fix?
-      Asset_Id id = tex_mgr_load_from_data(g_am.tm, uri->value, STR8(img_data, count));
+      Asset_Id id = am_load_from_data(uri->value, STR8(img_data, count));
       info.images[image_idx] = (Gltf_Image){id};
     }
   }

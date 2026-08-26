@@ -52,7 +52,8 @@ void r3d_try_load_shaders() {
     tri_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(tri_vs, tri_fs),
 
-      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *(Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png")))},
+      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+
       .vbos = {
         [0] = {
           // the vertex buffer for this should probably be made after r_end has been called
@@ -81,7 +82,6 @@ void r3d_try_load_shaders() {
 }
 
 void r3d_imm_change_tex(Ogl_Tex *tex) {
-  //Ogl_Tex *texture = ((Ogl_Tex*)am_get(tex));
   tri_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("u_tex"), .tex = *(tex),};
 }
 

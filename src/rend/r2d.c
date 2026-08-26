@@ -356,7 +356,7 @@ R2D_Pass *r2d_pass_back() {
 
 void r2d_push_quad(R2D_Pass *pass, R_Quad q) {
   // white.png is just an invalid png name, which means that the default texture will be mapped (white)
-  if (q.tex == nullptr) q.tex = ((Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png"))));
+  if (q.tex == nullptr) q.tex = AM_GET(asset_id_from_path(STR8L("white.png")), tex);
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 

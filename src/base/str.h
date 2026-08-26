@@ -255,13 +255,15 @@ char* cstr_from_str8(Arena *arena, str8 s) {
 str8 str8_extract_path(str8 file_path) {
   // FIXME: Why are paths always with '/'?
   // support delimeter with all path separatos
-  s64 last_slash_idx = maximum(0,str8_find_char(file_path, '/', true));
+  s64 last_slash_idx = str8_find_char(file_path, '/', true);
+  if (last_slash_idx == STR8_NO_MATCH) last_slash_idx = 0;
   return str8_substr(file_path, 0, last_slash_idx);
 }
 
 str8 str8_extract_filename(str8 file_path) {
 uint64_t str8_find_needle(str8 haystack, str8 needle);
-  s64 last_slash_idx = maximum(0,str8_find_char(file_path, '/', true));
+  s64 last_slash_idx = str8_find_char(file_path, '/', true);
+  if (last_slash_idx == STR8_NO_MATCH) last_slash_idx = -1; // Retarded logic, pls stop this
   return str8_substr(file_path, last_slash_idx+1, file_path.count-1);
 }
 

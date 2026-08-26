@@ -14,70 +14,35 @@ static Asset_Id asset_id_from_path(str8 path) {
   return (Asset_Id){djb2_buf(path.data, path.count), asset_kind_from_path(path)};
 }
 
-Ogl_Tex *tex_mgr_get(Tex_Mgr *mgr, Asset_Id id);
-Model_Info *model_mgr_get(Model_Mgr *mgr, Asset_Id id);
+Asset_Node *asset_cache_get(Asset_Cache *mgr, Asset_Id id);
 static Asset_Handle am_get(Asset_Id id) {
-  switch(id.kind) {
-    case ASSET_KIND_TEX:
-      return (Asset_Handle)tex_mgr_get(g_am.tm, id);
-    case ASSET_KIND_MODEL:
-      return (Asset_Handle)model_mgr_get(g_am.mm, id);
-    case ASSET_KIND_FONT:
-    case ASSET_KIND_AUDIO:
-    default:
-      printf("YOYOYOYOOYO\n");
-      return (Asset_Handle){};
-  }
+    return (Asset_Handle)asset_cache_get(g_am.cache, id);
 }
+// This is a great help actually!
+#define AM_GET(id, field) (&((Asset_Node*)am_get(id))->field)
 
-Asset_Id tex_mgr_load_from_data(Tex_Mgr *mgr, str8 asset_path, str8 asset_data);
-Asset_Id model_mgr_load_from_data(Model_Mgr *mgr, str8 asset_path, str8 asset_data);
+Asset_Id asset_cache_load_from_data(Asset_Cache *mgr, str8 asset_fullpath, str8 asset_data);
 static Asset_Id am_load_from_data(str8 asset_path, str8 asset_data) {
-  Asset_Id id = asset_id_from_path(asset_path);
-
-  switch(id.kind) {
-    case ASSET_KIND_TEX:
-      return tex_mgr_load_from_data(g_am.tm, asset_path, asset_data);
-    case ASSET_KIND_MODEL:
-      return model_mgr_load_from_data(g_am.mm, asset_path, asset_data);
-    case ASSET_KIND_FONT:
-    case ASSET_KIND_AUDIO:
-    default:
-      printf("YOYOYOYOOYO\n");
-      return (Asset_Id){};
-  }
+  //Asset_Id id = asset_id_from_path(asset_path);
+  return asset_cache_load_from_data(g_am.cache, asset_path, asset_data);
 }
 
+Asset_Id asset_cache_load_from_fullpath(Asset_Cache *mgr, str8 asset_fullpath);
+static Asset_Id am_load_from_fullpath(str8 asset_fullpath) {
+  //str8 file = str8_extract_filename(asset_path);
+  //Asset_Id id = asset_id_from_path(file);
+  //assert(id.kind == ASSET_KIND_MODEL);
 
-Asset_Id tex_mgr_load_from_fullpath(Tex_Mgr *mgr, str8 asset_path);
-Asset_Id model_mgr_load_from_fullpath(Model_Mgr *mgr, str8 asset_path);
-static Asset_Id am_load_from_fullpath(str8 asset_path) {
-  str8 file = str8_extract_filename(asset_path);
-  Asset_Id id = asset_id_from_path(file);
-  assert(id.kind == ASSET_KIND_MODEL);
-
-  switch(id.kind) {
-    case ASSET_KIND_TEX:
-      return tex_mgr_load_from_fullpath(g_am.tm, asset_path);
-    case ASSET_KIND_MODEL:
-      return model_mgr_load_from_fullpath(g_am.mm, asset_path);
-    case ASSET_KIND_FONT:
-    case ASSET_KIND_AUDIO:
-    default:
-      printf("1YOYOYOYOOYO\n");
-      return (Asset_Id){};
-  }
+  return asset_cache_load_from_fullpath(g_am.cache, asset_fullpath);
 }
 
-Tex_Mgr* tex_mgr_init(Asset_Mgr *parent);
-Model_Mgr* model_mgr_init(Asset_Mgr *parent);
+Asset_Cache* asset_cache_init(Asset_Mgr *parent);
 static void am_init(Arena *arena, Arena *tarena) {
   g_am.arena = arena;
   g_am.tarena = tarena;
 
   // Initialize texture manager
-  g_am.tm = tex_mgr_init(&g_am);
-  g_am.mm = model_mgr_init(&g_am);
+  g_am.cache = asset_cache_init(&g_am);
 }
 
 

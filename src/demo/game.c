@@ -92,13 +92,13 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
   r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 
-  Model_Info *mi = (Model_Info*)am_get(asset_id_from_path(STR8L("Avocado.gltf")));
-  Ogl_Tex *texture = ((Ogl_Tex*)am_get(mi->tex_id));
+  Model_Info *mi = AM_GET(asset_id_from_path(STR8L("Avocado.gltf")), model);
+  Ogl_Tex *texture = AM_GET(mi->tex_id, tex);
   r3d_imm_change_tex(texture);
 
   m4 mvp2 = m4_mult(m4_mult(gs->proj, gs->view), m4_mult(m4_rotate(180, v3m(0,1,0)), m4_scale(v3m(50,50,50))));
   r3d_imm_verts(gs->game_viewport, mi->verts, mi->vert_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp2);
-  Ogl_Tex *white = (Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png")));
+  Ogl_Tex *white = AM_GET(asset_id_from_path(STR8L("white.png")), tex);
   r3d_imm_change_tex(white);
 }
 
@@ -109,49 +109,6 @@ void game_render(Game_State *gs, float dt) {
   game_draw_origin_grid(gs, 10);
   entity_store_update_render(gs, dt);
   particle_mgr_render(gs, gs->pmgr);
-
-
-#if 0
-  // TODO: particles
-  // Draw an xy-face, needed for basic particle system
-  m4 model = m4_translate(v3m(0, 4, 4));
-  m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
-  r3d_imm_xy_face(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, col(1,1,1,0.4));
-#endif
-
-  // Simple test for quad rendernig
-#if 0
-  // TODO: Maybe we should push/pop asset ids for textures??
-  // Sample quad for renderer architecture
-  R_Quad q = (R_Quad){
-    .dst_rect = rec(300,200,500,500),
-    .src_rect = rec(0,0,128,80),
-    .c = col(1.0,1.0,1.0,1.0),
-    .rot_deg = 9.0 * gs->time_sec,
-    .corner_radius = 20.0,
-    .softness = 4.0,
-    .tex = (Ogl_Tex*)am_get(asset_id_from_path(STR8L("white.png"))),
-  };
-  r2d_push_quad(r2d_pass_front(), q);
-
-  // For test
-  //r2d_flush_all();
-
-  q = (R_Quad){
-    .dst_rect = rec(500,200,500,500),
-    .src_rect = rec(0,0,128,80),
-    .c = col(1.0,1.0,1.0,1.0),
-    .rot_deg = 19.0 * gs->time_sec,
-    .corner_radius = 20.0,
-    .softness = 4.0,
-    .tex = (Ogl_Tex*)am_get(asset_id_from_path(STR8L("atlas.png"))),
-  };
-  r2d_push_quad(r2d_pass_front(), q);
-
-  //r2d_flush_all();
-
-#endif
-
 
   // Gui Test
 #if 1
