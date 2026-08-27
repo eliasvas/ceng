@@ -461,60 +461,58 @@ static u8* gltf_data_from_accessor(Gltf_Info info, s32 acc_idx, s32 *stride) {
   return (u8*)(buf_data + bufv_offset + acc_offset);
 }
 
-static Tri_Vertex* gltf_to_basic_mesh_bundle(Arena *arena, Gltf_Info info, s64 *vcount) {
-  s64 actual_vcount = 0;
-  for (s32 i = 0; i < info.mesh_count; i+=1) {
-    Gltf_Mesh *mesh = &info.meshes[i];
+static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
+  Model_Info model = {};
 
-    // add either the count of indices or the count of position to final mesh vertex count
+  model.mesh_count = info.mesh_count;
+  model.meshes = arena_push_array(arena, Mesh_Info, model.mesh_count); 
+  // FIXME: Allocations for e.g vertex attributes should be done in temp arena ok? Use the scratch ok?
+  for (s32 mesh_idx = 0; mesh_idx < info.mesh_count; mesh_idx+=1) {
+    Gltf_Mesh *gmesh = &info.meshes[mesh_idx];
+    Mesh_Info *mesh = &model.meshes[mesh_idx];
+    // FIXME: We currently don't do anything w/ primitives, this has to change!
+    mesh->prim_count = gmesh->prim_count;
+    mesh->prims = arena_push_array(arena, Mesh_Primitive_Info, mesh->prim_count);
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
-      Gltf_Prim *primitive = &mesh->prims[prim_idx];
-      actual_vcount += (gltf_is_property_specified(primitive->indices_idx)) ? 
-        info.accessors[mesh->prims[prim_idx].indices_idx].count : 
-        info.accessors[mesh->prims[prim_idx].attribs.pos_idx].count;
-    }
-  }
-  *vcount = actual_vcount;
+      Gltf_Prim *gprim = &gmesh->prims[prim_idx];
+      Mesh_Primitive_Info *prim = &mesh->prims[prim_idx];
+      Gltf_Material *material = &info.materials[gprim->material_idx];
 
-  Tri_Vertex *verts = arena_push_array(arena, Tri_Vertex, actual_vcount);
+      prim->type = ogl_prim_type_from_gltf_prim_mode(gprim->mode);
+      f32 *positions = (f32*)gltf_data_from_accessor(info, gprim->attribs.pos_idx, nullptr);
+      f32 *texcoords = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[0], nullptr);
 
-  s64 vert_idx = 0;
-  for (s32 i = 0; i < info.mesh_count; i+=1) {
-    Gltf_Mesh *mesh = &info.meshes[i];
-
-    for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
-      f32 *positions = (f32*)gltf_data_from_accessor(info, mesh->prims[prim_idx].attribs.pos_idx, nullptr);
-      f32 *texcoords = (f32*)gltf_data_from_accessor(info, mesh->prims[prim_idx].attribs.texcoord_idx[0], nullptr);
-      b32 index_data_available = gltf_is_property_specified(mesh->prims[prim_idx].indices_idx);
-
-      if (index_data_available) { // In case of index-based primitive
-        s16 *indices = (s16*)gltf_data_from_accessor(info, mesh->prims[prim_idx].indices_idx, nullptr);
-        s64 indices_count = info.accessors[mesh->prims[prim_idx].indices_idx].count;
-        for (s64 idx = 0; idx < indices_count; idx+=1) {
-          s32 vidx = indices[idx];
-          v3 *vpos = (v3*)(&positions[3 * vidx]);
-          v2 *tc = (v2*)(&texcoords[2 * vidx]);
-          verts[vert_idx].pos = *(vpos);
-          verts[vert_idx].uv = *(tc);
-
-          verts[vert_idx].color = info.materials[mesh->prims[prim_idx].material_idx].pbr.base_color_factor;
-          vert_idx+=1;
-        }
-      } else { // In case of vertex-only primitive
-        s64 vertices_count = info.accessors[mesh->prims[prim_idx].attribs.pos_idx].count;
-        for (s64 idx = 0; idx < vertices_count; idx+=1) {
-          s32 vidx = idx; 
-          v3 *vpos = (v3*)(&positions[3 * vidx]);
-          verts[vert_idx].pos = *(vpos);
-
-          verts[vert_idx].color = info.materials[mesh->prims[prim_idx].material_idx].pbr.base_color_factor;
-          vert_idx+=1;
-        }
+      s64 vcount = info.accessors[gprim->attribs.pos_idx].count;
+      Temp_Arena temp = get_scratch(&arena,1);
+      Tri_Vertex *verts = arena_push_array_nz(temp.arena, Tri_Vertex, vcount);
+      for (s64 vidx = 0; vidx < vcount; vidx+=1) {
+        verts[vidx].pos = *((v3*)&positions[3 * vidx]);
+        verts[vidx].uv = *((v2*)&texcoords[2 * vidx]);
+        verts[vidx].color = material->pbr.base_color_factor;
       }
+
+      b32 mesh_has_idx = gltf_is_property_specified(gprim->indices_idx);
+
+      Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, verts, 1, sizeof(Tri_Vertex)*vcount);
+      prim->vbo = vbo;
+
+      if (mesh_has_idx) {
+        // FIXME: We should handle every index size not just s16
+        s16 *indices = (s16*)gltf_data_from_accessor(info, gprim->indices_idx, nullptr);
+        s64 indices_count = info.accessors[gprim->indices_idx].count;
+        Ogl_Buf ibo = ogl_buf_make(OGL_BUF_KIND_INDEX, OGL_BUF_HINT_STATIC, indices, indices_count, sizeof(s16));
+        prim->ibo = ibo;
+      }
+
+      // FIXME: Material handling.. GWE
+      if (info.image_count > 0 && info.texture_count >0 && info.material_count > 0) {
+        model.tex_id = info.images[info.textures[info.materials[0].pbr.base_color_texture.index].image_idx].id;
+      }
+      release_scratch(temp);
     }
   }
 
-  return verts;
+  return model;
 }
 
 #endif

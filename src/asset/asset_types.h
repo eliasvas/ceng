@@ -21,15 +21,32 @@ typedef struct {
   Asset_Kind kind;
 } Asset_Id;
 
+typedef struct {
+  v4 base_color;
+} Material_Info;
 
 typedef struct {
+  Ogl_Buf vbo;
+  Ogl_Buf ibo;
+  Ogl_Prim_Type type;
+  Material_Info material;
+} Mesh_Primitive_Info;
+
+typedef struct {
+  Mesh_Primitive_Info *prims;
+  s64 prim_count;
+} Mesh_Info;
+
+typedef struct Model_Info {
   Tri_Vertex *verts;
   s64 vert_count;
+
+  Mesh_Info *meshes;
+  s64 mesh_count;
 
   Asset_Id tex_id;
 } Model_Info;
 struct Ogl_Tex;
-
 
 typedef struct Asset_Node Asset_Node;
 struct Asset_Node {
@@ -44,6 +61,8 @@ struct Asset_Node {
   Asset_Node *next;
   Asset_Node *prev;
 };
+
+
 
 typedef struct {
   struct Asset_Node *first;

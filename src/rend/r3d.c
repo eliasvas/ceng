@@ -161,3 +161,23 @@ void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Ty
     r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
   }
 
+
+void r3d_imm_model(rect viewport, struct Model_Info *info, m4 *mvp) {
+  for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
+    Mesh_Info *mesh = &info->meshes[mesh_idx];
+    for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
+      Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
+      tri_bundle.vbos[0].buffer = prim->vbo;
+      tri_bundle.index_buffer = prim->ibo;
+      tri_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
+      tri_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
+      // Also the material should be filled here (UBO1) right? maybe make another one along mvp
+      ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, mvp, 1, sizeof(m4));
+      if (prim->ibo.count) {
+        ogl_render_bundle_draw_indexed(&tri_bundle, prim->type, prim->ibo.count);
+      } else {
+        ogl_render_bundle_draw(&tri_bundle, prim->type, prim->vbo.count, 1);
+      }
+    }
+  }
+}

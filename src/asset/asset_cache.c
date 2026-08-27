@@ -17,12 +17,8 @@ Asset_Cache* asset_cache_init(Asset_Mgr *parent) {
 
   // Default model
   Gltf_Info info = gltf_load(parent->tarena, (str8){},STR8(test_json_str, cstr_count(test_json_str)));
-  s64 vcount = 0;
-  Tri_Vertex* verts = gltf_to_basic_mesh_bundle(parent->arena, info, &vcount);
-  ac->default_value.model = (Model_Info) {
-    .verts = verts,
-    .vert_count = vcount,
-  };
+  Model_Info model = gltf_to_model(parent->arena, info);
+  ac->default_value.model = model;
 
   ac->slot_count = 32;
   ac->slots = arena_push_array(parent->arena, Tex_Node_Hash_Slot, ac->slot_count); 
@@ -75,17 +71,7 @@ Asset_Id asset_cache_load_from_data(Asset_Cache *mgr, str8 asset_fullpath, str8 
       break;
     case ASSET_KIND_MODEL:
       Gltf_Info info = gltf_load(mgr->parent->tarena, dir, asset_data);
-      s64 vcount = 0;
-      Tri_Vertex* verts = gltf_to_basic_mesh_bundle(mgr->parent->arena, info, &vcount);
-
-      Model_Info model = (Model_Info) {
-        .verts = verts,
-        .vert_count = vcount,
-        .tex_id = (Asset_Id){0, ASSET_KIND_TEX},
-      };
-      if (info.image_count > 0 && info.texture_count >0 && info.material_count > 0) {
-        model.tex_id = info.images[info.textures[info.materials[0].pbr.base_color_texture.index].image_idx].id;
-      }
+      Model_Info model = gltf_to_model(mgr->parent->arena, info);
       node->model = model; // <------- Important part here! :)
       break;
     case ASSET_KIND_FONT:

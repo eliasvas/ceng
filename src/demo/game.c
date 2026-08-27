@@ -97,6 +97,8 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   r3d_imm_change_tex(texture);
 
   m4 mvp2 = m4_mult(m4_mult(gs->proj, gs->view), m4_mult(m4_rotate(180, v3m(0,1,0)), m4_scale(v3m(50,50,50))));
+
+  r3d_imm_model(gs->game_viewport, mi, (m4*)&mvp2);
   r3d_imm_verts(gs->game_viewport, mi->verts, mi->vert_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp2);
   Ogl_Tex *white = AM_GET(asset_id_from_path(STR8L("white.png")), tex);
   r3d_imm_change_tex(white);

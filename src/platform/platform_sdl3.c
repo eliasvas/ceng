@@ -45,7 +45,7 @@ u8* platform_img_to_raw(Arena *arena, str8 image_data, v2 *out_dim) {
     SDL_Surface *rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
     out_dim->x = rgba->w;
     out_dim->y = rgba->h;
-    SDL_FlipSurface(rgba, SDL_FLIP_VERTICAL);
+    //SDL_FlipSurface(rgba, SDL_FLIP_VERTICAL);
     //return rgba->pixels;
     u8 *px = arena_push_array_nz(arena, u8, sizeof(u8) * 4 * rgba->w * rgba->h);
     M_COPY(px, rgba->pixels, sizeof(u8) * 4 * rgba->w * rgba->h);

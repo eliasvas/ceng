@@ -327,6 +327,7 @@ typedef struct {
   void ogl_tex_deinit(Ogl_Tex *tex);
 
   void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count);
+void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t index_count);
   void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
 
   void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth);
@@ -353,6 +354,15 @@ static int64_t ogl_buf_count_bytes(Ogl_Buf *buf) {
   return buf->count * buf->bytes_per_elem;
 }
 
+
+static s32 gl_type_from_ogl_index_buf(Ogl_Buf *ibo) {
+  switch(ibo->bytes_per_elem) {
+    case 1: return GL_UNSIGNED_BYTE;
+    case 2: return GL_UNSIGNED_SHORT;
+    case 4: return GL_UNSIGNED_INT;
+    default: return GL_UNSIGNED_INT;
+  }
+}
 static GLuint ogl_to_gl_buf_hint(Ogl_Buf_Hint hint) {
   switch (hint) {
     case OGL_BUF_HINT_STATIC:  return GL_STATIC_DRAW;
@@ -818,6 +828,11 @@ void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint3
   ogl_render_bundle_bind(bundle);
   // FIXME: first == 0? why? we need to enhance the API
   glDrawArraysInstanced(ogl_prim_type_to_gl_type(prim), 0, vertex_count, instance_count);
+}
+
+void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t index_count) {
+  ogl_render_bundle_bind(bundle);
+  glDrawElements(ogl_prim_type_to_gl_type(prim), index_count, gl_type_from_ogl_index_buf(&bundle->index_buffer), nullptr);
 }
 
 #endif
