@@ -276,6 +276,7 @@ static f64 pwr(double b, int e) {
     #define M_ZERO(p, s) (ZeroMemory(p, s))
 // TODO: NO cstdlib
     #define M_CMP(a, b, s) memcmp(a, b, s)
+    #define M_CPY(dest, src, bytes) (memcpy(dest, source, num))
 #else
     #include <sys/mman.h>
     #include <string.h>
@@ -284,8 +285,8 @@ static f64 pwr(double b, int e) {
     #define M_ALLOC(bytes) mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)
     #define M_RELEASE(base, bytes) munmap(base, bytes)
     #define M_ZERO(p, s) memset(p, 0, s)
-// TODO: NO cstdlib
     #define M_CMP(a, b, s) memcmp(a, b, s)
+    #define M_CPY(dest, src, bytes) (memcpy(dest, source, num))
 #endif
 
 #define M_ZERO_STRUCT(p)  M_ZERO((p), sizeof(*(p)))

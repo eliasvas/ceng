@@ -50,6 +50,7 @@ f64 str8_to_float(str8 s);
 str8 str8_extract_path(str8 file_path);
 str8 str8_extract_filename(str8 file_path);
 str8 str8_concat(Arena *arena, str8 a, str8 b);
+str8 str8_read_file_binary(Arena *arena, str8 filepath);
 
 #else
 
@@ -269,6 +270,24 @@ uint64_t str8_find_needle(str8 haystack, str8 needle);
 
 str8 str8_concat(Arena *arena, str8 a, str8 b) {
   return str8_sprintf(arena, "%.*s%.*s", STR8_VARG(a), STR8_VARG(b));
+}
+
+str8 str8_read_file_binary(Arena *arena, str8 filepath) {
+  str8 s;
+  Temp_Arena temp = get_scratch(&arena,1);
+  char* filepath_cstr = cstr_from_str8(temp.arena, filepath);
+
+  FILE *f = fopen(filepath_cstr, "rb");
+  fseek(f, 0, SEEK_END);
+  long fsize = ftell(f);
+  s.count = fsize;
+  fseek(f, 0, SEEK_SET);
+  s.data = arena_push_array_nz(arena, u8, s.count);
+  fread(s.data, 1, s.count, f);
+  fclose(f);
+
+  release_scratch(temp);
+  return s;
 }
 
 #endif // STR_IMPLEMENTATION

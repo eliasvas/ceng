@@ -4,8 +4,6 @@
 #include "core/json_util.h"
 #include "core/base64.h"
 
-// FIXME: embedded images don't currently work
-
 // Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 
 typedef enum {
@@ -311,16 +309,13 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     info.buffers[buf_idx] = str8_substr(uri->value, str8_find_needle(uri->value, STR8L(","))+1, uri->value.count); 
 
     if (str8_ends_with(uri->value, STR8L(".bin"))) {
-      str8 bin_fullpath = str8_concat(arena, dir, uri->value);
+      Temp_Arena temp = get_scratch(&arena,1);
+      str8 bin_fullpath = str8_concat(temp.arena, dir, uri->value);
       //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
-      Temp_Arena temp = get_scratch(0,0);
-      char* bin_fullpath_cstr = cstr_from_str8(temp.arena, bin_fullpath);
-      u32 count = 0;
-      // FIXME: leak
-      u8 *bin_data = (u8*)read_whole_file_binary(bin_fullpath_cstr, &count);
-      assert(bin_data);
+      str8 bin_data = str8_read_file_binary(arena, bin_fullpath);
+      assert(bin_data.count);
       release_scratch(temp);
-      info.buffers[buf_idx] = STR8(bin_data, count);
+      info.buffers[buf_idx] = bin_data;
     } else {
       info.buffers[buf_idx] = my_base64_decode(arena, info.buffers[buf_idx]);
     }
@@ -366,27 +361,21 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     for (Json_Element *i= images_json->first; i != nullptr; i = i->next, image_idx+=1) {
       Json_Element* uri = json_lookup(i, STR8L("uri"));
 
-      char *img_data;
-      u32 count = 0;
-
+      str8 img_data;
       if (str8_starts_with(uri->value, STR8L("data"))) {
         str8 img_b64_data = str8_substr(uri->value, str8_find_needle(uri->value, STR8L(","))+1, uri->value.count); 
         str8 decoded = my_base64_decode(arena, img_b64_data);
-        count = decoded.count;
-        img_data = (char*)decoded.data;
+        img_data = STR8((char*)decoded.data, decoded.count);
       } else {
         // Read the image data
-        str8 img_fullpath = str8_concat(arena, dir, uri->value);
         //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
-        Temp_Arena temp = get_scratch(0,0);
-        char* img_fullpath_cstr = cstr_from_str8(temp.arena, img_fullpath);
-        // FIXME: leak
-        img_data = (char*)read_whole_file_binary(img_fullpath_cstr, &count);
-        assert(img_data);
+        Temp_Arena temp = get_scratch(&arena,1);
+        str8 img_fullpath = str8_concat(temp.arena, dir, uri->value);
+        img_data = str8_read_file_binary(arena, img_fullpath);
         release_scratch(temp);
       }
 
-      Asset_Id id = am_load_from_data(uri->value, STR8(img_data, count));
+      Asset_Id id = am_load_from_data(uri->value, img_data);
       info.images[image_idx] = (Gltf_Image){id};
     }
   }
@@ -466,7 +455,6 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
 
   model.mesh_count = info.mesh_count;
   model.meshes = arena_push_array(arena, Mesh_Info, model.mesh_count); 
-  // FIXME: Allocations for e.g vertex attributes should be done in temp arena ok? Use the scratch ok?
   for (s32 mesh_idx = 0; mesh_idx < info.mesh_count; mesh_idx+=1) {
     Gltf_Mesh *gmesh = &info.meshes[mesh_idx];
     Mesh_Info *mesh = &model.meshes[mesh_idx];
@@ -497,10 +485,10 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       prim->vbo = vbo;
 
       if (mesh_has_idx) {
-        // FIXME: We should handle every index size not just s16
-        s16 *indices = (s16*)gltf_data_from_accessor(info, gprim->indices_idx, nullptr);
+        s32 index_buf_element_size = info.accessors[gprim->indices_idx].bytes_per_elem;
+        u8 *indices = (u8*)gltf_data_from_accessor(info, gprim->indices_idx, nullptr);
         s64 indices_count = info.accessors[gprim->indices_idx].count;
-        Ogl_Buf ibo = ogl_buf_make(OGL_BUF_KIND_INDEX, OGL_BUF_HINT_STATIC, indices, indices_count, sizeof(s16));
+        Ogl_Buf ibo = ogl_buf_make(OGL_BUF_KIND_INDEX, OGL_BUF_HINT_STATIC, indices, indices_count, index_buf_element_size);
         prim->ibo = ibo;
       }
 
