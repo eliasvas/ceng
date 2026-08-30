@@ -250,6 +250,9 @@ static f64 pwr(double b, int e) {
 #define sll_queue_pop_N(f,l,next) (((f)==(l))?((f)=(l)=0):((f)=(f)->next))
 #define sll_queue_push(f,l,n) sll_queue_push_N(f,l,n,next)
 #define sll_queue_pop(f,l) sll_queue_pop_N(f,l,next)
+#define sll_queue_push_front_N(f,l,n,next) (((f)==0)?((f)=(l)=(n)):((n)->next=(f),(f)=(n)))
+#define sll_queue_push_front(f,l,n) sll_queue_push_front_N(f,l,n,next)
+
 
 #define check_zero(z,p) ((p) == 0 || (p) == z)
 #define set_zero(z,p) ((p) = z)
@@ -259,10 +262,18 @@ static f64 pwr(double b, int e) {
 #define dll_push_back(f,l,n) dll_push_back_NP(f,l,n,next,prev)
 #define dll_push_front_NPZ(z,f,l,n,next,prev) dll_insert_NPZ(z,l,f,f,n,prev,next)
 #define dll_push_front_NP(f,l,n,next,prev) dll_push_front_NPZ(0,f,l,n,next,prev)
-#define dll_push_front(f,l,n) dll_push_back_NP(l,f,n,prev,next)
-#define dll_remove_NPZ(z,f,l,n,next,prev) (((n) == (f) ? (f) = (n)->next : (0)), ((n) == (l) ? (l) = (l)->prev : (0)), (check_zero(z,(n)->prev) ? (0) : ((n)->prev->next = (n)->next)), (check_zero(z,(n)->next) ? (0) : ((n)->next->prev = (n)->prev)))
+#define dll_push_front(f,l,n) dll_push_front_NP(f,l,n,next,prev)
+#define dll_remove_NPZ(z,f,l,n,next,prev) \
+    (((n) == (f) ? (f) = (n)->next : (0)), \
+     ((n) == (l) ? (l) = (l)->prev : (0)), \
+     (check_zero(z,(n)->prev) ? (0) : ((n)->prev->next = (n)->next)), \
+     (check_zero(z,(n)->next) ? (0) : ((n)->next->prev = (n)->prev)), \
+     ((n)->next = (z)), \
+     ((n)->prev = (z)))
 #define dll_remove_NP(f,l,n,next,prev) dll_remove_NPZ(0,f,l,n,next,prev)
 #define dll_remove(f,l,n) dll_remove_NP(f,l,n,next,prev)
+#define dll_remove_front(f,l) dll_remove_NP(f,l,f,next,prev)
+#define dll_remove_back(f,l) dll_remove_NP(f,l,l,next,prev)
 
 //////////////////////////////
 // Memory Allocation Helpers

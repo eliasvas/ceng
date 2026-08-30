@@ -24,8 +24,30 @@ typedef struct {
 } str8;
 #define STR8(S, C) (str8){(uint8_t*)(S), C}
 #define STR8L(S) (str8){(uint8_t*)(S), sizeof(S) - 1}
-#define STR8C(S) (str8){(uint8_t*)(S), strlen(S) - 1}
+#define STR8C(S) (str8){(uint8_t*)(S), strlen(S)}
 #define STR8_VARG(S) (int)(S).count, (S).data
+
+typedef struct str8_node str8_node;
+struct str8_node {
+  str8_node *next;
+  str8_node *prev;
+  str8 s;
+};
+
+typedef struct {
+  str8_node *first;
+  str8_node *last;
+
+  s64 node_count;
+  s64 char_count;
+} str8_list;
+
+typedef struct {
+  str8 *arr;
+
+  s64 count;
+  s64 char_count;
+} str8_array;
 
 
 // FIXME: I don't like this because you cant do stuff like str8_substr(s, 0, str8_find_needle(s, "##")) because
@@ -51,6 +73,17 @@ str8 str8_extract_path(str8 file_path);
 str8 str8_extract_filename(str8 file_path);
 str8 str8_concat(Arena *arena, str8 a, str8 b);
 str8 str8_read_file_binary(Arena *arena, str8 filepath);
+
+
+str8_node* str8_list_push_back_node(str8_list *list, str8_node *node);
+str8_node* str8_list_push_front_node(str8_list *list, str8_node *node);
+str8_node* str8_list_push_front(Arena *arena, str8_list *list, str8 s);
+str8_node* str8_list_push_back(Arena *arena, str8_list *list, str8 s);
+str8_node *str8_list_pop_back(str8_list *list);
+str8_node *str8_list_pop_front(str8_list *list);
+void str8_list_print(str8_list *list);
+
+str8_array str8_array_from_list(Arena *arena, str8_list *list);
 
 #else
 
@@ -289,6 +322,68 @@ str8 str8_read_file_binary(Arena *arena, str8 filepath) {
   release_scratch(temp);
   return s;
 }
+
+str8_node* str8_list_push_back_node(str8_list *list, str8_node *node) {
+  dll_push_back(list->first, list->last, node);
+  list->node_count+=1;
+  list->char_count+=node->s.count;
+  return node;
+}
+
+str8_node* str8_list_push_front_node(str8_list *list, str8_node *node) {
+  dll_push_front(list->first, list->last, node);
+  list->node_count+=1;
+  list->char_count+=node->s.count;
+  return node;
+}
+
+str8_node* str8_list_push_front(Arena *arena, str8_list *list, str8 s) {
+  str8_node *node = arena_push_array(arena, str8_node, 1);
+  node->s = s;
+  str8_list_push_front_node(list, node);
+  return node;
+}
+
+str8_node* str8_list_push_back(Arena *arena, str8_list *list, str8 s) {
+  str8_node *node = arena_push_array(arena, str8_node, 1);
+  node->s = s;
+  str8_list_push_back_node(list, node);
+  return node;
+}
+
+str8_node *str8_list_pop_back(str8_list *list) {
+  str8_node *node = nullptr;
+  if (list->node_count) {
+    list->char_count -= list->last->s.count;
+    list->node_count -=1;
+    node = list->last;
+    dll_remove_back(list->first, list->last);
+  }
+  return node;
+}
+
+str8_node *str8_list_pop_front(str8_list *list) {
+  str8_node *node = nullptr;
+  if (list->node_count) {
+    list->char_count -= list->first->s.count;
+    list->node_count -=1;
+    node = list->first;
+    dll_remove_front(list->first, list->last);
+  }
+  return node;
+}
+
+void str8_list_print(str8_list *list) {
+  printf("\n------------------------\n");
+  for (str8_node *node = list->first; node != nullptr; node=node->next) {
+    printf("%.*s", STR8_VARG(node->s));
+  }
+  printf("\n------------------------\n");
+}
+
+// str8_list_join
+
+
 
 #endif // STR_IMPLEMENTATION
 

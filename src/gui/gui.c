@@ -77,7 +77,7 @@ Gui_Box *gui_box_make(str8 label, Gui_Box_Flags flags) {
 
   // Finally (if freelist is empty) just allocate it from the arena..
   if (gui_box_is_nil(box)) {
-    box = arena_push_array(ctx.arena, Gui_Box, 1);
+    box = arena_push_array((is_transient) ? ctx.temp_arena: ctx.arena, Gui_Box, 1);
   }
 
   // If this box is a spacer, DON'T plug into the persistent hierarchy 
