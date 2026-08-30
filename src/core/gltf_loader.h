@@ -306,11 +306,12 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     Json_Element* uri = json_lookup(b, STR8L("uri")); assert(uri);
     Json_Element* byte_len = json_lookup(b, STR8L("byteLength")); assert(byte_len);
 
-    info.buffers[buf_idx] = str8_substr(uri->value, str8_find_needle(uri->value, STR8L(","))+1, uri->value.count); 
+    s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
+    info.buffers[buf_idx] = str8_substr(uri->value, data_idx, uri->value.count); 
 
     if (str8_ends_with(uri->value, STR8L(".bin"))) {
       Temp_Arena temp = get_scratch(&arena,1);
-      str8 bin_fullpath = str8_concat(temp.arena, dir, uri->value);
+      str8 bin_fullpath = str8_concat(temp.arena, str8_concat(temp.arena, dir, STR8L("/")), uri->value);
       //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
       str8 bin_data = str8_read_file_binary(arena, bin_fullpath);
       assert(bin_data.count);
@@ -363,14 +364,15 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
       str8 img_data;
       if (str8_starts_with(uri->value, STR8L("data"))) {
-        str8 img_b64_data = str8_substr(uri->value, str8_find_needle(uri->value, STR8L(","))+1, uri->value.count); 
+        s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
+        str8 img_b64_data = str8_substr(uri->value, data_idx, uri->value.count); 
         str8 decoded = my_base64_decode(arena, img_b64_data);
         img_data = STR8((char*)decoded.data, decoded.count);
       } else {
         // Read the image data
         //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
         Temp_Arena temp = get_scratch(&arena,1);
-        str8 img_fullpath = str8_concat(temp.arena, dir, uri->value);
+        str8 img_fullpath = str8_concat(temp.arena, str8_concat(temp.arena, dir, STR8L("/")), uri->value);
         img_data = str8_read_file_binary(arena, img_fullpath);
         release_scratch(temp);
       }

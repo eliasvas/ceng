@@ -268,8 +268,8 @@ static f64 pwr(double b, int e) {
      ((n) == (l) ? (l) = (l)->prev : (0)), \
      (check_zero(z,(n)->prev) ? (0) : ((n)->prev->next = (n)->next)), \
      (check_zero(z,(n)->next) ? (0) : ((n)->next->prev = (n)->prev)), \
-     ((n)->next = (z)), \
-     ((n)->prev = (z)))
+     ((n == (l)) ? (n)->next = (z) : (0)), \
+     ((n == (f)) ? (n)->prev = (z) : (0)))
 #define dll_remove_NP(f,l,n,next,prev) dll_remove_NPZ(0,f,l,n,next,prev)
 #define dll_remove(f,l,n) dll_remove_NP(f,l,n,next,prev)
 #define dll_remove_front(f,l) dll_remove_NP(f,l,f,next,prev)
@@ -287,7 +287,7 @@ static f64 pwr(double b, int e) {
     #define M_ZERO(p, s) (ZeroMemory(p, s))
 // TODO: NO cstdlib
     #define M_CMP(a, b, s) memcmp(a, b, s)
-    #define M_CPY(dest, src, bytes) (memcpy(dest, source, num))
+    #define M_CPY(dest, src, bytes) (memcpy(dest, src, bytes))
 #else
     #include <sys/mman.h>
     #include <string.h>
@@ -297,7 +297,7 @@ static f64 pwr(double b, int e) {
     #define M_RELEASE(base, bytes) munmap(base, bytes)
     #define M_ZERO(p, s) memset(p, 0, s)
     #define M_CMP(a, b, s) memcmp(a, b, s)
-    #define M_CPY(dest, src, bytes) (memcpy(dest, source, num))
+    #define M_CPY(dest, src, bytes) (memcpy(dest, src, bytes))
 #endif
 
 #define M_ZERO_STRUCT(p)  M_ZERO((p), sizeof(*(p)))

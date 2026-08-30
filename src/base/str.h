@@ -63,7 +63,7 @@ str8 lower_from_str8(Arena *arena, str8 base);
 bool str8_eq(str8 left, str8 right);
 bool str8_starts_with(str8 s, str8 prefix);
 bool str8_ends_with(str8 s, str8 postfix);
-str8 str8_substr(str8 s, int64_t start_incl, int64_t end_incl);
+str8 str8_substr(str8 s, int64_t start_idx, int64_t end_idx);
 uint64_t str8_find_needle(str8 haystack, str8 needle);
 uint64_t str8_find_char(str8 haystack, char needle, b32 backward_search);
 str8 str8_sprintf(Arena *arena, const char* format, ...);
@@ -81,9 +81,10 @@ str8_node* str8_list_push_front(Arena *arena, str8_list *list, str8 s);
 str8_node* str8_list_push_back(Arena *arena, str8_list *list, str8 s);
 str8_node *str8_list_pop_back(str8_list *list);
 str8_node *str8_list_pop_front(str8_list *list);
+str8 str8_list_join(Arena *arena, str8_list *list);
 void str8_list_print(str8_list *list);
 
-str8_array str8_array_from_list(Arena *arena, str8_list *list);
+str8_array str8_array_from_list(Arena *arena, str8_list *list, b32 deep_copy);
 
 #else
 
@@ -152,7 +153,8 @@ str8 lower_from_str8(Arena *arena, str8 base) {
 }
 
 bool str8_eq(str8 left, str8 right) {
-  return (M_CMP(left.data, right.data, sizeof(uint8_t)*left.count) == 0);
+  //return ((left.count == right.count) && M_CMP(left.data, right.data, left.count) == 0);
+  return (M_CMP(left.data, right.data, left.count) == 0);
 }
 
 // TODO: Maybe add match_flags or something?
@@ -186,12 +188,9 @@ bool str8_ends_with(str8 s, str8 postfix) {
   return str8_eq(STR8(&s.data[s.count - postfix.count], postfix.count), postfix);
 }
 
-str8 str8_substr(str8 s, int64_t start_incl, int64_t end_incl) {
-  start_incl = (start_incl > s.count) ? s.count : start_incl;
-  end_incl = (end_incl > s.count) ? s.count : end_incl;
-
-  s.data+=start_incl;
-  s.count = (end_incl - start_incl)+1;
+str8 str8_substr(str8 s, int64_t start_idx, int64_t end_idx) {
+  s.data+=start_idx;
+  s.count = (end_idx - start_idx);
 
   return s;
 }
@@ -298,7 +297,7 @@ str8 str8_extract_filename(str8 file_path) {
 uint64_t str8_find_needle(str8 haystack, str8 needle);
   s64 last_slash_idx = str8_find_char(file_path, '/', true);
   if (last_slash_idx == STR8_NO_MATCH) last_slash_idx = -1; // Retarded logic, pls stop this
-  return str8_substr(file_path, last_slash_idx+1, file_path.count-1);
+  return str8_substr(file_path, last_slash_idx+1, file_path.count);
 }
 
 str8 str8_concat(Arena *arena, str8 a, str8 b) {
@@ -373,6 +372,21 @@ str8_node *str8_list_pop_front(str8_list *list) {
   return node;
 }
 
+str8 str8_list_join(Arena *arena, str8_list *list) {
+  str8 s = (str8){
+    .count = list->char_count,
+    .data = arena_push_array(arena, u8, sizeof(u8)*list->char_count),
+  };
+  s64 idx = 0;
+  for (str8_node *node = list->first; node != nullptr; node=node->next) {
+    for (s64 i = 0; i < node->s.count; i+=1) {
+      s.data[idx++] = node->s.data[i];
+    }
+  }
+
+  return s;
+}
+
 void str8_list_print(str8_list *list) {
   printf("\n------------------------\n");
   for (str8_node *node = list->first; node != nullptr; node=node->next) {
@@ -380,6 +394,30 @@ void str8_list_print(str8_list *list) {
   }
   printf("\n------------------------\n");
 }
+
+str8_array str8_array_from_list(Arena *arena, str8_list *list, b32 deep_copy) {
+  str8_array sa = (str8_array){
+    sa.arr = arena_push_array(arena, str8, list->node_count),
+    sa.char_count = list->char_count,
+    sa.count = list->node_count,
+  };
+
+  s64 node_idx = 0;
+  for (str8_node *node = list->first; node != nullptr; node=node->next, node_idx+=1) {
+    if (deep_copy) {
+      sa.arr[node_idx] = (str8) {
+        .data = arena_push_array(arena, u8, node->s.count),
+        .count = node->s.count,
+      };
+      M_CPY(sa.arr[node_idx].data, node->s.data, sizeof(u8)*node->s.count);
+    } else {
+      sa.arr[node_idx] = node->s;
+    }
+  }
+
+  return sa;
+}
+
 
 // str8_list_join
 

@@ -47,14 +47,15 @@ void game_init(Game_State *gs) {
   // Base64 test.. no reason
   base_64_test(gs->frame_arena);
 
-
-
   str8_list list = {};
   str8_list_push_back(gs->persistent_arena, &list, STR8L("One"));
   str8_list_push_back(gs->persistent_arena, &list, STR8L("Two"));
   str8_list_push_back(gs->persistent_arena, &list, STR8L("Three"));
+  str8_list_push_back(gs->persistent_arena, &list, STR8L("Four"));
   str8_list_pop_front(&list);
   str8_list_pop_back(&list);
+  str8 joined = str8_list_join(gs->persistent_arena, &list);
+  assert(str8_eq(joined, STR8L("TwoThree")));
   str8_list_print(&list);
 }
 
