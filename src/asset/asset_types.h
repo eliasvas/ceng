@@ -17,6 +17,33 @@ typedef enum {
 } Asset_Kind;
 
 typedef struct {
+  v3 pos;
+  v3 norm;
+  v4 tangent;
+
+  v2 tc_0;
+  v2 tc_1;
+  v2 tc_2;
+  v2 tc_3;
+
+  v4 col_0;
+  v4 col_1;
+  v4 col_2;
+  v4 col_3;
+
+  v4 joint_0;
+  v4 joint_1;
+  v4 joint_2;
+  v4 joint_3;
+
+  v4 weight_0;
+  v4 weight_1;
+  v4 weight_2;
+  v4 weight_3;
+
+} Uber_Vertex;
+
+typedef struct {
   u64 id;
   Asset_Kind kind;
 } Asset_Id;

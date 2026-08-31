@@ -74,6 +74,7 @@ void game_update(Game_State *gs, float dt) {
 
 }
 
+// FIXME: Make a VBO for this goddam it, or.. something
 void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   s32 line_count_per_axis = cell_count + 1; 
   Tri_Vertex *points = arena_push_array(gs->frame_arena, Tri_Vertex, line_count_per_axis*4);

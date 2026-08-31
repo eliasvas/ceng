@@ -279,17 +279,25 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       for (Json_Element *attrib = attribs_json->first ; attrib != nullptr; attrib = attrib->next) {
         //printf("IAM ATTRIB %.*s -> %.*s \n", STR8_VARG(attrib->label), STR8_VARG(attrib->value));
         Gltf_Attribs *attribs = &primitive->attribs;
-        if (str8_eq(attrib->label, STR8L("POSITION"))) {
-          attribs->pos_idx = str8_to_int(attrib->value);
-        } else if (str8_eq(attrib->label, STR8L("NORMAL"))) {
-          attribs->norm_idx = str8_to_int(attrib->value);
-        } else if (str8_eq(attrib->label, STR8L("TEXCOORD_0"))) {
-          attribs->texcoord_idx[0] = str8_to_int(attrib->value);
-        }
-        // TODO: Add more attributes!
-        // .....
-        // .....
-        // .....
+        if (str8_eq(attrib->label, STR8L("POSITION")))        attribs->pos_idx =         str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("NORMAL")))     attribs->norm_idx =        str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("TANGENT")))    attribs->tang_idx =        str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("TEXCOORD_0"))) attribs->texcoord_idx[0] = str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("TEXCOORD_1"))) attribs->texcoord_idx[1] = str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("TEXCOORD_2"))) attribs->texcoord_idx[2] = str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("TEXCOORD_3"))) attribs->texcoord_idx[3] = str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("COLOR_0")))    attribs->col_idx[0] =      str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("COLOR_1")))    attribs->col_idx[1] =      str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("COLOR_2")))    attribs->col_idx[2] =      str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("COLOR_3")))    attribs->col_idx[3] =      str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("JOINTS_0")))   attribs->joints_idx[0] =   str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("JOINTS_1")))   attribs->joints_idx[1] =   str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("JOINTS_2")))   attribs->joints_idx[2] =   str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("JOINTS_3")))   attribs->joints_idx[3] =   str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("WEIGHTS_0")))  attribs->weights_idx[0] =  str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("WEIGHTS_1")))  attribs->weights_idx[1] =  str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("WEIGHTS_2")))  attribs->weights_idx[2] =  str8_to_int(attrib->value);
+        else if (str8_eq(attrib->label, STR8L("WEIGHTS_3")))  attribs->weights_idx[3] =  str8_to_int(attrib->value);
       }
       primitive->indices_idx = json_parse_int(prim, STR8L("indices"), GLTF_PROPERTY_NOT_SPECIFIED);
       primitive->material_idx = json_parse_int(prim, STR8L("materials"), GLTF_PROPERTY_NOT_SPECIFIED);
@@ -442,6 +450,8 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 }
 
 static u8* gltf_data_from_accessor(Gltf_Info info, s32 acc_idx, s32 *stride) {
+  if (!gltf_is_property_specified(acc_idx)) return nullptr;
+
   s32 bufv_idx = info.accessors[acc_idx].bufv_idx;
   s32 buf_idx = info.buffer_views[bufv_idx].buf_idx;
   u8 *buf_data = info.buffers[buf_idx].data;
@@ -466,24 +476,70 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
       Gltf_Prim *gprim = &gmesh->prims[prim_idx];
       Mesh_Primitive_Info *prim = &mesh->prims[prim_idx];
+
+      // FIXME: This should be used for the material description ok?! Make a UBO and everything!
       Gltf_Material *material = &info.materials[gprim->material_idx];
+      assert(material);
 
       prim->type = ogl_prim_type_from_gltf_prim_mode(gprim->mode);
       f32 *positions = (f32*)gltf_data_from_accessor(info, gprim->attribs.pos_idx, nullptr);
-      f32 *texcoords = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[0], nullptr);
+
+      // FIXME: For normals we have to compute them if not available..
+      f32 *normals   = (f32*)gltf_data_from_accessor(info, gprim->attribs.norm_idx, nullptr);
+      f32 *tangents = (f32*)gltf_data_from_accessor(info, gprim->attribs.tang_idx, nullptr);
+
+      f32 *texcoords_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[0], nullptr);
+      f32 *texcoords_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[1], nullptr);
+      f32 *texcoords_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[2], nullptr);
+      f32 *texcoords_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[3], nullptr);
+
+      f32 *colors_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[0], nullptr);
+      f32 *colors_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[1], nullptr);
+      f32 *colors_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[2], nullptr);
+      f32 *colors_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[3], nullptr);
+
+      f32 *joints_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[0], nullptr);
+      f32 *joints_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[1], nullptr);
+      f32 *joints_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[2], nullptr);
+      f32 *joints_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[3], nullptr);
+
+      f32 *weights_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[0], nullptr);
+      f32 *weights_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[1], nullptr);
+      f32 *weights_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[2], nullptr);
+      f32 *weights_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[3], nullptr);
 
       s64 vcount = info.accessors[gprim->attribs.pos_idx].count;
       Temp_Arena temp = get_scratch(&arena,1);
-      Tri_Vertex *verts = arena_push_array_nz(temp.arena, Tri_Vertex, vcount);
+      Uber_Vertex *verts = arena_push_array_nz(temp.arena, Uber_Vertex, vcount);
       for (s64 vidx = 0; vidx < vcount; vidx+=1) {
         verts[vidx].pos = *((v3*)&positions[3 * vidx]);
-        verts[vidx].uv = *((v2*)&texcoords[2 * vidx]);
-        verts[vidx].color = material->pbr.base_color_factor;
+        verts[vidx].norm = (normals) ? *((v3*)&normals[3 * vidx]) : v3m(0,1,0);
+        verts[vidx].tangent = (tangents) ? *((v4*)&tangents[4 * vidx]) : v4m(0,0,0,0);
+
+        verts[vidx].tc_0 = (texcoords_0) ? *((v2*)&texcoords_0[2 * vidx]) : v2m(0,0);
+        verts[vidx].tc_1 = (texcoords_1) ? *((v2*)&texcoords_1[2 * vidx]) : v2m(0,0);
+        verts[vidx].tc_2 = (texcoords_2) ? *((v2*)&texcoords_2[2 * vidx]) : v2m(0,0);
+        verts[vidx].tc_3 = (texcoords_3) ? *((v2*)&texcoords_3[2 * vidx]) : v2m(0,0);
+
+        verts[vidx].col_0 = (colors_0) ? *((v4*)&colors_0[4 * vidx]) : v4m(1,1,1,1);
+        verts[vidx].col_1 = (colors_1) ? *((v4*)&colors_1[4 * vidx]) : v4m(1,1,1,1);
+        verts[vidx].col_2 = (colors_2) ? *((v4*)&colors_2[4 * vidx]) : v4m(1,1,1,1);
+        verts[vidx].col_3 = (colors_3) ? *((v4*)&colors_3[4 * vidx]) : v4m(1,1,1,1);
+
+        verts[vidx].joint_0 = (joints_0) ? *((v4*)&joints_0[4 * vidx]) : v4m(1,0,0,0);
+        verts[vidx].joint_1 = (joints_1) ? *((v4*)&joints_1[4 * vidx]) : v4m(1,0,0,0);
+        verts[vidx].joint_2 = (joints_2) ? *((v4*)&joints_2[4 * vidx]) : v4m(1,0,0,0);
+        verts[vidx].joint_3 = (joints_3) ? *((v4*)&joints_3[4 * vidx]) : v4m(1,0,0,0);
+
+        verts[vidx].weight_0 = (weights_0) ? *((v4*)&weights_0[4 * vidx]) : v4m(0,0,0,0);
+        verts[vidx].weight_1 = (weights_1) ? *((v4*)&weights_1[4 * vidx]) : v4m(0,0,0,0);
+        verts[vidx].weight_2 = (weights_2) ? *((v4*)&weights_2[4 * vidx]) : v4m(0,0,0,0);
+        verts[vidx].weight_3 = (weights_3) ? *((v4*)&weights_3[4 * vidx]) : v4m(0,0,0,0);
       }
 
       b32 mesh_has_idx = gltf_is_property_specified(gprim->indices_idx);
 
-      Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, verts, 1, sizeof(Tri_Vertex)*vcount);
+      Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, verts, 1, sizeof(Uber_Vertex)*vcount);
       prim->vbo = vbo;
 
       if (mesh_has_idx) {
