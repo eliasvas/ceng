@@ -264,6 +264,11 @@ void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Ty
   }
 
 
+void r3d_set_material(Mesh_Primitive_Info *info) {
+  Ogl_Tex *texture = AM_GET(info->material.base_tex.tex_asset_id, tex);
+  r3d_imm_change_tex(texture);
+}
+
 void r3d_imm_model(rect viewport, struct Model_Info *info, m4 *mvp) {
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
@@ -275,6 +280,8 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 *mvp) {
       uber_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
       // Also the material should be filled here (UBO1) right? maybe make another one along mvp
       ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, mvp, 1, sizeof(m4));
+      r3d_set_material(prim);
+      //ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, mvp, 1, sizeof(m4));
       if (prim->ibo.count) {
         ogl_render_bundle_draw_indexed(&uber_bundle, prim->type, prim->ibo.count);
       } else {

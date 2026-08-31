@@ -554,6 +554,59 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       if (info.image_count > 0 && info.texture_count >0 && info.material_count > 0) {
         model.tex_id = info.images[info.textures[info.materials[0].pbr.base_color_texture.index].image_idx].id;
       }
+
+      // Material Parsing here!
+      Gltf_Material *gmat = &info.materials[gprim->material_idx];
+      if (gmat && info.texture_count && info.image_count) {
+        Material_Info *material = &prim->material;
+        M_ZERO_STRUCT(material);
+
+        // Base color
+        material->base_color_factor = gmat->pbr.base_color_factor;
+        if (gltf_is_property_specified(gmat->pbr.base_color_texture.index) &&
+            gltf_is_property_specified(info.textures[gmat->pbr.base_color_texture.index].image_idx)) {
+          material->base_tex = (Material_Tex) {
+            .tex_asset_id = info.images[info.textures[gmat->pbr.base_color_texture.index].image_idx].id,
+            .tc_idx = gmat->pbr.base_color_texture.tex_coord,
+            .active = gmat->pbr.base_color_texture.active,
+          };
+        }
+
+        // Metallic Roughness
+        material->metallic_factor = gmat->pbr.metallic_factor;
+        material->roughness_factor = gmat->pbr.roughness_factor;
+        if (gltf_is_property_specified(gmat->pbr.metallic_roughness_texture.index) &&
+            gltf_is_property_specified(info.textures[gmat->pbr.metallic_roughness_texture.index].image_idx)) {
+          material->metallic_roughness_tex = (Material_Tex) {
+            .tex_asset_id = info.images[info.textures[gmat->pbr.metallic_roughness_texture.index].image_idx].id,
+            .tc_idx = gmat->pbr.metallic_roughness_texture.tex_coord,
+            .active = gmat->pbr.metallic_roughness_texture.active,
+          };
+        }
+
+        // Occlusion
+        if (gltf_is_property_specified(gmat->occlusion_texture.index) &&
+            gltf_is_property_specified(info.textures[gmat->occlusion_texture.index].image_idx)) {
+          material->base_tex = (Material_Tex) {
+            .tex_asset_id = info.images[info.textures[gmat->occlusion_texture.index].image_idx].id,
+            .tc_idx = gmat->occlusion_texture.tex_coord,
+            .active = gmat->occlusion_texture.active,
+          };
+        }
+
+        // Emissive
+        material->emissive_factor = gmat->emissive_factor;
+        if (gltf_is_property_specified(gmat->emissive_texture.index) &&
+            gltf_is_property_specified(info.textures[gmat->emissive_texture.index].image_idx)) {
+          material->base_tex = (Material_Tex) {
+            .tex_asset_id = info.images[info.textures[gmat->emissive_texture.index].image_idx].id,
+            .tc_idx = gmat->emissive_texture.tex_coord,
+            .active = gmat->emissive_texture.active,
+          };
+        }
+
+      }
+
       release_scratch(temp);
     }
   }

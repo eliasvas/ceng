@@ -48,8 +48,27 @@ typedef struct {
   Asset_Kind kind;
 } Asset_Id;
 
+
 typedef struct {
-  v4 base_color;
+  Asset_Id tex_asset_id;
+  s32 tc_idx; // e.g tc_0 or tc_1
+  b32 active;
+} Material_Tex; 
+
+typedef struct {
+  v4 base_color_factor;
+  Material_Tex base_tex;
+
+  f32 metallic_factor;
+  f32 roughness_factor;
+  Material_Tex metallic_roughness_tex;
+
+  Material_Tex normal_tex;
+  Material_Tex occlusion_tex;
+
+  v3 emissive_factor;
+  Material_Tex emissive_tex;
+
 } Material_Info;
 
 typedef struct {
