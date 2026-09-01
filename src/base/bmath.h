@@ -323,6 +323,160 @@ INLINE m4 m4_inv(m4 m) {
   return inv_out;
 }
 
+typedef union {
+#if 0
+  struct {
+    union {
+      v3 xyz;
+      struct {
+        f32 x,y,z;
+      };
+    };
+    f32 w;
+  };
+#endif
+  struct {
+    f32 x,y,z,w;
+  };
+  f32 raw[4];
+} quat;
+
+#define qu(x, y, z, w) ((quat){{x, y, z, w}})
+
+static quat quat_norm(quat q) {
+  v4 v = v4m(q.x, q.y, q.z, q.w);
+  v = v4_norm(v);
+  return qu(v.x, v.y, v.z, v.w);
+}
+
+static quat quat_inv(quat q) {
+  return qu(-q.x, -q.y, -q.z, q.w);
+}
+
+static quat quat_sub(quat left, quat right) {
+  quat q;
+  q.x = left.x - right.x;
+  q.y = left.y - right.y;
+  q.z = left.z - right.z;
+  q.w = left.w - right.w;
+  return q;
+}
+
+static quat quat_add(quat left, quat right) {
+  quat q;
+  q.x = left.x + right.x;
+  q.y = left.y + right.y;
+  q.z = left.z + right.z;
+  q.w = left.w + right.w;
+  return q;
+}
+
+static quat quat_mult(quat left, quat right) {
+  quat q;
+
+  q.x =  right.raw[3] * +left.raw[0];
+  q.y =  right.raw[2] * -left.raw[0];
+  q.z =  right.raw[1] * +left.raw[0];
+  q.w =  right.raw[0] * -left.raw[0];
+
+  q.x += right.raw[2] * +left.raw[1];
+  q.y += right.raw[3] * +left.raw[1];
+  q.z += right.raw[0] * -left.raw[1];
+  q.w += right.raw[1] * -left.raw[1];
+
+  q.x += right.raw[1] * -left.raw[2];
+  q.y += right.raw[0] * +left.raw[2];
+  q.z += right.raw[3] * +left.raw[2];
+  q.w += right.raw[2] * -left.raw[2];
+
+  q.x += right.raw[0] * +left.raw[3];
+  q.y += right.raw[1] * +left.raw[3];
+  q.z += right.raw[2] * +left.raw[3];
+  q.w += right.raw[3] * +left.raw[3];
+
+  return q;
+}
+
+static quat quat_multf(quat left, f32 d) {
+    quat q;
+    q.x = left.x * d;
+    q.y = left.y * d;
+    q.z = left.z * d;
+    q.w = left.w * d;
+    return q;
+}
+
+static quat quat_from_axis_angle(v3 axis, f32 angle) {
+  v3 axis_norm = v3_norm(axis);
+  f32 sine_of_rot = sin_f32(angle/2.0f);
+  v3 r = v3_multf(axis_norm, sine_of_rot);
+  return qu(r.x, r.y, r.z, cos_f32(angle/2.0f));
+}
+
+static m4 m4_from_quat(quat q) {
+  m4 m;
+  quat norm_q = quat_norm(q);
+
+  f32 xx, yy, zz, xy, xz, yz, wx, wy, wz;
+  xx = norm_q.x * norm_q.x;
+  yy = norm_q.y * norm_q.y;
+  zz = norm_q.z * norm_q.z;
+  xy = norm_q.x * norm_q.y;
+  xz = norm_q.x * norm_q.z;
+  yz = norm_q.y * norm_q.z;
+  wx = norm_q.w * norm_q.x;
+  wy = norm_q.w * norm_q.y;
+  wz = norm_q.w * norm_q.z;
+
+  m.col[0][0] = 1.0f - 2.0f * (yy + zz);
+  m.col[0][1] = 2.0f * (xy + wz);
+  m.col[0][2] = 2.0f * (xz - wy);
+  m.col[0][3] = 0.0f;
+
+  m.col[1][0] = 2.0f * (xy - wz);
+  m.col[1][1] = 1.0f - 2.0f * (xx + zz);
+  m.col[1][2] = 2.0f * (yz + wx);
+  m.col[1][3] = 0.0f;
+
+  m.col[2][0] = 2.0f * (xz + wy);
+  m.col[2][1] = 2.0f * (yz - wx);
+  m.col[2][2] = 1.0f - 2.0f * (xx + yy);
+  m.col[2][3] = 0.0f;
+
+  m.col[3][0] = 0.0f;
+  m.col[3][1] = 0.0f;
+  m.col[3][2] = 0.0f;
+  m.col[3][3] = 1.0f;
+
+  return m;
+}
+
+// https://d3cw3dd2w32x2b.cloudfront.net/wp-content/uploads/2015/01/matrix-to-quat.pdf
+static quat quat_from_m4(m4 m) {
+  f32 t;
+  quat q;
+
+  if (m.col[2][2] < 0.0f) {
+    if (m.col[0][0] > m.col[1][1]) {
+      t = 1 + m.col[0][0] - m.col[1][1] - m.col[2][2];
+      q = qu(t, m.col[0][1]+m.col[1][0], m.col[2][0]+m.col[0][2], m.col[1][2]-m.col[2][1]);
+    } else {
+      t = 1 - m.col[0][0] + m.col[1][1] - m.col[2][2];
+      q = qu(m.col[0][1] + m.col[1][0], t, m.col[1][2] + m.col[2][1], m.col[2][0] - m.col[0][2]);
+    }
+  } else {
+    if (m.col[0][0] < -m.col[1][1]) {
+      t = 1 - m.col[0][0] - m.col[1][1] + m.col[2][2];
+      q = qu(m.col[2][0] + m.col[0][2], m.col[1][2] + m.col[2][1], t, m.col[0][1] - m.col[1][0]);
+    } else {
+      t = 1 + m.col[0][0] + m.col[1][1] + m.col[2][2];
+      q = qu(m.col[1][2] - m.col[2][1], m.col[2][0] - m.col[0][2], m.col[0][1] - m.col[1][0], t);
+    }
+  }
+  q = quat_multf(q, 0.5f / sqrtf(t));
+
+  return q;
+}
 
 typedef union {
   struct { f32 x,y,w,h; };

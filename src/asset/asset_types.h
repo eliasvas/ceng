@@ -76,6 +76,7 @@ typedef struct {
   Ogl_Buf ibo;
   Ogl_Prim_Type type;
   Material_Info material;
+  m4 model;
 } Mesh_Primitive_Info;
 
 typedef struct {

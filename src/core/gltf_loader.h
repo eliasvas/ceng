@@ -88,12 +88,19 @@ typedef struct {
   s32 indices_idx;
   s32 material_idx;
   s32 mode;
+  m4 model_matrix;
 } Gltf_Prim;
 
 typedef struct {
   Gltf_Prim *prims;
   s32 prim_count;
 } Gltf_Mesh;
+
+typedef struct {
+  s32 mesh_idx;
+  m4 model_matrix;
+  //str8 name;
+} Gltf_Node_Info;
 
 
 // Meshes are arrays of mesh primitives
@@ -122,8 +129,10 @@ typedef struct {
   Gltf_Material *materials;
   s32 material_count;
 
-} Gltf_Info;
+  Gltf_Node_Info *nodes;
+  s32 node_count;
 
+} Gltf_Info;
 
 
 static Gltf_Prim default_prim = (Gltf_Prim) {
@@ -221,34 +230,58 @@ static f32 json_parse_float(Json_Element *root, str8 path, f32 def) {
   return (node) ? str8_to_float(node->value) : def;
 }
 
-static v2 json_parse_vec2(Json_Element *root, str8 path, v2 def) {
+static b32 json_parse_floats(Json_Element *root, str8 path, f32 *dst, s32 count) {
   Json_Element *node = json_lookup(root, path);
-  return (node && node->first) ?
-    v2m(
-        str8_to_float(node->first->value), 
-        str8_to_float(node->first->next->value)
-    ) : def;
+  if (!node) return false;
+
+  s32 dst_idx = 0;
+  for (Json_Element *n = node->first; n != nullptr && dst_idx < count; n=n->next, dst_idx+=1) {
+    dst[dst_idx] = str8_to_float(n->value);
+  }
+
+  return true;
+}
+
+static v2 json_parse_vec2(Json_Element *root, str8 path, v2 def) {
+  v2 v = def;
+  json_parse_floats(root, path, (f32*)&v, 2);
+  return v;
 }
 
 static v3 json_parse_vec3(Json_Element *root, str8 path, v3 def) {
-  Json_Element *node = json_lookup(root, path);
-  return (node && node->first) ?
-    v3m(
-        str8_to_float(node->first->value), 
-        str8_to_float(node->first->next->value),
-        str8_to_float(node->first->next->next->value)
-    ) : def;
+  v3 v = def;
+  json_parse_floats(root, path, (f32*)&v, 3);
+  return v;
 }
 
 static v4 json_parse_vec4(Json_Element *root, str8 path, v4 def) {
-  Json_Element *node = json_lookup(root, path);
-  return (node && node->first) ?
-    v4m(
-        str8_to_float(node->first->value), 
-        str8_to_float(node->first->next->value),
-        str8_to_float(node->first->next->next->value),
-        str8_to_float(node->first->next->next->next->value)
-    ) : def;
+  v4 v = def;
+  json_parse_floats(root, path, (f32*)&v, 4);
+  return v;
+}
+
+static quat json_parse_quat(Json_Element *root, str8 path, quat def) {
+  quat q = def;
+  json_parse_floats(root, path, (f32*)&q, 4);
+  return q;
+}
+
+static m4 json_parse_mat4(Json_Element *root, str8 path, m4 def) {
+  m4 m = def;
+  json_parse_floats(root, path, (f32*)&m, 16);
+  return m;
+}
+
+static m4 gltf_get_model_matrix_for_mesh(Gltf_Info *info, s32 mesh_idx) {
+  m4 m = m4d(1.0);
+  for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
+    Gltf_Node_Info *node = &info->nodes[node_idx];
+    if (node->mesh_idx == mesh_idx) {
+      return node->model_matrix;
+    }
+  }
+
+  return m;
 }
 
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
@@ -259,7 +292,29 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   //Json_Element* scene = json_lookup(root, STR8L("scene"));
   //assert(str8_eq(scene->label, STR8L("scene")) && str8_to_int(scene->value) == 0);
 
-  // 0. Parse meshes
+
+  // 0. Parse Nodes 
+  Json_Element* nodes_json = json_lookup(root, STR8L("nodes"));
+  info.node_count = (nodes_json) ? json_count_children(nodes_json) : 0;
+  info.nodes = arena_push_array(arena, Gltf_Node_Info, info.node_count); 
+  if (nodes_json) {
+    s32 node_idx = 0;
+    for (Json_Element *n= nodes_json->first; n != nullptr; n = n->next, node_idx+=1) {
+      Gltf_Node_Info *node = &info.nodes[node_idx];
+
+      node->mesh_idx = json_parse_int(n, STR8L("mesh"), 0);
+      v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
+      quat r =  json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
+      v3 s =  json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
+      // FIXME: No rotation yet! we need quaternions for this im afraid!
+      m4 trs = m4_mult(m4_translate(t), m4_mult(m4_from_quat(r), m4_scale(s))); 
+      // TODO: Not implemented yet!
+      m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
+      node->model_matrix = m4_mult(trs, m);
+    }
+  }
+
+  // 1. Parse meshes
   Json_Element* meshes_json = json_lookup(root, STR8L("meshes")); assert(meshes_json);
   info.mesh_count = json_count_children(meshes_json);
   info.meshes = arena_push_array(arena, Gltf_Mesh, info.mesh_count);
@@ -274,6 +329,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     for (Json_Element *prim = primitives_json->first; prim != nullptr; prim = prim->next, prim_idx+=1) {
       Gltf_Prim *primitive = &info.meshes[mesh_idx].prims[prim_idx];
       *primitive = default_prim;
+      primitive->model_matrix = gltf_get_model_matrix_for_mesh(&info, mesh_idx);
 
       Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
       for (Json_Element *attrib = attribs_json->first ; attrib != nullptr; attrib = attrib->next) {
@@ -476,6 +532,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
       Gltf_Prim *gprim = &gmesh->prims[prim_idx];
       Mesh_Primitive_Info *prim = &mesh->prims[prim_idx];
+      prim->model = gprim->model_matrix;
 
       // FIXME: This should be used for the material description ok?! Make a UBO and everything!
       Gltf_Material *material = &info.materials[gprim->material_idx];
@@ -587,7 +644,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         // Occlusion
         if (gltf_is_property_specified(gmat->occlusion_texture.index) &&
             gltf_is_property_specified(info.textures[gmat->occlusion_texture.index].image_idx)) {
-          material->base_tex = (Material_Tex) {
+          material->occlusion_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->occlusion_texture.index].image_idx].id,
             .tc_idx = gmat->occlusion_texture.tex_coord,
             .active = gmat->occlusion_texture.active,
@@ -598,7 +655,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         material->emissive_factor = gmat->emissive_factor;
         if (gltf_is_property_specified(gmat->emissive_texture.index) &&
             gltf_is_property_specified(info.textures[gmat->emissive_texture.index].image_idx)) {
-          material->base_tex = (Material_Tex) {
+          material->emissive_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->emissive_texture.index].image_idx].id,
             .tc_idx = gmat->emissive_texture.tex_coord,
             .active = gmat->emissive_texture.active,

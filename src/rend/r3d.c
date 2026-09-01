@@ -37,13 +37,12 @@ layout(location = 0) out vec4 out_color;
 in vec2 f_tc;
 in vec4 f_color;
 in vec3 f_norm;
-uniform sampler2D u_tex;
 
 void main() {
   ivec2 texture_size;
   vec2 tc;
 
-  out_color = f_color * texture(u_tex, f_tc);
+  out_color = f_color;
 }
 )";
 
@@ -183,105 +182,94 @@ void r3d_try_load_shaders() {
 }
 
 void r3d_imm_change_tex(Ogl_Tex *tex) {
-  tri_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("u_tex"), .tex = *(tex),};
   uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("u_tex"), .tex = *(tex),};
 }
 
 void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp) {
-  //u64 arena_prev_pos = arena_get_current_pos(__frame_arena); 
-  //buf sampler_name = arena_sprintf(__frame_arena, "u_tex");
-
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
   tri_bundle.vbos[0].buffer = vbo;
-
-  //m4 proj = m4_persp(45.0, viewport.w/(f32)viewport.h, 0.1, 100);
-  //m4 view = m4_view(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
-
   ogl_buf_update(&tri_bundle.ubos[0].buffer, 0, mvp, 1, sizeof(m4));
-
   // Set dynamically before drawcall currently
   tri_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
   tri_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
-
   ogl_render_bundle_draw(&tri_bundle, prim, vert_count, 1);
-  //arena_reset_to_pos(__frame_arena, arena_prev_pos);
 }
 
-  // FIXME: This is INSANELY slow, especially for particles!
-  // FIXME: Probably cancel any rotation (M33) to be user facing right?
-  void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
-    Tri_Vertex cube_verts[6] = {
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
-    };
-    r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
-  }
+// FIXME: This is INSANELY slow, especially for particles!
+// FIXME: Probably cancel any rotation (M33) to be user facing right?
+void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
+  Tri_Vertex cube_verts[6] = {
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
+  };
+  r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
+}
 
-  void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
-    Tri_Vertex cube_verts[36] = {
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-      (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
-    };
-    r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
-  }
-
+void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
+  Tri_Vertex cube_verts[36] = {
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
+  };
+  r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
+}
 
 void r3d_set_material(Mesh_Primitive_Info *info) {
   Ogl_Tex *texture = AM_GET(info->material.base_tex.tex_asset_id, tex);
   r3d_imm_change_tex(texture);
 }
 
-void r3d_imm_model(rect viewport, struct Model_Info *info, m4 *mvp) {
+void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model) {
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
+      m4 model_matrix = m4_mult(model, prim->model);
+      m4 mvp = m4_mult(vp, model_matrix);
       uber_bundle.vbos[0].buffer = prim->vbo;
       uber_bundle.index_buffer = prim->ibo;
       uber_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
       uber_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
       // Also the material should be filled here (UBO1) right? maybe make another one along mvp
-      ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, mvp, 1, sizeof(m4));
+      ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &mvp, 1, sizeof(m4));
       r3d_set_material(prim);
-      //ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, mvp, 1, sizeof(m4));
       if (prim->ibo.count) {
         ogl_render_bundle_draw_indexed(&uber_bundle, prim->type, prim->ibo.count);
       } else {

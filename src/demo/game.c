@@ -81,7 +81,8 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   color c1 = v4m(0.7,0.7,0.7,1);
 
   m4 model = m4_translate(v3m(0, 0, 0));
-  m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
+  m4 vp = m4_mult(gs->proj, gs->view);
+  m4 mvp = m4_mult(vp, model);
 
   s32 point_idx = 0;
 
@@ -103,20 +104,19 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
 
   assert(point_idx == line_count_per_axis*4);
   r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
-
-  Model_Info *mi = AM_GET(asset_id_from_path(STR8L("Avocado.gltf")), model);
-  m4 mvp2 = m4_mult(m4_mult(gs->proj, gs->view), m4_mult(m4_rotate(180, v3m(0,1,0)), m4_scale(v3m(50,50,50))));
-  r3d_imm_model(gs->game_viewport, mi, (m4*)&mvp2);
-  r3d_imm_verts(gs->game_viewport, mi->verts, mi->vert_count, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp2);
-  Ogl_Tex *white = AM_GET(asset_id_from_path(STR8L("white.png")), tex);
-  r3d_imm_change_tex(white);
 }
 
 void game_render(Game_State *gs, float dt) {
-  //m4 model = m4_mult(m4_translate(v3m(0,0,0)), m4_rotate(gs->time_sec*3.14, v3m(0,1,0)));
-
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
+  // Draw the test model
+  m4 vp = m4_mult(gs->proj, gs->view);
+  Model_Info *mi = AM_GET(asset_id_from_path(STR8L("Lantern.gltf")), model);
+  m4 model_for_mesh = m4_mult(m4_rotate(gs->time_sec * M_PI, v3m(0,1,0)), m4_scale(v3m(0.3,0.3,0.3)));
+  //m4 model_for_mesh = m4_mult(m4_from_quat(quat_from_axis_angle(v3m(0,1,0), gs->time_sec*3.14)), m4_scale(v3m(0.3,0.3,0.3)));
+  r3d_imm_model(gs->game_viewport, mi, vp, model_for_mesh);
+
+  // Rest of the frame
   entity_store_update_render(gs, dt);
   particle_mgr_render(gs, gs->pmgr);
 
