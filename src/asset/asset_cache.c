@@ -27,8 +27,6 @@ Asset_Cache* asset_cache_init(Asset_Mgr *parent) {
   return ac;
 }
 
-// Asset_Node;
-
 // TODO: Check if its a nil id no need for a full lookup for garbo stuff
 Asset_Node *asset_cache_find(Asset_Cache *mgr, Asset_Id id) {
   s64 slot_idx = (id.id % mgr->slot_count);

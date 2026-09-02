@@ -304,8 +304,8 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
       node->mesh_idx = json_parse_int(n, STR8L("mesh"), 0);
       v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
-      quat r =  json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
-      v3 s =  json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
+      quat r = json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
+      v3 s = json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
       // FIXME: No rotation yet! we need quaternions for this im afraid!
       m4 trs = m4_mult(m4_translate(t), m4_mult(m4_from_quat(r), m4_scale(s))); 
       // TODO: Not implemented yet!
@@ -495,7 +495,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         material->pbr.metallic_roughness_texture = json_parse_tex_info(pbr_mr, STR8L("metallicRoughnessTexture"));
       }
 
-      material->emissive_factor = json_parse_vec3(m, STR8L("emissive_factor"), v3_zero);
+      material->emissive_factor = json_parse_vec3(m, STR8L("emissiveFactor"), v3_zero);
       material->normal_texture = json_parse_tex_info(m, STR8L("normalTexture"));
       material->emissive_texture = json_parse_tex_info(m, STR8L("emissiveTexture"));
       material->occlusion_texture = json_parse_tex_info(m, STR8L("occlusionTexture"));
@@ -638,6 +638,17 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
             .tex_asset_id = info.images[info.textures[gmat->pbr.metallic_roughness_texture.index].image_idx].id,
             .tc_idx = gmat->pbr.metallic_roughness_texture.tex_coord,
             .active = gmat->pbr.metallic_roughness_texture.active,
+          };
+        }
+
+
+        // Normal texture
+        if (gltf_is_property_specified(gmat->normal_texture.index) &&
+            gltf_is_property_specified(info.textures[gmat->normal_texture.index].image_idx)) {
+          material->normal_tex = (Material_Tex) {
+            .tex_asset_id = info.images[info.textures[gmat->normal_texture.index].image_idx].id,
+            .tc_idx = gmat->normal_texture.tex_coord,
+            .active = gmat->normal_texture.active,
           };
         }
 

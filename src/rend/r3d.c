@@ -39,9 +39,6 @@ in vec4 f_color;
 in vec3 f_norm;
 
 void main() {
-  ivec2 texture_size;
-  vec2 tc;
-
   out_color = f_color;
 }
 )";
@@ -67,16 +64,32 @@ layout(location=10) in vec4 col_3;
 //layout(location=15) in vec4 weight_0;
 
 layout (std140) uniform BatchUbo { mat4 view_proj; };
+layout(std140) uniform Material {
+  vec4 base_color_factor;
+  vec4 emissive_factor;
+  float metallic_factor;
+  float roughness_factor;
+
+  int base_tc_idx;
+  int normal_tc_idx;
+  int metallic_roughness_tc_idx;
+  int emissive_tc_idx;
+  int occlusion_tc_idx;
+};
 
 out vec4 f_color;
 out vec3 f_norm;
-out vec2 f_tc;
+out vec2 f_tc[4];
 
 void main() { 
 	gl_Position = view_proj * vec4(pos, 1.0);
-  f_color = col_0;
+  f_color = col_0*base_color_factor;
   f_norm = norm;
-  f_tc = tc_0;
+
+  f_tc[0] = tc_0;
+  f_tc[1] = tc_1;
+  f_tc[2] = tc_2;
+  f_tc[3] = tc_3;
 }
 )";
 
@@ -84,28 +97,59 @@ const char* uber_fs= R"(#version 460 core
 precision highp float;
 layout(location = 0) out vec4 out_color;
 
-in vec2 f_tc;
+layout(std140) uniform Material {
+  vec4 base_color_factor;
+  vec4 emissive_factor;
+  float metallic_factor;
+  float roughness_factor;
+
+  int base_tc_idx;
+  int normal_tc_idx;
+  int metallic_roughness_tc_idx;
+  int emissive_tc_idx;
+  int occlusion_tc_idx;
+};
+
+in vec2 f_tc[4];
 in vec4 f_color;
 in vec3 f_norm;
-uniform sampler2D u_tex;
+
+uniform sampler2D base_color_tex;
+uniform sampler2D normal_tex;
+uniform sampler2D metallic_roughness_tex;
+uniform sampler2D emissive_tex;
+uniform sampler2D occlusion_tex;
 
 void main() {
   ivec2 texture_size;
   vec2 tc;
 
-  out_color = f_color * texture(u_tex, f_tc);
+  out_color = f_color * texture(base_color_tex, f_tc[base_tc_idx]);
+  out_color += emissive_factor * texture(emissive_tex, f_tc[emissive_tc_idx]);
+  out_color += 0.1 * texture(occlusion_tex, f_tc[occlusion_tc_idx]);
+  out_color += 0.01 * texture(normal_tex, f_tc[normal_tc_idx]);
+  out_color += 0.01 * texture(metallic_roughness_tex, f_tc[metallic_roughness_tc_idx]);
 }
 )";
 
+typedef struct {
+  v4 base_color_factor;
+  v4 emissive_factor;
+  float metallic_factor;
+  float roughness_factor;
+
+  int base_tc_idx;
+  int normal_tc_idx;
+  int metallic_roughness_tc_idx;
+  int emissive_tc_idx;
+  int occlusion_tc_idx;
+} Material_UBO;
 
 void r3d_try_load_shaders() {
   m4 m = {};
   if (tri_bundle.sp.impl_state == 0) {
     tri_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(tri_vs, tri_fs),
-
-      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
-
       .vbos = {
         [0] = {
           // the vertex buffer for this should probably be made after r_end has been called
@@ -135,7 +179,11 @@ void r3d_try_load_shaders() {
     uber_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(uber_vs, uber_fs),
 
-      .textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+      .textures[0] = (Ogl_Tex_Slot){ .name = "base_color_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+      .textures[1] = (Ogl_Tex_Slot){ .name = "normal_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+      .textures[2] = (Ogl_Tex_Slot){ .name = "metallic_roughness_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+      .textures[3] = (Ogl_Tex_Slot){ .name = "emissive_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+      .textures[4] = (Ogl_Tex_Slot){ .name = "occlusion_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .vbos = {
         [0] = {
           .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Uber_Vertex)),
@@ -166,7 +214,9 @@ void r3d_try_load_shaders() {
           },
         },
       },
-      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
+      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, 
+                [1] = { .name = "Material", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Material_UBO)), .start_offset = 0, .size = sizeof(Material_UBO) },
+      },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
       .dyn_state = (Ogl_Dyn_State){
 //        .viewport = viewport,
@@ -181,9 +231,6 @@ void r3d_try_load_shaders() {
   }
 }
 
-void r3d_imm_change_tex(Ogl_Tex *tex) {
-  uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("u_tex"), .tex = *(tex),};
-}
 
 void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp) {
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
@@ -193,6 +240,9 @@ void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Ty
   tri_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
   tri_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
   ogl_render_bundle_draw(&tri_bundle, prim, vert_count, 1);
+
+  // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
+  ogl_buf_deinit(&vbo);
 }
 
 // FIXME: This is INSANELY slow, especially for particles!
@@ -252,8 +302,34 @@ void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
 }
 
 void r3d_set_material(Mesh_Primitive_Info *info) {
-  Ogl_Tex *texture = AM_GET(info->material.base_tex.tex_asset_id, tex);
-  r3d_imm_change_tex(texture);
+  Material_Info *material = &info->material;
+  Ogl_Tex *texture = AM_GET(material->base_tex.tex_asset_id, tex);
+  uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("base_color_tex"), .tex = *(texture),};
+
+  texture = AM_GET(material->normal_tex.tex_asset_id, tex);
+  uber_bundle.textures[1] = (Ogl_Tex_Slot){.name = ("normal_tex"), .tex = *(texture),};
+
+  texture = AM_GET(material->metallic_roughness_tex.tex_asset_id, tex);
+  uber_bundle.textures[2] = (Ogl_Tex_Slot){.name = ("metallic_roughness_tex"), .tex = *(texture),};
+
+  texture = AM_GET(material->emissive_tex.tex_asset_id, tex);
+  uber_bundle.textures[3] = (Ogl_Tex_Slot){.name = ("emissive_tex"), .tex = *(texture),};
+
+  texture = AM_GET(material->occlusion_tex.tex_asset_id, tex);
+  uber_bundle.textures[4] = (Ogl_Tex_Slot){.name = ("occlusion_tex"), .tex = *(texture),};
+
+  Material_UBO material_ubo = (Material_UBO) {
+    .base_color_factor = material->base_color_factor,
+    .metallic_factor = material->metallic_factor,
+    .roughness_factor = material->roughness_factor,
+    .emissive_factor = v4_from_v3(material->emissive_factor, 1.0),
+    .base_tc_idx = material->base_tex.tc_idx,
+    .metallic_roughness_tc_idx = material->metallic_roughness_tex.tc_idx,
+    .normal_tc_idx = material->normal_tex.tc_idx,
+    .occlusion_tc_idx = material->occlusion_tex.tc_idx,
+  };
+  ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
+
 }
 
 void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model) {
@@ -267,9 +343,10 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model) {
       uber_bundle.index_buffer = prim->ibo;
       uber_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
       uber_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
-      // Also the material should be filled here (UBO1) right? maybe make another one along mvp
       ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &mvp, 1, sizeof(m4));
+
       r3d_set_material(prim);
+
       if (prim->ibo.count) {
         ogl_render_bundle_draw_indexed(&uber_bundle, prim->type, prim->ibo.count);
       } else {

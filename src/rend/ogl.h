@@ -140,7 +140,7 @@ typedef enum {
 #define OGL_MAX_VERTEX_BUFFERS 8
 #define OGL_MAX_ATTRIBS 20
 #define OGL_MAX_UNIFORM_BUFFERS 4
-#define OGL_MAX_ACTIVE_TEXTURES 4
+#define OGL_MAX_ACTIVE_TEXTURES 6
 #define OGL_MAX_RENDER_TARGET_ATTACHMENTS 4
 
 typedef enum {
@@ -288,8 +288,6 @@ typedef struct {
   uint32_t height;
   uint64_t impl_state;
 } Ogl_Render_Target;
-
-
 
 // This is a dirty cache pretty much..
 typedef struct {
