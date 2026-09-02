@@ -63,7 +63,11 @@ layout(location=10) in vec4 col_3;
 //layout(location=14) in vec4 joint_3;
 //layout(location=15) in vec4 weight_0;
 
-layout (std140) uniform BatchUbo { mat4 view_proj; };
+layout (std140) uniform PerFrameData { 
+  mat4 view_proj;
+  vec3 cam_pos;
+  vec3 light_dir;
+};
 layout(std140) uniform Material {
   vec4 base_color_factor;
   vec4 emissive_factor;
@@ -75,27 +79,53 @@ layout(std140) uniform Material {
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
+
+  mat4 model_matrix;
 };
 
 out vec4 f_color;
+out vec4 f_wp;
+out vec3 f_view_dir;
 out vec3 f_norm;
+out vec3 f_tang;
+out vec3 f_binorm;
 out vec2 f_tc[4];
 
 void main() { 
-	gl_Position = view_proj * vec4(pos, 1.0);
   f_color = col_0*base_color_factor;
-  f_norm = norm;
+	gl_Position = view_proj * model_matrix * vec4(pos, 1.0);
 
   f_tc[0] = tc_0;
   f_tc[1] = tc_1;
   f_tc[2] = tc_2;
   f_tc[3] = tc_3;
+
+  // Normal mapping bullshido
+  mat3 M = mat3(model_matrix);
+  mat3 normal_matrix = transpose(inverse(M));
+  f_norm = normalize(normal_matrix * norm);
+  vec3 T = normalize(M * tang.xyz);
+  vec3 N = normalize(normal_matrix * norm);
+  T = normalize(T - N * dot(N, T));
+  vec3 B = normalize(cross(N, T)) * tang.w;
+  f_tang = T;
+  f_binorm = B;
+
+  f_wp = model_matrix * vec4(pos, 1.0f);
+  f_view_dir = normalize(cam_pos.xyz - f_wp.xyz);
 }
 )";
 
+// ref: https://www.rastertek.com/gl4linuxtut52.html
 const char* uber_fs= R"(#version 460 core
 precision highp float;
 layout(location = 0) out vec4 out_color;
+
+layout (std140) uniform PerFrameData { 
+  mat4 view_proj;
+  vec3 cam_pos;
+  vec3 light_dir;
+};
 
 layout(std140) uniform Material {
   vec4 base_color_factor;
@@ -108,11 +138,17 @@ layout(std140) uniform Material {
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
+
+  mat4 model_matrix;
 };
 
 in vec2 f_tc[4];
 in vec4 f_color;
+in vec4 f_wp;
+in vec3 f_view_dir;
 in vec3 f_norm;
+in vec3 f_tang;
+in vec3 f_binorm;
 
 uniform sampler2D base_color_tex;
 uniform sampler2D normal_tex;
@@ -121,28 +157,107 @@ uniform sampler2D emissive_tex;
 uniform sampler2D occlusion_tex;
 
 void main() {
+
+#if 0
   ivec2 texture_size;
   vec2 tc;
-
   out_color = f_color * texture(base_color_tex, f_tc[base_tc_idx]);
   out_color += emissive_factor * texture(emissive_tex, f_tc[emissive_tc_idx]);
   out_color += 0.1 * texture(occlusion_tex, f_tc[occlusion_tc_idx]);
   out_color += 0.01 * texture(normal_tex, f_tc[normal_tc_idx]);
   out_color += 0.01 * texture(metallic_roughness_tex, f_tc[metallic_roughness_tc_idx]);
+#else
+
+  vec3 lD;
+  vec3 albedo, metallic_rough, bump_map;
+  vec3 bump_norm;
+  float roughness, metallic;
+  vec3 F0;
+  vec3 half_dir;
+  float NdotH, NdotV, NdotL, HdotV;
+  float roughness_sqr, rough_sqr2, NdotHSqr, denominator, normal_distribution;
+  float smithL, smithV, geom_shadow;
+  vec3 fresnel;
+  vec3 specularity;
+  vec4 color;
+
+  lD = -light_dir;
+
+  // Sample the textures needed
+  albedo = texture(base_color_tex, f_tc[base_tc_idx]).rgb;
+  metallic_rough = texture(metallic_roughness_tex, f_tc[metallic_roughness_tc_idx]).rgb;
+  bump_map = texture(normal_tex, f_tc[normal_tc_idx]).rgb;
+
+  // Perform normal mapping
+  bump_map = (bump_map * 2.0f) - 1.0f;
+  bump_norm = (bump_map.x * f_tang) + (bump_map.y * f_binorm) + (bump_map.z * f_norm);
+  bump_norm = normalize(bump_norm);
+
+  // Retrieve metallic/roughness
+  roughness = metallic_rough.r;
+  metallic = metallic_rough.b;
+
+  // Calculate fresnel factor
+  F0 = vec3(0.04f, 0.04f, 0.04f);
+  F0 = mix(F0, albedo, metallic);
+
+  // Setup all needed vectors for lighting
+  half_dir = normalize(f_view_dir + lD);
+  NdotH = max(0.0f, dot(bump_norm, half_dir));
+  NdotV = max(0.0f, dot(bump_norm, f_view_dir));
+  NdotL = max(0.0f, dot(bump_norm, lD));
+  HdotV = max(0.0f, dot(half_dir, f_view_dir));
+
+  // GGX for normal distribution
+  roughness_sqr = roughness * roughness;
+  rough_sqr2 = roughness_sqr * roughness_sqr;
+  NdotHSqr = NdotH * NdotH;
+  denominator = (NdotHSqr * (rough_sqr2 - 1.0f) + 1.0f);
+  denominator = 3.14159265359f * (denominator * denominator);
+  normal_distribution = rough_sqr2 / denominator;
+
+  // Schlick GGX for the geometric shadow
+  smithL = NdotL / (NdotL * (1.0f - roughness_sqr) + roughness_sqr);
+  smithV = NdotV / (NdotV * (1.0f - roughness_sqr) + roughness_sqr);
+  geom_shadow = smithL * smithV;
+
+  // Fresnel SChlick for fresnel calculation
+  fresnel = F0 + (1.0f - F0) * pow(1.0f - HdotV, 5.0f);
+
+  // Cook-Torrance specular BRDF
+  specularity = (normal_distribution * fresnel * geom_shadow) / ((4.0f * (NdotL * NdotV)) + 0.00001f);
+  color.rgb = albedo + specularity;
+  color.rgb = color.rgb * NdotL;
+  color = vec4(color.rgb, 1.0f);
+
+  out_color = color;
+#endif
 }
 )";
 
 typedef struct {
+  m4 view_proj;
+  v3 cam_pos;
+  f32 _padding;
+  v3 light_dir;
+  f32 _padding2;
+} PerFrameData_UBO;
+
+typedef struct {
   v4 base_color_factor;
   v4 emissive_factor;
+
   float metallic_factor;
   float roughness_factor;
-
   int base_tc_idx;
   int normal_tc_idx;
+
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
+  int _padding;
+
+  m4 model_matrix;
 } Material_UBO;
 
 void r3d_try_load_shaders() {
@@ -214,7 +329,7 @@ void r3d_try_load_shaders() {
           },
         },
       },
-      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, 
+      .ubos = { [0] = { .name = "PerFrameData", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(PerFrameData_UBO)), .start_offset = 0, .size = sizeof(PerFrameData_UBO) }, 
                 [1] = { .name = "Material", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Material_UBO)), .start_offset = 0, .size = sizeof(Material_UBO) },
       },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
@@ -301,7 +416,7 @@ void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
   r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
 }
 
-void r3d_set_material(Mesh_Primitive_Info *info) {
+void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
   Material_Info *material = &info->material;
   Ogl_Tex *texture = AM_GET(material->base_tex.tex_asset_id, tex);
   uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("base_color_tex"), .tex = *(texture),};
@@ -327,25 +442,33 @@ void r3d_set_material(Mesh_Primitive_Info *info) {
     .metallic_roughness_tc_idx = material->metallic_roughness_tex.tc_idx,
     .normal_tc_idx = material->normal_tex.tc_idx,
     .occlusion_tc_idx = material->occlusion_tex.tc_idx,
+    .model_matrix = model,
   };
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 
 }
 
-void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model) {
+void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos) {
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
       m4 model_matrix = m4_mult(model, prim->model);
-      m4 mvp = m4_mult(vp, model_matrix);
+      //m4 mvp = m4_mult(vp, model_matrix);
       uber_bundle.vbos[0].buffer = prim->vbo;
       uber_bundle.index_buffer = prim->ibo;
       uber_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
       uber_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
-      ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &mvp, 1, sizeof(m4));
 
-      r3d_set_material(prim);
+      PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
+        .view_proj = vp,
+        .cam_pos = cam_pos,
+        .light_dir = v3_norm(v3m(0.2,1,-1)),
+      };
+      ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &pf_ubo, 1, sizeof(pf_ubo));
+
+
+      r3d_set_material(prim, model_matrix);
 
       if (prim->ibo.count) {
         ogl_render_bundle_draw_indexed(&uber_bundle, prim->type, prim->ibo.count);

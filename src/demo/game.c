@@ -39,9 +39,6 @@ void game_init(Game_State *gs) {
   ground->box.hdim = v3m(4,1,4),
   ground->col = v4m(0.4,0.4,0.4,1.0);
 
-
-  gs->view = m4_look_at(v3m(0,8,10), v3m(0,0,0), v3m(0,1,0));
-
   gui_init(gs->frame_arena, &gs->font, &gs->input);
 
   // Base64 test.. no reason
@@ -107,14 +104,17 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
 }
 
 void game_render(Game_State *gs, float dt) {
+  v3 cam_pos = v3m(0,8,10);
+  gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
   // Draw the test model
   m4 vp = m4_mult(gs->proj, gs->view);
   Model_Info *mi = AM_GET(asset_id_from_path(STR8L("Lantern.gltf")), model);
   m4 model_for_mesh = m4_mult(m4_rotate(gs->time_sec * M_PI, v3m(0,1,0)), m4_scale(v3m(0.3,0.3,0.3)));
-  //m4 model_for_mesh = m4_mult(m4_from_quat(quat_from_axis_angle(v3m(0,1,0), gs->time_sec*3.14)), m4_scale(v3m(0.3,0.3,0.3)));
-  r3d_imm_model(gs->game_viewport, mi, vp, model_for_mesh);
+  //Model_Info *mi = AM_GET(asset_id_from_path(STR8L("Avocado.gltf")), model);
+  //m4 model_for_mesh = m4_mult(m4_from_quat(quat_from_axis_angle(v3m(0,1,0), gs->time_sec*3.14)), m4_scale(v3m(50,50,50)));
+  r3d_imm_model(gs->game_viewport, mi, vp, model_for_mesh, cam_pos);
 
   // Rest of the frame
   entity_store_update_render(gs, dt);
