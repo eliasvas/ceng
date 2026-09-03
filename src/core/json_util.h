@@ -198,6 +198,7 @@ static void json_parser_eat_tok(Json_Parser *parser, Json_Token_Kind expected_to
 }
 
 static s32 json_count_children(Json_Element *root) {
+  if (!root) return 0;
   Json_Element *iter = root->first;
   s32 children_count = 0;
   while (iter != nullptr) {

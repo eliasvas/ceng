@@ -56,6 +56,7 @@ Asset_Id asset_cache_load_from_data(Asset_Cache *mgr, str8 asset_fullpath, str8 
 
   switch(id.kind) {
     case ASSET_KIND_TEX:
+      //printf("loading tex:%.*s\n", STR8_VARG(file));
       Ogl_Tex tex = {};
       if (asset_data.count > 0) {
         v2 img_dim = {};

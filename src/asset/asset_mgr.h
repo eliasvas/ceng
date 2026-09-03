@@ -6,6 +6,7 @@
 extern Asset_Mgr g_am;
 
 static Asset_Kind asset_kind_from_path(str8 path) {
+  if (path.data[path.count-1] + path.data[path.count-2] + path.data[path.count-3] == 'j'+'p'+'g')return ASSET_KIND_TEX;
   return (path.count < 3) ?  ASSET_KIND_TEX :
    path.data[path.count-1] + path.data[path.count-2] + path.data[path.count-3]; // look at enum Asset_Kind
 }

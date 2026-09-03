@@ -431,7 +431,8 @@ int main(void) {
   gs.atlas_sprites_per_dim = v2m(16,10);
 
   //gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Avocado/glTF/Avocado.gltf"));
-  gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Lantern/glTF/Lantern.gltf"));
+  //gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Lantern/glTF/Lantern.gltf"));
+  gs.model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/CesiumMan/glTF/CesiumMan.gltf"));
 
   gs.font = bfont_load_default_atlas(gs.persistent_arena, 32, 256, 256);
 

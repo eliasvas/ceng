@@ -98,9 +98,52 @@ typedef struct {
 
 typedef struct {
   s32 mesh_idx;
+  s32 skin_idx;
   m4 model_matrix;
+
+  s32 *children;
+  s32 children_count;
   //str8 name;
 } Gltf_Node_Info;
+
+typedef enum {
+  GLTF_ANIMATION_KIND_TRANSLATION,
+  GLTF_ANIMATION_KIND_ROTATION,
+  GLTF_ANIMATION_KIND_SCALE,
+} Gltf_Animation_Kind;
+
+typedef struct {
+  s32 sampler_id;
+  s32 target_node_id;
+  Gltf_Animation_Kind kind;
+} Gltf_Animation_Channel;
+
+typedef enum {
+  GLTF_INTERP_TYPE_LINEAR,
+  GLTF_INTERP_TYPE_STEP,
+  GLTF_INTERP_TYPE_CUBIC_SPLINE,
+} Gltf_Animation_Sampler_Interp_Type;
+
+typedef struct {
+  Gltf_Animation_Sampler_Interp_Type type;
+  s32 input;
+  s32 output;
+} Gltf_Animation_Sampler;
+
+typedef struct {
+  Gltf_Animation_Channel *channels;
+  s32 channel_count;
+
+  Gltf_Animation_Sampler *samplers;
+  s32 sampler_count;
+} Gltf_Animation;
+
+typedef struct {
+  s32 inverse_bind_matrices_accessor_id; // (OPTIONAL) where to get IBNs
+  s32 skeleton_node_id; // the root node id
+  s32 *joints; // joint -> node_idx
+  s32 joint_count;
+} Gltf_Skin;
 
 
 // Meshes are arrays of mesh primitives
@@ -131,6 +174,12 @@ typedef struct {
 
   Gltf_Node_Info *nodes;
   s32 node_count;
+
+  Gltf_Animation *animations;
+  s32 animation_count;
+
+  Gltf_Skin *skins;
+  s32 skin_count;
 
 } Gltf_Info;
 
@@ -225,6 +274,18 @@ static s32 json_parse_int(Json_Element *root, str8 path, s32 def) {
   return (node) ? str8_to_int(node->value) : def;
 }
 
+static b32 json_parse_ints(Json_Element *root, str8 path, s32 *dst, s32 count) {
+  Json_Element *node = json_lookup(root, path);
+  if (!node) return false;
+
+  s32 dst_idx = 0;
+  for (Json_Element *n = node->first; n != nullptr && dst_idx < count; n=n->next, dst_idx+=1) {
+    dst[dst_idx] = str8_to_int(n->value);
+  }
+
+  return true;
+}
+
 static f32 json_parse_float(Json_Element *root, str8 path, f32 def) {
   Json_Element *node = json_lookup(root, path);
   return (node) ? str8_to_float(node->value) : def;
@@ -303,6 +364,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       Gltf_Node_Info *node = &info.nodes[node_idx];
 
       node->mesh_idx = json_parse_int(n, STR8L("mesh"), 0);
+      node->skin_idx = json_parse_int(n, STR8L("skin"), GLTF_PROPERTY_NOT_SPECIFIED);
       v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
       quat r = json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
       v3 s = json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
@@ -311,6 +373,11 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       // TODO: Not implemented yet!
       m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
       node->model_matrix = m4_mult(trs, m);
+
+
+      node->children_count = json_count_children(n);
+      node->children = arena_push_array(arena, s32, node->children_count);
+      json_parse_ints(n, STR8L("children"), node->children, node->children_count);
     }
   }
 
@@ -501,6 +568,81 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       material->occlusion_texture = json_parse_tex_info(m, STR8L("occlusionTexture"));
     }
   }
+
+  // 5. Parse animations
+  Json_Element* animations_json = json_lookup(root, STR8L("animations"));
+  info.animation_count = json_count_children(animations_json);
+  info.animations = arena_push_array(arena, Gltf_Animation, info.animation_count); 
+
+  if (info.animation_count) {
+    s32 anim_idx = 0;
+    for (Json_Element *a = animations_json->first; a != nullptr; a = a->next, anim_idx+=1) {
+      //Json_Element *name = json_lookup(a, STR8L("name")); assert(name);
+      Gltf_Animation *anim = &info.animations[anim_idx];
+
+      // 5.1 Parse channels
+      s32 channel_idx = 0;
+      Json_Element *channels = json_lookup(a, STR8L("channels"));
+      s32 channel_count = json_count_children(channels);
+      anim->channels = arena_push_array(arena, Gltf_Animation_Channel, channel_count);
+      for (Json_Element *c = channels->first; c != nullptr; c = c->next, channel_idx+=1) {
+        Gltf_Animation_Channel *channel = &anim->channels[channel_idx];
+        channel->sampler_id = json_parse_int(c, STR8L("input"), 0);
+        Json_Element *target = json_lookup(c, STR8L("target"));
+        channel->target_node_id = json_parse_int(target, STR8L("node"), 0);
+        Json_Element *path = json_lookup(target, STR8L("path"));
+        if (str8_eq(path->value, STR8L("scale"))) {
+          channel->kind = GLTF_ANIMATION_KIND_SCALE;
+        } else if (str8_eq(path->value, STR8L("rotation"))) {
+          channel->kind = GLTF_ANIMATION_KIND_ROTATION;
+        } else {
+          channel->kind = GLTF_ANIMATION_KIND_SCALE;
+        }
+      }
+
+      // 5.2 Parse samplers 
+      s32 sampler_idx = 0;
+      Json_Element *samplers = json_lookup(a, STR8L("samplers"));
+      s32 sampler_count = json_count_children(samplers);
+      anim->samplers = arena_push_array(arena, Gltf_Animation_Channel, sampler_count);
+      for (Json_Element *s = samplers->first; s != nullptr; s = s->next, sampler_idx+=1) {
+        Gltf_Animation_Sampler *sampler = &anim->samplers[sampler_idx];
+        sampler->input  = json_parse_int(s, STR8L("input"), 0);
+        sampler->output = json_parse_int(s, STR8L("output"), 0);
+        Json_Element *interp = json_lookup(s, STR8L("interpolation"));
+        if (str8_eq(interp->value, STR8L("LINEAR"))) {
+          sampler->type = GLTF_INTERP_TYPE_LINEAR;
+        } else if (str8_eq(interp->value, STR8L("STEP"))) {
+          sampler->type = GLTF_INTERP_TYPE_STEP;
+        } else {
+          sampler->type = GLTF_INTERP_TYPE_CUBIC_SPLINE;
+        }
+      }
+
+    }
+  }
+
+
+  // 5. Parse skins 
+  Json_Element* skins_json = json_lookup(root, STR8L("skins"));
+  info.skin_count = json_count_children(skins_json);
+  info.skins = arena_push_array(arena, Gltf_Skin, info.skin_count); 
+
+  if (info.skin_count) {
+    s32 skin_idx = 0;
+    for (Json_Element *s = skins_json->first; s != nullptr; s = s->next, skin_idx+=1) {
+      //Json_Element *name = json_lookup(a, STR8L("name")); assert(name);
+      Gltf_Skin *skin = &info.skins[skin_idx];
+      skin->inverse_bind_matrices_accessor_id = json_parse_int(s, STR8L("inverseBindMatrices"), GLTF_PROPERTY_NOT_SPECIFIED);
+      skin->skeleton_node_id= json_parse_int(s, STR8L("skeleton"), 0);
+
+      Json_Element *joints_json = json_lookup(s, STR8L("joints"));
+      skin->joint_count = json_count_children(joints_json);
+      skin->joints = arena_push_array(arena, s32, skin->joint_count);
+      json_parse_ints(s, STR8L("joints"), skin->joints, skin->joint_count);
+    }
+  }
+
 
   return info;
 }

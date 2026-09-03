@@ -158,7 +158,7 @@ uniform sampler2D occlusion_tex;
 
 void main() {
 
-#if 0
+#if 1
   ivec2 texture_size;
   vec2 tc;
   out_color = f_color * texture(base_color_tex, f_tc[base_tc_idx]);
