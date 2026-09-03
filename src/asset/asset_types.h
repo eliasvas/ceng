@@ -77,6 +77,9 @@ typedef struct {
   Ogl_Prim_Type type;
   Material_Info material;
   m4 model;
+  v3 t;
+  quat r;
+  v3 s;
 } Mesh_Primitive_Info;
 
 typedef struct {
@@ -84,12 +87,38 @@ typedef struct {
   s64 prim_count;
 } Mesh_Info;
 
+typedef enum {
+  MESH_ANIMATION_KIND_TRANSLATION,
+  MESH_ANIMATION_KIND_ROTATION,
+  MESH_ANIMATION_KIND_SCALE,
+} Mesh_Animation_Kind;
+
+typedef enum {
+  MESH_ANIMATION_INTERP_TYPE_LINEAR,
+  MESH_ANIMATION_INTERP_TYPE_STEP,
+  MESH_ANIMATION_INTERP_TYPE_CUBIC_SPLINE,
+} Mesh_Animation_Interp_Type;
+
+typedef struct {
+  s32 mesh_idx;
+  f32 *kf_timestamps;
+  f32 *values;
+  s32 kf_count;
+  f32 max_duration;
+
+  Mesh_Animation_Interp_Type type;
+  Mesh_Animation_Kind kind;
+} Mesh_Animation;
+
 typedef struct Model_Info {
   Tri_Vertex *verts;
   s64 vert_count;
 
   Mesh_Info *meshes;
   s64 mesh_count;
+
+  Mesh_Animation *animations;
+  s64 animation_count;
 
   Asset_Id tex_id;
 } Model_Info;

@@ -5,6 +5,13 @@
 #include "core/base64.h"
 
 // Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+// Ref: https://github.khronos.org/glTF-Tutorials/gltfTutorial/
+
+typedef struct {
+  v3 t;
+  quat r;
+  v3 s;
+} Gltf_Transform;
 
 typedef enum {
   GLTF_ARRAY_BUFFER,         // vertex buffer
@@ -88,7 +95,11 @@ typedef struct {
   s32 indices_idx;
   s32 material_idx;
   s32 mode;
+
   m4 model_matrix;
+  v3 t;
+  quat r;
+  v3 s;
 } Gltf_Prim;
 
 typedef struct {
@@ -100,6 +111,10 @@ typedef struct {
   s32 mesh_idx;
   s32 skin_idx;
   m4 model_matrix;
+
+  v3 t;
+  quat r;
+  v3 s;
 
   s32 *children;
   s32 children_count;
@@ -333,17 +348,43 @@ static m4 json_parse_mat4(Json_Element *root, str8 path, m4 def) {
   return m;
 }
 
-static m4 gltf_get_model_matrix_for_mesh(Gltf_Info *info, s32 mesh_idx) {
-  m4 m = m4d(1.0);
+static Gltf_Transform gltf_get_transform_for_mesh(Gltf_Info *info, s32 mesh_idx) {
+  Gltf_Transform trans = (Gltf_Transform){};
   for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
     Gltf_Node_Info *node = &info->nodes[node_idx];
     if (node->mesh_idx == mesh_idx) {
+#if 0
       return node->model_matrix;
+#else
+      Gltf_Transform trs = (Gltf_Transform) {
+        .t = node->t,
+        .r = node->r,
+        .s = node->s,
+      };
+      trans = trs;
+#endif
     }
   }
 
-  return m;
+  return trans;
 }
+static m4 gltf_get_model_matrix_for_mesh(Gltf_Info *info, s32 mesh_idx) {
+  Gltf_Transform trans = gltf_get_transform_for_mesh(info, mesh_idx);
+  m4 trs = m4_mult(m4_translate(trans.t), m4_mult(m4_from_quat(trans.r), m4_scale(trans.s))); 
+  return trs;
+}
+
+static Gltf_Transform gltf_matrix_to_trs(m4 m) {
+  Gltf_Transform out = (Gltf_Transform){};
+
+  out.t = v3m(m.col[3][0], m.col[3][1], m.col[3][2]);
+  out.s = v3m(m.col[0][0],m.col[1][1],m.col[2][2]);
+  // FIXME: We haven't translated rotations here!
+  out.r = qu(0,0,0,1);
+
+  return out;
+}
+
 
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
@@ -365,15 +406,25 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
       node->mesh_idx = json_parse_int(n, STR8L("mesh"), 0);
       node->skin_idx = json_parse_int(n, STR8L("skin"), GLTF_PROPERTY_NOT_SPECIFIED);
-      v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
-      quat r = json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
-      v3 s = json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
-      // FIXME: No rotation yet! we need quaternions for this im afraid!
-      m4 trs = m4_mult(m4_translate(t), m4_mult(m4_from_quat(r), m4_scale(s))); 
-      // TODO: Not implemented yet!
-      m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
-      node->model_matrix = m4_mult(trs, m);
 
+      Json_Element* matrix_json = json_lookup(n, STR8L("matrix"));
+      if (matrix_json) {
+        m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
+        Gltf_Transform trans = gltf_matrix_to_trs(m);
+        node->model_matrix = m;
+        node->t = trans.t;
+        node->r = trans.r;
+        node->s = trans.s;
+      } else {
+        v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
+        quat r = json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
+        v3 s = json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
+        m4 trs = m4_mult(m4_translate(t), m4_mult(m4_from_quat(r), m4_scale(s))); 
+        node->model_matrix = trs;
+        node->t = t;
+        node->r = r;
+        node->s = s;
+      }
 
       node->children_count = json_count_children(n);
       node->children = arena_push_array(arena, s32, node->children_count);
@@ -397,6 +448,10 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       Gltf_Prim *primitive = &info.meshes[mesh_idx].prims[prim_idx];
       *primitive = default_prim;
       primitive->model_matrix = gltf_get_model_matrix_for_mesh(&info, mesh_idx);
+      Gltf_Transform trans = gltf_get_transform_for_mesh(&info, mesh_idx);
+      primitive->t = trans.t;
+      primitive->r = trans.r;
+      primitive->s = trans.s;
 
       Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
       for (Json_Element *attrib = attribs_json->first ; attrib != nullptr; attrib = attrib->next) {
@@ -585,6 +640,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       Json_Element *channels = json_lookup(a, STR8L("channels"));
       s32 channel_count = json_count_children(channels);
       anim->channels = arena_push_array(arena, Gltf_Animation_Channel, channel_count);
+      anim->channel_count = channel_count;
       for (Json_Element *c = channels->first; c != nullptr; c = c->next, channel_idx+=1) {
         Gltf_Animation_Channel *channel = &anim->channels[channel_idx];
         channel->sampler_id = json_parse_int(c, STR8L("input"), 0);
@@ -596,7 +652,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         } else if (str8_eq(path->value, STR8L("rotation"))) {
           channel->kind = GLTF_ANIMATION_KIND_ROTATION;
         } else {
-          channel->kind = GLTF_ANIMATION_KIND_SCALE;
+          channel->kind = GLTF_ANIMATION_KIND_TRANSLATION;
         }
       }
 
@@ -605,6 +661,8 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       Json_Element *samplers = json_lookup(a, STR8L("samplers"));
       s32 sampler_count = json_count_children(samplers);
       anim->samplers = arena_push_array(arena, Gltf_Animation_Channel, sampler_count);
+      anim->sampler_count = sampler_count;
+  //printf("--- sampler count; %ld\n", anim->sampler_count);
       for (Json_Element *s = samplers->first; s != nullptr; s = s->next, sampler_idx+=1) {
         Gltf_Animation_Sampler *sampler = &anim->samplers[sampler_idx];
         sampler->input  = json_parse_int(s, STR8L("input"), 0);
@@ -647,15 +705,15 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   return info;
 }
 
-static u8* gltf_data_from_accessor(Gltf_Info info, s32 acc_idx, s32 *stride) {
+static u8* gltf_data_from_accessor(Gltf_Info *info, s32 acc_idx, s32 *stride) {
   if (!gltf_is_property_specified(acc_idx)) return nullptr;
 
-  s32 bufv_idx = info.accessors[acc_idx].bufv_idx;
-  s32 buf_idx = info.buffer_views[bufv_idx].buf_idx;
-  u8 *buf_data = info.buffers[buf_idx].data;
-  s64 bufv_offset = info.buffer_views[bufv_idx].byte_offset;
-  s64 acc_offset = info.accessors[acc_idx].byte_offset;
-  if (stride) *(stride) = info.buffer_views[bufv_idx].byte_stride; 
+  s32 bufv_idx = info->accessors[acc_idx].bufv_idx;
+  s32 buf_idx = info->buffer_views[bufv_idx].buf_idx;
+  u8 *buf_data = info->buffers[buf_idx].data;
+  s64 bufv_offset = info->buffer_views[bufv_idx].byte_offset;
+  s64 acc_offset = info->accessors[acc_idx].byte_offset;
+  if (stride) *(stride) = info->buffer_views[bufv_idx].byte_stride; 
 
   return (u8*)(buf_data + bufv_offset + acc_offset);
 }
@@ -663,11 +721,88 @@ static u8* gltf_data_from_accessor(Gltf_Info info, s32 acc_idx, s32 *stride) {
 static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
   Model_Info model = {};
 
+
+  // FIXME FIXME FIXME: Why do we separate animations per channel
+  s32 animation_count = 0;
+  for (s32 anim_idx = 0; anim_idx < info.animation_count; anim_idx+=1) {
+    Gltf_Animation *anim = &info.animations[anim_idx];
+    for (s32 sampler_idx = 0; sampler_idx < anim->sampler_count; sampler_idx+=1) {
+      animation_count += 1; 
+    }
+  }
+
+  s32 running_anim_idx = 0;
+
+  model.animation_count = animation_count;
+  model.animations = arena_push_array(arena, Mesh_Animation, model.animation_count);
+  for (s32 anim_idx = 0; anim_idx < info.animation_count; anim_idx+=1) {
+    Gltf_Animation *anim = &info.animations[anim_idx];
+    for (s32 channel_idx = 0; channel_idx < anim->channel_count; channel_idx+=1) {
+      Gltf_Animation_Channel *channel = &anim->channels[channel_idx];
+      s32 mesh_idx = info.nodes[channel->target_node_id].mesh_idx;
+      s32 sampler_idx = channel->sampler_id;
+      Gltf_Animation_Sampler *sampler = &anim->samplers[sampler_idx];
+      f32 *timestamps = (f32*)gltf_data_from_accessor(&info, sampler->input, nullptr);
+      s64 timestamp_count = info.accessors[sampler->input].count;
+      f32 *values = (f32*)gltf_data_from_accessor(&info, sampler->output, nullptr);
+      Mesh_Animation_Kind kind = MESH_ANIMATION_KIND_TRANSLATION;
+      s32 component_count = 3;
+      switch(channel->kind) {
+        case GLTF_ANIMATION_KIND_TRANSLATION:
+          kind = MESH_ANIMATION_KIND_TRANSLATION;
+          component_count = 3;
+          break;
+        case GLTF_ANIMATION_KIND_ROTATION:
+          kind = MESH_ANIMATION_KIND_ROTATION;
+          component_count = 4;
+          break;
+        case GLTF_ANIMATION_KIND_SCALE:
+          kind = MESH_ANIMATION_KIND_SCALE;
+          component_count = 3;
+          break;
+        default:
+          break;
+      }
+      Mesh_Animation_Interp_Type type = MESH_ANIMATION_INTERP_TYPE_LINEAR;
+      switch(sampler->type) {
+        case GLTF_INTERP_TYPE_LINEAR:
+          type = MESH_ANIMATION_INTERP_TYPE_LINEAR;
+          break;
+        case GLTF_INTERP_TYPE_STEP:
+          type = MESH_ANIMATION_INTERP_TYPE_STEP;
+          break;
+        case GLTF_INTERP_TYPE_CUBIC_SPLINE:
+          type = MESH_ANIMATION_INTERP_TYPE_CUBIC_SPLINE;
+          break;
+        default:
+          break;
+      }
+      Mesh_Animation new_anim = (Mesh_Animation) {
+        .mesh_idx = mesh_idx,
+        .kf_timestamps = arena_push_array(arena, f32, timestamp_count),
+        .kf_count = timestamp_count,
+        .values = arena_push_array(arena, f32, component_count*timestamp_count),
+        .type = type,
+        .kind = kind,
+      };
+      for (s32 sample = 0; sample < timestamp_count; sample+=1) {
+        new_anim.kf_timestamps[sample] = timestamps[sample];
+        for (s32 comp = 0; comp < component_count; comp+=1) {
+          new_anim.values[component_count*sample + comp] = values[component_count*sample + comp];
+        }
+      }
+      new_anim.max_duration = new_anim.kf_timestamps[new_anim.kf_count - 1];
+      model.animations[running_anim_idx++] = new_anim;
+    }
+  }
+
+
   model.mesh_count = info.mesh_count;
   model.meshes = arena_push_array(arena, Mesh_Info, model.mesh_count); 
   for (s32 mesh_idx = 0; mesh_idx < info.mesh_count; mesh_idx+=1) {
     Gltf_Mesh *gmesh = &info.meshes[mesh_idx];
     Mesh_Info *mesh = &model.meshes[mesh_idx];
+
     // FIXME: We currently don't do anything w/ primitives, this has to change!
     mesh->prim_count = gmesh->prim_count;
     mesh->prims = arena_push_array(arena, Mesh_Primitive_Info, mesh->prim_count);
@@ -675,37 +810,40 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       Gltf_Prim *gprim = &gmesh->prims[prim_idx];
       Mesh_Primitive_Info *prim = &mesh->prims[prim_idx];
       prim->model = gprim->model_matrix;
+      prim->t = gprim->t;
+      prim->r = gprim->r;
+      prim->s = gprim->s;
 
       // FIXME: This should be used for the material description ok?! Make a UBO and everything!
       Gltf_Material *material = &info.materials[gprim->material_idx];
       assert(material);
 
       prim->type = ogl_prim_type_from_gltf_prim_mode(gprim->mode);
-      f32 *positions = (f32*)gltf_data_from_accessor(info, gprim->attribs.pos_idx, nullptr);
+      f32 *positions = (f32*)gltf_data_from_accessor(&info, gprim->attribs.pos_idx, nullptr);
 
       // FIXME: For normals we have to compute them if not available..
-      f32 *normals   = (f32*)gltf_data_from_accessor(info, gprim->attribs.norm_idx, nullptr);
-      f32 *tangents = (f32*)gltf_data_from_accessor(info, gprim->attribs.tang_idx, nullptr);
+      f32 *normals   = (f32*)gltf_data_from_accessor(&info, gprim->attribs.norm_idx, nullptr);
+      f32 *tangents = (f32*)gltf_data_from_accessor(&info, gprim->attribs.tang_idx, nullptr);
 
-      f32 *texcoords_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[0], nullptr);
-      f32 *texcoords_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[1], nullptr);
-      f32 *texcoords_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[2], nullptr);
-      f32 *texcoords_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.texcoord_idx[3], nullptr);
+      f32 *texcoords_0 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.texcoord_idx[0], nullptr);
+      f32 *texcoords_1 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.texcoord_idx[1], nullptr);
+      f32 *texcoords_2 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.texcoord_idx[2], nullptr);
+      f32 *texcoords_3 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.texcoord_idx[3], nullptr);
 
-      f32 *colors_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[0], nullptr);
-      f32 *colors_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[1], nullptr);
-      f32 *colors_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[2], nullptr);
-      f32 *colors_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.col_idx[3], nullptr);
+      f32 *colors_0 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.col_idx[0], nullptr);
+      f32 *colors_1 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.col_idx[1], nullptr);
+      f32 *colors_2 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.col_idx[2], nullptr);
+      f32 *colors_3 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.col_idx[3], nullptr);
 
-      f32 *joints_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[0], nullptr);
-      f32 *joints_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[1], nullptr);
-      f32 *joints_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[2], nullptr);
-      f32 *joints_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.joints_idx[3], nullptr);
+      f32 *joints_0 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[0], nullptr);
+      f32 *joints_1 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[1], nullptr);
+      f32 *joints_2 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[2], nullptr);
+      f32 *joints_3 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[3], nullptr);
 
-      f32 *weights_0 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[0], nullptr);
-      f32 *weights_1 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[1], nullptr);
-      f32 *weights_2 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[2], nullptr);
-      f32 *weights_3 = (f32*)gltf_data_from_accessor(info, gprim->attribs.weights_idx[3], nullptr);
+      f32 *weights_0 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.weights_idx[0], nullptr);
+      f32 *weights_1 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.weights_idx[1], nullptr);
+      f32 *weights_2 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.weights_idx[2], nullptr);
+      f32 *weights_3 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.weights_idx[3], nullptr);
 
       s64 vcount = info.accessors[gprim->attribs.pos_idx].count;
       Temp_Arena temp = get_scratch(&arena,1);
@@ -743,7 +881,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
 
       if (mesh_has_idx) {
         s32 index_buf_element_size = info.accessors[gprim->indices_idx].bytes_per_elem;
-        u8 *indices = (u8*)gltf_data_from_accessor(info, gprim->indices_idx, nullptr);
+        u8 *indices = (u8*)gltf_data_from_accessor(&info, gprim->indices_idx, nullptr);
         s64 indices_count = info.accessors[gprim->indices_idx].count;
         Ogl_Buf ibo = ogl_buf_make(OGL_BUF_KIND_INDEX, OGL_BUF_HINT_STATIC, indices, indices_count, index_buf_element_size);
         prim->ibo = ibo;

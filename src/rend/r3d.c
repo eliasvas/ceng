@@ -445,15 +445,73 @@ void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
     .model_matrix = model,
   };
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
-
 }
 
-void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos) {
+void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
+
+  //printf("animcount : %ld\n", info->animation_count);
+  for (s64 anim_idx = 0; anim_idx < info->animation_count; anim_idx+=1) {
+    Mesh_Animation *anim = &info->animations[anim_idx];
+    // Do the interpolation..
+
+    f32 anim_time = fmodf(time_sec, anim->max_duration);
+    s32 prev_kf_idx = 0;
+    s32 next_kf_idx = 0;
+    for (s32 kf_idx = 0; kf_idx < anim->kf_count; kf_idx+=1) {
+      f32 timestamp = anim->kf_timestamps[kf_idx];
+      if (anim_time > timestamp) prev_kf_idx = timestamp;
+      if (timestamp > anim_time) {
+        next_kf_idx = timestamp;
+        break;
+      }
+    }
+
+    f32 percent = (anim_time - prev_kf_idx) / (next_kf_idx - prev_kf_idx);
+    Mesh_Info *mesh = &info->meshes[anim->mesh_idx];
+    v3 prev, next, interp;
+    v4 prev4, next4,interp4;
+    switch(anim->kind) {
+      case MESH_ANIMATION_KIND_TRANSLATION:
+        prev = ((v3*)(anim->values))[prev_kf_idx];
+        next = ((v3*)(anim->values))[next_kf_idx];
+        interp = v3_lerp(prev, next, percent);
+        for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
+          Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
+          prim->t = interp;
+        }
+        break;
+      case MESH_ANIMATION_KIND_ROTATION:
+        prev4 = ((v4*)(anim->values))[prev_kf_idx];
+        next4 = ((v4*)(anim->values))[next_kf_idx];
+        interp4 = v4_lerp(prev4, next4, percent);
+        for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
+          Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
+          prim->r = qu(interp4.x, interp4.y, interp4.z, interp4.w);
+        }
+        break;
+      case MESH_ANIMATION_KIND_SCALE:
+        prev = ((v3*)(anim->values))[prev_kf_idx];
+        next = ((v3*)(anim->values))[next_kf_idx];
+        interp = v3_lerp(prev, next, percent);
+        for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
+          Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
+          prim->s = interp;
+        }
+        break;
+      default:
+        break;
+    }
+    //assert(anim);
+  }
+
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
-      m4 model_matrix = m4_mult(model, prim->model);
+
+      m4 trs = m4_mult(m4_translate(prim->t), m4_mult(m4_from_quat(prim->r), m4_scale(prim->s))); 
+
+      m4 model_matrix = m4_mult(model, trs);
       //m4 mvp = m4_mult(vp, model_matrix);
       uber_bundle.vbos[0].buffer = prim->vbo;
       uber_bundle.index_buffer = prim->ibo;
