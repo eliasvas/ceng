@@ -643,7 +643,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       anim->channel_count = channel_count;
       for (Json_Element *c = channels->first; c != nullptr; c = c->next, channel_idx+=1) {
         Gltf_Animation_Channel *channel = &anim->channels[channel_idx];
-        channel->sampler_id = json_parse_int(c, STR8L("input"), 0);
+        channel->sampler_id = json_parse_int(c, STR8L("sampler"), 0);
         Json_Element *target = json_lookup(c, STR8L("target"));
         channel->target_node_id = json_parse_int(target, STR8L("node"), 0);
         Json_Element *path = json_lookup(target, STR8L("path"));
@@ -660,7 +660,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       s32 sampler_idx = 0;
       Json_Element *samplers = json_lookup(a, STR8L("samplers"));
       s32 sampler_count = json_count_children(samplers);
-      anim->samplers = arena_push_array(arena, Gltf_Animation_Channel, sampler_count);
+      anim->samplers = arena_push_array(arena, Gltf_Animation_Sampler, sampler_count);
       anim->sampler_count = sampler_count;
   //printf("--- sampler count; %ld\n", anim->sampler_count);
       for (Json_Element *s = samplers->first; s != nullptr; s = s->next, sampler_idx+=1) {
@@ -668,6 +668,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         sampler->input  = json_parse_int(s, STR8L("input"), 0);
         sampler->output = json_parse_int(s, STR8L("output"), 0);
         Json_Element *interp = json_lookup(s, STR8L("interpolation"));
+        sampler->type = GLTF_INTERP_TYPE_LINEAR;
         if (str8_eq(interp->value, STR8L("LINEAR"))) {
           sampler->type = GLTF_INTERP_TYPE_LINEAR;
         } else if (str8_eq(interp->value, STR8L("STEP"))) {
@@ -726,7 +727,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
   s32 animation_count = 0;
   for (s32 anim_idx = 0; anim_idx < info.animation_count; anim_idx+=1) {
     Gltf_Animation *anim = &info.animations[anim_idx];
-    for (s32 sampler_idx = 0; sampler_idx < anim->sampler_count; sampler_idx+=1) {
+    for (s32 channel_idx = 0; channel_idx < anim->channel_count; channel_idx+=1) {
       animation_count += 1; 
     }
   }
@@ -763,6 +764,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         default:
           break;
       }
+
       Mesh_Animation_Interp_Type type = MESH_ANIMATION_INTERP_TYPE_LINEAR;
       switch(sampler->type) {
         case GLTF_INTERP_TYPE_LINEAR:

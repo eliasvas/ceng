@@ -406,6 +406,15 @@ static quat quat_multf(quat left, f32 d) {
     return q;
 }
 
+
+static f32 quat_dot(quat a, quat b) {
+  return (a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w);
+}
+
+static quat quat_scale(quat a, f32 d) {
+  return qu(a.x*d, a.y*d, a.z*d, a.w*d);
+}
+
 static quat quat_from_axis_angle(v3 axis, f32 angle) {
   v3 axis_norm = v3_norm(axis);
   f32 sine_of_rot = sin_f32(angle/2.0f);
@@ -476,6 +485,20 @@ static quat quat_from_m4(m4 m) {
   q = quat_multf(q, 0.5f / sqrtf(t));
 
   return q;
+}
+
+static quat quat_nlerp(quat a, quat b, f32 t) {
+  // Make sure we take the shortest path.
+  if (quat_dot(a, b) < 0.0f) {
+    b = quat_scale(b, -1.0f);
+  }
+
+  quat q = quat_add(
+    quat_scale(a, 1.0f - t),
+    quat_scale(b, t)
+  );
+
+  return quat_norm(q);
 }
 
 typedef union {

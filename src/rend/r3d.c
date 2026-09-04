@@ -452,24 +452,29 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
   //printf("animcount : %ld\n", info->animation_count);
   for (s64 anim_idx = 0; anim_idx < info->animation_count; anim_idx+=1) {
     Mesh_Animation *anim = &info->animations[anim_idx];
-    // Do the interpolation..
 
     f32 anim_time = fmodf(time_sec, anim->max_duration);
     s32 prev_kf_idx = 0;
-    s32 next_kf_idx = 0;
+    s32 next_kf_idx = anim->kf_count-1;
     for (s32 kf_idx = 0; kf_idx < anim->kf_count; kf_idx+=1) {
       f32 timestamp = anim->kf_timestamps[kf_idx];
-      if (anim_time > timestamp) prev_kf_idx = timestamp;
+      if (timestamp < anim_time) prev_kf_idx = kf_idx;
       if (timestamp > anim_time) {
-        next_kf_idx = timestamp;
+        next_kf_idx = kf_idx;
         break;
       }
     }
 
-    f32 percent = (anim_time - prev_kf_idx) / (next_kf_idx - prev_kf_idx);
+    f32 prev_timestamp = anim->kf_timestamps[prev_kf_idx];
+    f32 next_timestamp = anim->kf_timestamps[next_kf_idx];
+    f32 percent = 0;
+    if (next_timestamp - prev_timestamp != 0.0) percent = (anim_time - prev_timestamp) / (next_timestamp - prev_timestamp);
+
+
     Mesh_Info *mesh = &info->meshes[anim->mesh_idx];
+    printf("timestamps: %f - %f - %f\n", prev_timestamp, anim_time, next_timestamp);
     v3 prev, next, interp;
-    v4 prev4, next4,interp4;
+    quat prev4, next4, interp4;
     switch(anim->kind) {
       case MESH_ANIMATION_KIND_TRANSLATION:
         prev = ((v3*)(anim->values))[prev_kf_idx];
@@ -478,15 +483,17 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
         for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
           Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
           prim->t = interp;
+          //printf("trans: (%f %f %f)\n", prim->t.x, prim->t.y, prim->t.z);
         }
         break;
       case MESH_ANIMATION_KIND_ROTATION:
-        prev4 = ((v4*)(anim->values))[prev_kf_idx];
-        next4 = ((v4*)(anim->values))[next_kf_idx];
-        interp4 = v4_lerp(prev4, next4, percent);
+        prev4 = ((quat*)(anim->values))[prev_kf_idx];
+        next4 = ((quat*)(anim->values))[next_kf_idx];
+        interp4 = quat_nlerp(prev4, next4, percent);
+        //printf("rot: (%f %f %f %f)\n", prim->r.x, prim->r.y, prim->r.z, prim->r.w);
         for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
           Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
-          prim->r = qu(interp4.x, interp4.y, interp4.z, interp4.w);
+          prim->r = interp4; 
         }
         break;
       case MESH_ANIMATION_KIND_SCALE:
