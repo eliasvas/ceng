@@ -57,11 +57,11 @@ layout(location=7)  in vec4 col_0;
 layout(location=8)  in vec4 col_1;
 layout(location=9)  in vec4 col_2;
 layout(location=10) in vec4 col_3;
-//layout(location=11) in vec4 joint_0;
+layout(location=11) in vec4 joint_0;
 //layout(location=12) in vec4 joint_1;
 //layout(location=13) in vec4 joint_2;
 //layout(location=14) in vec4 joint_3;
-//layout(location=15) in vec4 weight_0;
+layout(location=12) in vec4 weight_0;
 
 layout (std140) uniform PerFrameData { 
   mat4 view_proj;
@@ -83,6 +83,11 @@ layout(std140) uniform Material {
   mat4 model_matrix;
 };
 
+// FIXME: Why is max number of bones 32???? fix this
+layout(std140) uniform JointMatrices {
+  mat4 joint_mat[32];
+};
+
 out vec4 f_color;
 out vec4 f_wp;
 out vec3 f_view_dir;
@@ -93,7 +98,13 @@ out vec2 f_tc[4];
 
 void main() { 
   f_color = col_0*base_color_factor;
-	gl_Position = view_proj * model_matrix * vec4(pos, 1.0);
+
+  mat4 skinMat =
+    weight_0.x * joint_mat[int(joint_0.x)] +
+    weight_0.y * joint_mat[int(joint_0.y)] +
+    weight_0.z * joint_mat[int(joint_0.z)] +
+    weight_0.w * joint_mat[int(joint_0.w)];
+	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
 
   f_tc[0] = tc_0;
   f_tc[1] = tc_1;
@@ -315,6 +326,8 @@ void r3d_try_load_shaders() {
             [9] =  { .location = 9,  .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, col_2),    .stride = sizeof(Uber_Vertex), .instanced = false, },
             [10] = { .location = 10, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, col_3),    .stride = sizeof(Uber_Vertex), .instanced = false, },
 
+            [11] = { .location = 11, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, joint_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
+            [12] = { .location = 11, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, weight_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
             // FIXME: If we get only 2 joints and 2 weights max, 11 + 4 = 15 < 16 (Most OpenGL implementation MAX attribs) 
 #if 0
             [11] = { .location = 11, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, joint_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
@@ -331,6 +344,7 @@ void r3d_try_load_shaders() {
       },
       .ubos = { [0] = { .name = "PerFrameData", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(PerFrameData_UBO)), .start_offset = 0, .size = sizeof(PerFrameData_UBO) }, 
                 [1] = { .name = "Material", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Material_UBO)), .start_offset = 0, .size = sizeof(Material_UBO) },
+                [2] = { .name = "JointMatrices", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(m4)*32), .start_offset = 0, .size = sizeof(m4)*32 },
       },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
       .dyn_state = (Ogl_Dyn_State){
@@ -447,6 +461,14 @@ void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 }
 
+void calc_global_transform(Mesh_Info *info, Mesh_Joint *root, m4 parent) {
+  m4 local = m4_mult(m4_translate(root->t), m4_mult(m4_from_quat(root->r), m4_scale(root->s)));
+  root->m = m4_mult(local, parent);
+  for (s32 child_idx = 0; child_idx < root->children_count; child_idx +=1) {
+    calc_global_transform(info, &info->joint_hierarchy.joints[root->children[child_idx]], root->m);
+  }
+}
+
 void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
 
   //printf("animcount : %ld\n", info->animation_count);
@@ -472,7 +494,7 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
 
 
     Mesh_Info *mesh = &info->meshes[anim->mesh_idx];
-    printf("timestamps: %f - %f - %f\n", prev_timestamp, anim_time, next_timestamp);
+    //printf("timestamps: %f - %f - %f\n", prev_timestamp, anim_time, next_timestamp);
     v3 prev, next, interp;
     quat prev4, next4, interp4;
     switch(anim->kind) {
@@ -511,8 +533,17 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
     //assert(anim);
   }
 
+
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
+
+
+    m4 root_bone_transform = m4d(1.0);
+    //m4_mult(m4_mult(m4_translate(root->t), m4_mult(m4_from_quat(root->r), m4_scale(root->s))), root->ibn); 
+    // FIXME: joint[0] isnt always the first joint right? or no idk, maybe the root has many such children
+    calc_global_transform(mesh, &mesh->joint_hierarchy.joints[0], root_bone_transform);
+
+
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
 
@@ -532,6 +563,14 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
       };
       ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &pf_ubo, 1, sizeof(pf_ubo));
 
+      // We could set update frequence to 'per mesh' here
+      m4 joint_matrices[32];
+      for (s32 i = 0; i < (s32)array_count(joint_matrices); i+=1) {
+        //joint_matrices[i] = m4d(1.0);
+        //joint_matrices[i] = mesh->joint_hierarchy.joints[i].ibn;
+        joint_matrices[i] = m4_mult(mesh->joint_hierarchy.joints[i].m, mesh->joint_hierarchy.joints[i].ibn);
+      }
+      ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(joint_matrices));
 
       r3d_set_material(prim, model_matrix);
 

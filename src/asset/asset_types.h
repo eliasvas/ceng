@@ -71,6 +71,28 @@ typedef struct {
 
 } Material_Info;
 
+
+typedef struct {
+  s32 *children;
+  s32 children_count;
+  s32 node_id;
+
+  s32 parent;
+
+  v3 t;
+  quat r;
+  v3 s;
+
+  m4 m;
+
+  m4 ibn;
+} Mesh_Joint;
+
+typedef struct {
+  Mesh_Joint *joints;
+  s32 joint_count;
+} Mesh_Joint_Hierarchy;
+
 typedef struct {
   Ogl_Buf vbo;
   Ogl_Buf ibo;
@@ -85,6 +107,8 @@ typedef struct {
 typedef struct {
   Mesh_Primitive_Info *prims;
   s64 prim_count;
+
+  Mesh_Joint_Hierarchy joint_hierarchy;
 } Mesh_Info;
 
 typedef enum {

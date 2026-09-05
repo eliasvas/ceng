@@ -105,6 +105,8 @@ typedef struct {
 typedef struct {
   Gltf_Prim *prims;
   s32 prim_count;
+
+  s32 skin_id;
 } Gltf_Mesh;
 
 typedef struct {
@@ -348,6 +350,19 @@ static m4 json_parse_mat4(Json_Element *root, str8 path, m4 def) {
   return m;
 }
 
+// FIXME: Make a hashtable!!
+static s32 gltf_get_skin_id_for_mesh(Gltf_Info *info, s32 mesh_idx) {
+  for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
+    Gltf_Node_Info *node = &info->nodes[node_idx];
+    if (node->mesh_idx == mesh_idx && gltf_is_property_specified(node->skin_idx)) {
+      return node->skin_idx;
+    }
+  }
+
+  return GLTF_PROPERTY_NOT_SPECIFIED;
+}
+
+// FIXME: Make a hashtable!!
 static Gltf_Transform gltf_get_transform_for_mesh(Gltf_Info *info, s32 mesh_idx) {
   Gltf_Transform trans = (Gltf_Transform){};
   for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
@@ -404,6 +419,9 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     for (Json_Element *n= nodes_json->first; n != nullptr; n = n->next, node_idx+=1) {
       Gltf_Node_Info *node = &info.nodes[node_idx];
 
+      //---------------------------------------------------------------------------------------------------------
+      // FIXME: This needs to be GLTF_PROPERTY_NOT_SPECIFIED rright? why doesnt the game work otherwise
+      //---------------------------------------------------------------------------------------------------------
       node->mesh_idx = json_parse_int(n, STR8L("mesh"), 0);
       node->skin_idx = json_parse_int(n, STR8L("skin"), GLTF_PROPERTY_NOT_SPECIFIED);
 
@@ -426,11 +444,16 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         node->s = s;
       }
 
-      node->children_count = json_count_children(n);
-      node->children = arena_push_array(arena, s32, node->children_count);
-      json_parse_ints(n, STR8L("children"), node->children, node->children_count);
+      Json_Element *children = json_lookup(n, STR8L("children"));
+      node->children_count = (children) ? json_count_children(children) : 0;
+      node->children = (node->children_count) ? arena_push_array(arena, s32, node->children_count) : nullptr;
+      if (children) {
+        json_parse_ints(n, STR8L("children"), node->children, node->children_count);
+      }
     }
   }
+
+
 
   // 1. Parse meshes
   Json_Element* meshes_json = json_lookup(root, STR8L("meshes")); assert(meshes_json);
@@ -442,6 +465,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
     info.meshes[mesh_idx].prim_count = json_count_children(primitives_json);
     info.meshes[mesh_idx].prims = arena_push_array(arena, Gltf_Prim, info.meshes[mesh_idx].prim_count);
+    info.meshes[mesh_idx].skin_id = gltf_get_skin_id_for_mesh(&info, mesh_idx);
 
     s32 prim_idx = 0;
     for (Json_Element *prim = primitives_json->first; prim != nullptr; prim = prim->next, prim_idx+=1) {
@@ -482,7 +506,6 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       primitive->mode = json_parse_int(prim, STR8L("mode"), 4);
     }
   }
-
 
   // 1. Parse buffers
   Json_Element* buffers_json = json_lookup(root, STR8L("buffers")); assert(buffers_json);
@@ -623,6 +646,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       material->occlusion_texture = json_parse_tex_info(m, STR8L("occlusionTexture"));
     }
   }
+
 
   // 5. Parse animations
   Json_Element* animations_json = json_lookup(root, STR8L("animations"));
@@ -799,13 +823,59 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
   }
 
 
+
   model.mesh_count = info.mesh_count;
   model.meshes = arena_push_array(arena, Mesh_Info, model.mesh_count); 
   for (s32 mesh_idx = 0; mesh_idx < info.mesh_count; mesh_idx+=1) {
     Gltf_Mesh *gmesh = &info.meshes[mesh_idx];
     Mesh_Info *mesh = &model.meshes[mesh_idx];
 
-    // FIXME: We currently don't do anything w/ primitives, this has to change!
+
+
+
+    if (gltf_is_property_specified(gmesh->skin_id)) {
+      Gltf_Skin *skin = &info.skins[gmesh->skin_id];
+      m4 *ibn = (m4*)gltf_data_from_accessor(&info, skin->inverse_bind_matrices_accessor_id, nullptr);
+      Mesh_Joint_Hierarchy hierarchy = (Mesh_Joint_Hierarchy) {
+        .joint_count = skin->joint_count,
+        .joints = arena_push_array(arena, Mesh_Joint, skin->joint_count),
+      };
+
+      // Populate the joint_hierarchy with all node info from info.nodes[..]
+      for (s32 joint_idx = 0; joint_idx < hierarchy.joint_count; joint_idx += 1) {
+        s32 node_idx = info.skins[gmesh->skin_id].joints[joint_idx];
+        Gltf_Node_Info *node = &info.nodes[node_idx];
+        Mesh_Joint *joint = &hierarchy.joints[joint_idx];
+        assert(gltf_is_property_specified(node_idx));
+        *(joint) = (Mesh_Joint) {
+          .ibn = ibn[joint_idx],
+          .t = node->t,
+          .r = node->r,
+          .s = node->s,
+          .node_id = node_idx,
+
+          // FIXME: Not correct, maybe not ALL children are nodes
+          .children_count = node->children_count,
+          .children = arena_push_array(arena, s32, node->children_count),
+        };
+
+        // Find the joint index for the node and insert that to the joint's children
+        for (s32 child_idx = 0; child_idx < joint->children_count; child_idx+=1) {
+          s32 child_node_idx = node->children[child_idx];
+          s32 joint_id_for_node = 0;
+          for (s32 j = 0; j < info.skins[gmesh->skin_id].joint_count; j += 1) {
+            s32 node_idx_for_joint = info.skins[gmesh->skin_id].joints[j];
+            if (node_idx_for_joint == child_node_idx) {
+              joint_id_for_node = j; 
+            }
+            joint->children[child_idx] = joint_id_for_node;
+          }
+        }
+        mesh->joint_hierarchy = hierarchy;
+      }
+    }
+
+
     mesh->prim_count = gmesh->prim_count;
     mesh->prims = arena_push_array(arena, Mesh_Primitive_Info, mesh->prim_count);
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
@@ -850,6 +920,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       s64 vcount = info.accessors[gprim->attribs.pos_idx].count;
       Temp_Arena temp = get_scratch(&arena,1);
       Uber_Vertex *verts = arena_push_array_nz(temp.arena, Uber_Vertex, vcount);
+      // FIXME: we need support for non-triangle primitive kinds!
       for (s64 vidx = 0; vidx < vcount; vidx+=1) {
         verts[vidx].pos = *((v3*)&positions[3 * vidx]);
         verts[vidx].norm = (normals) ? *((v3*)&normals[3 * vidx]) : v3m(0,1,0);
@@ -889,10 +960,6 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         prim->ibo = ibo;
       }
 
-      // FIXME: Material handling.. GWE
-      if (info.image_count > 0 && info.texture_count >0 && info.material_count > 0) {
-        model.tex_id = info.images[info.textures[info.materials[0].pbr.base_color_texture.index].image_idx].id;
-      }
 
       // Material Parsing here!
       Gltf_Material *gmat = &info.materials[gprim->material_idx];
