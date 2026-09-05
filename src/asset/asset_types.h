@@ -91,6 +91,8 @@ typedef struct {
 typedef struct {
   Mesh_Joint *joints;
   s32 joint_count;
+
+  s32 transform_node_id;
 } Mesh_Joint_Hierarchy;
 
 typedef struct {
@@ -98,41 +100,51 @@ typedef struct {
   Ogl_Buf ibo;
   Ogl_Prim_Type type;
   Material_Info material;
-  m4 model;
-  v3 t;
-  quat r;
-  v3 s;
 } Mesh_Primitive_Info;
 
 typedef struct {
   Mesh_Primitive_Info *prims;
   s64 prim_count;
 
+  s32 node_idx;
+  s32 skin_idx;
+
   Mesh_Joint_Hierarchy joint_hierarchy;
 } Mesh_Info;
 
-typedef enum {
-  MESH_ANIMATION_KIND_TRANSLATION,
-  MESH_ANIMATION_KIND_ROTATION,
-  MESH_ANIMATION_KIND_SCALE,
-} Mesh_Animation_Kind;
+typedef struct {
+  v3 t;
+  quat r;
+  v3 s;
+  m4 m;
+
+  s32 *children;
+  s32 children_count;
+  s32 parent_idx;
+} Transform_Node;
 
 typedef enum {
-  MESH_ANIMATION_INTERP_TYPE_LINEAR,
-  MESH_ANIMATION_INTERP_TYPE_STEP,
-  MESH_ANIMATION_INTERP_TYPE_CUBIC_SPLINE,
-} Mesh_Animation_Interp_Type;
+  NODE_ANIM_KIND_TRANSLATION,
+  NODE_ANIM_KIND_ROTATION,
+  NODE_ANIM_KIND_SCALE,
+} Node_Anim_Kind;
+
+typedef enum {
+  NODE_ANIM_INTERP_TYPE_LINEAR,
+  NODE_ANIM_INTERP_TYPE_STEP,
+  NODE_ANIM_INTERP_TYPE_CUBIC_SPLINE,
+} Node_Anim_Interp_Type;
 
 typedef struct {
-  s32 mesh_idx;
+  s32 node_idx;
   f32 *kf_timestamps;
   f32 *values;
   s32 kf_count;
   f32 max_duration;
 
-  Mesh_Animation_Interp_Type type;
-  Mesh_Animation_Kind kind;
-} Mesh_Animation;
+  Node_Anim_Interp_Type type;
+  Node_Anim_Kind kind;
+} Node_Anim;
 
 typedef struct Model_Info {
   Tri_Vertex *verts;
@@ -141,8 +153,11 @@ typedef struct Model_Info {
   Mesh_Info *meshes;
   s64 mesh_count;
 
-  Mesh_Animation *animations;
+  Node_Anim *animations;
   s64 animation_count;
+
+  Transform_Node *nodes;
+  s32 node_count;
 
   Asset_Id tex_id;
 } Model_Info;

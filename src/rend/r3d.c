@@ -99,11 +99,16 @@ out vec2 f_tc[4];
 void main() { 
   f_color = col_0*base_color_factor;
 
+#if 0
   mat4 skinMat =
     weight_0.x * joint_mat[int(joint_0.x)] +
     weight_0.y * joint_mat[int(joint_0.y)] +
     weight_0.z * joint_mat[int(joint_0.z)] +
     weight_0.w * joint_mat[int(joint_0.w)];
+#else
+  mat4 skinMat = mat4(1.0);
+  #endif
+
 	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
 
   f_tc[0] = tc_0;
@@ -469,11 +474,30 @@ void calc_global_transform(Mesh_Info *info, Mesh_Joint *root, m4 parent) {
   }
 }
 
+m4 node_transform(Transform_Node *node) {
+  return m4_mult(m4_translate(node->t), m4_mult(m4_from_quat(node->r), m4_scale(node->s)));
+}
+
+m4 calc_transform(Model_Info *info, s32 node_idx) {
+  Transform_Node *node = &info->nodes[node_idx];
+  m4 trans = node_transform(node);
+
+  while (node->parent_idx != node_idx) {
+    node_idx = node->parent_idx;
+    node = &info->nodes[node->parent_idx];
+    trans = m4_mult(node_transform(node), trans);
+  }
+
+  return trans;
+}
+
 void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
 
-  //printf("animcount : %ld\n", info->animation_count);
+  //----------------
+  // Do animations!
+  //----------------
   for (s64 anim_idx = 0; anim_idx < info->animation_count; anim_idx+=1) {
-    Mesh_Animation *anim = &info->animations[anim_idx];
+    Node_Anim *anim = &info->animations[anim_idx];
 
     f32 anim_time = fmodf(time_sec, anim->max_duration);
     s32 prev_kf_idx = 0;
@@ -493,63 +517,56 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
     if (next_timestamp - prev_timestamp != 0.0) percent = (anim_time - prev_timestamp) / (next_timestamp - prev_timestamp);
 
 
-    Mesh_Info *mesh = &info->meshes[anim->mesh_idx];
+    // FIXME: Interpolate based on Interp_Type, dont do always linear!
+    Transform_Node *tn = &info->nodes[anim->node_idx];
     //printf("timestamps: %f - %f - %f\n", prev_timestamp, anim_time, next_timestamp);
     v3 prev, next, interp;
     quat prev4, next4, interp4;
     switch(anim->kind) {
-      case MESH_ANIMATION_KIND_TRANSLATION:
+      case NODE_ANIM_KIND_TRANSLATION:
         prev = ((v3*)(anim->values))[prev_kf_idx];
         next = ((v3*)(anim->values))[next_kf_idx];
+        //printf("[node:%ld] trans: (%f %f %f)\n", anim->node_idx, tn->t.x, tn->t.y, tn->t.z);
         interp = v3_lerp(prev, next, percent);
-        for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
-          Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
-          prim->t = interp;
-          //printf("trans: (%f %f %f)\n", prim->t.x, prim->t.y, prim->t.z);
-        }
+        tn->t = interp;
         break;
-      case MESH_ANIMATION_KIND_ROTATION:
+      case NODE_ANIM_KIND_ROTATION:
         prev4 = ((quat*)(anim->values))[prev_kf_idx];
         next4 = ((quat*)(anim->values))[next_kf_idx];
         interp4 = quat_nlerp(prev4, next4, percent);
-        //printf("rot: (%f %f %f %f)\n", prim->r.x, prim->r.y, prim->r.z, prim->r.w);
-        for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
-          Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
-          prim->r = interp4; 
-        }
+        tn->r = interp4;
+        //printf("[node:%ld] rot: (%f %f %f %f)\n", anim->node_idx, tn->r.x, tn->r.y, tn->r.z, tn->r.w);
         break;
-      case MESH_ANIMATION_KIND_SCALE:
+      case NODE_ANIM_KIND_SCALE:
         prev = ((v3*)(anim->values))[prev_kf_idx];
         next = ((v3*)(anim->values))[next_kf_idx];
         interp = v3_lerp(prev, next, percent);
-        for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
-          Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
-          prim->s = interp;
-        }
+        tn->s = interp;
         break;
       default:
         break;
     }
-    //assert(anim);
   }
 
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
+    m4 global_transform = calc_transform(info, mesh->node_idx);
 
-
-    m4 root_bone_transform = m4d(1.0);
-    //m4_mult(m4_mult(m4_translate(root->t), m4_mult(m4_from_quat(root->r), m4_scale(root->s))), root->ibn); 
-    // FIXME: joint[0] isnt always the first joint right? or no idk, maybe the root has many such children
-    calc_global_transform(mesh, &mesh->joint_hierarchy.joints[0], root_bone_transform);
+    if (mesh->joint_hierarchy.joint_count > 0) {
+      m4 root_bone_transform = m4d(1.0);
+      //m4_mult(m4_mult(m4_translate(root->t), m4_mult(m4_from_quat(root->r), m4_scale(root->s))), root->ibn); 
+      // FIXME: joint[0] isnt always the first joint right? or no idk, maybe the root has many such children
+      calc_global_transform(mesh, &mesh->joint_hierarchy.joints[0], root_bone_transform);
+    }
 
 
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
 
-      m4 trs = m4_mult(m4_translate(prim->t), m4_mult(m4_from_quat(prim->r), m4_scale(prim->s))); 
+      // FIXME why is the node TRS multiplied to the model matrix? This is for the whole mesh right?
+      m4 model_matrix = m4_mult(model, global_transform);
 
-      m4 model_matrix = m4_mult(model, trs);
       //m4 mvp = m4_mult(vp, model_matrix);
       uber_bundle.vbos[0].buffer = prim->vbo;
       uber_bundle.index_buffer = prim->ibo;
@@ -566,9 +583,9 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
       // We could set update frequence to 'per mesh' here
       m4 joint_matrices[32];
       for (s32 i = 0; i < (s32)array_count(joint_matrices); i+=1) {
-        //joint_matrices[i] = m4d(1.0);
+        joint_matrices[i] = m4d(1.0);
         //joint_matrices[i] = mesh->joint_hierarchy.joints[i].ibn;
-        joint_matrices[i] = m4_mult(mesh->joint_hierarchy.joints[i].m, mesh->joint_hierarchy.joints[i].ibn);
+        //joint_matrices[i] = m4_mult(mesh->joint_hierarchy.joints[i].m, mesh->joint_hierarchy.joints[i].ibn);
       }
       ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(joint_matrices));
 
