@@ -33,6 +33,7 @@ typedef struct {
   s64 count;
   s32 bytes_per_elem;
   s32 comp_per_elem;
+  s32 comp_type; // <----
 } Gltf_Accessor;
 
 typedef struct {
@@ -95,11 +96,6 @@ typedef struct {
   s32 indices_idx;
   s32 material_idx;
   s32 mode;
-
-  m4 model_matrix;
-  v3 t;
-  quat r;
-  v3 s;
 } Gltf_Prim;
 
 typedef struct {
@@ -351,69 +347,16 @@ static m4 json_parse_mat4(Json_Element *root, str8 path, m4 def) {
   return m;
 }
 
-
-// FIXME: Make a hashtable!!
-static s32 gltf_get_node_id_for_mesh(Gltf_Info *info, s32 mesh_idx) {
-  for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
-    Gltf_Node_Info *node = &info->nodes[node_idx];
-    if (node->mesh_idx == mesh_idx) {
-      return node_idx;
-    }
-  }
-
-  return 0;
-}
-
-// FIXME: Make a hashtable!!
-static s32 gltf_get_skin_id_for_mesh(Gltf_Info *info, s32 mesh_idx) {
-  for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
-    Gltf_Node_Info *node = &info->nodes[node_idx];
-    if (node->mesh_idx == mesh_idx && gltf_is_property_specified(node->skin_idx)) {
-      return node->skin_idx;
-    }
-  }
-
-  return GLTF_PROPERTY_NOT_SPECIFIED;
-}
-
-// FIXME: Make a hashtable!!
-static Gltf_Transform gltf_get_transform_for_mesh(Gltf_Info *info, s32 mesh_idx) {
-  Gltf_Transform trans = (Gltf_Transform){};
-  for (s32 node_idx = 0; node_idx < info->node_count; node_idx+=1) {
-    Gltf_Node_Info *node = &info->nodes[node_idx];
-    if (node->mesh_idx == mesh_idx) {
-#if 0
-      return node->model_matrix;
-#else
-      Gltf_Transform trs = (Gltf_Transform) {
-        .t = node->t,
-        .r = node->r,
-        .s = node->s,
-      };
-      trans = trs;
-#endif
-    }
-  }
-
-  return trans;
-}
-static m4 gltf_get_model_matrix_for_mesh(Gltf_Info *info, s32 mesh_idx) {
-  Gltf_Transform trans = gltf_get_transform_for_mesh(info, mesh_idx);
-  m4 trs = m4_mult(m4_translate(trans.t), m4_mult(m4_from_quat(trans.r), m4_scale(trans.s))); 
-  return trs;
-}
-
 static Gltf_Transform gltf_matrix_to_trs(m4 m) {
-  Gltf_Transform out = (Gltf_Transform){};
+  Gltf_Transform gt;
+  gt.t = m4_extract_trans(m);
+  gt.s = m4_extract_scale(m);
 
-  out.t = v3m(m.col[3][0], m.col[3][1], m.col[3][2]);
-  out.s = v3m(m.col[0][0],m.col[1][1],m.col[2][2]);
-  // FIXME: We haven't translated rotations here!
-  out.r = qu(0,0,0,1);
+  m4 rot = m4_remove_scale(m, gt.s);
+  gt.r = quat_from_m4(rot);
 
-  return out;
+  return gt;
 }
-
 
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
@@ -440,6 +383,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       if (matrix_json) {
         m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
         Gltf_Transform trans = gltf_matrix_to_trs(m);
+        printf("we are screwed!!!!!\n");
         node->model_matrix = m;
         node->t = trans.t;
         node->r = trans.r;
@@ -476,21 +420,25 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
     info.meshes[mesh_idx].prim_count = json_count_children(primitives_json);
     info.meshes[mesh_idx].prims = arena_push_array(arena, Gltf_Prim, info.meshes[mesh_idx].prim_count);
-    info.meshes[mesh_idx].skin_idx = gltf_get_skin_id_for_mesh(&info, mesh_idx);
-    info.meshes[mesh_idx].node_idx = gltf_get_node_id_for_mesh(&info, mesh_idx);
+
+
+    info.meshes[mesh_idx].skin_idx = GLTF_PROPERTY_NOT_SPECIFIED;
+    info.meshes[mesh_idx].node_idx = GLTF_PROPERTY_NOT_SPECIFIED;
+    for (s32 node_idx = 0; node_idx < info.node_count; node_idx+=1) {
+      Gltf_Node_Info *node = &info.nodes[node_idx];
+      if (node->mesh_idx == mesh_idx) {
+        info.meshes[mesh_idx].node_idx = node_idx;
+        if (gltf_is_property_specified(node->skin_idx)) {
+          info.meshes[mesh_idx].skin_idx = node->skin_idx;
+        }
+      }
+    }
 
 
     s32 prim_idx = 0;
     for (Json_Element *prim = primitives_json->first; prim != nullptr; prim = prim->next, prim_idx+=1) {
       Gltf_Prim *primitive = &info.meshes[mesh_idx].prims[prim_idx];
       *primitive = default_prim;
-
-      primitive->model_matrix = gltf_get_model_matrix_for_mesh(&info, mesh_idx);
-      Gltf_Transform trans = gltf_get_transform_for_mesh(&info, mesh_idx);
-      primitive->t = trans.t;
-      primitive->r = trans.r;
-      primitive->s = trans.s;
-
       Json_Element* attribs_json = json_lookup(prim, STR8L("attributes")); assert(attribs_json);
       for (Json_Element *attrib = attribs_json->first ; attrib != nullptr; attrib = attrib->next) {
         //printf("IAM ATTRIB %.*s -> %.*s \n", STR8_VARG(attrib->label), STR8_VARG(attrib->value));
@@ -569,7 +517,8 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
     accessor->bufv_idx = json_parse_int(a, STR8L("bufferView"), 0);
     accessor->byte_offset = json_parse_int(a, STR8L("byteOffset"), 0);
-    accessor->bytes_per_elem = gltf_byte_count_from_comp_type(json_parse_int(a, STR8L("componentType"), 0));
+    accessor->comp_type = json_parse_int(a, STR8L("componentType"), 5126);
+    accessor->bytes_per_elem = gltf_byte_count_from_comp_type(accessor->comp_type);
     accessor->count = json_parse_int(a, STR8L("count"), 0);
 
     Json_Element* type = json_lookup(a, STR8L("type")); assert(type);
@@ -731,7 +680,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       //Json_Element *name = json_lookup(a, STR8L("name")); assert(name);
       Gltf_Skin *skin = &info.skins[skin_idx];
       skin->inverse_bind_matrices_accessor_id = json_parse_int(s, STR8L("inverseBindMatrices"), GLTF_PROPERTY_NOT_SPECIFIED);
-      skin->skeleton_node_id= json_parse_int(s, STR8L("skeleton"), 0);
+      skin->skeleton_node_id= json_parse_int(s, STR8L("skeleton"), GLTF_PROPERTY_NOT_SPECIFIED);
 
       Json_Element *joints_json = json_lookup(s, STR8L("joints"));
       skin->joint_count = json_count_children(joints_json);
@@ -794,7 +743,6 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
 
 
 
-  // FIXME FIXME FIXME: Why do we separate animations per channel
   s32 animation_count = 0;
   for (s32 anim_idx = 0; anim_idx < info.animation_count; anim_idx+=1) {
     Gltf_Animation *anim = &info.animations[anim_idx];
@@ -892,33 +840,12 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       // Populate the joint_hierarchy with all node info from info.nodes[..]
       for (s32 joint_idx = 0; joint_idx < hierarchy.joint_count; joint_idx += 1) {
         s32 node_idx = info.skins[gmesh->skin_idx].joints[joint_idx];
-        Gltf_Node_Info *node = &info.nodes[node_idx];
         Mesh_Joint *joint = &hierarchy.joints[joint_idx];
         assert(gltf_is_property_specified(node_idx));
         *(joint) = (Mesh_Joint) {
           .ibn = ibn[joint_idx],
-          .t = node->t,
-          .r = node->r,
-          .s = node->s,
           .node_id = node_idx,
-
-          // FIXME: Not correct, maybe not ALL children are nodes
-          .children_count = node->children_count,
-          .children = arena_push_array(arena, s32, node->children_count),
         };
-
-        // Find the joint index for the node and insert that to the joint's children
-        for (s32 child_idx = 0; child_idx < joint->children_count; child_idx+=1) {
-          s32 child_node_idx = node->children[child_idx];
-          s32 joint_id_for_node = 0;
-          for (s32 j = 0; j < info.skins[gmesh->skin_idx].joint_count; j += 1) {
-            s32 node_idx_for_joint = info.skins[gmesh->skin_idx].joints[j];
-            if (node_idx_for_joint == child_node_idx) {
-              joint_id_for_node = j; 
-            }
-            joint->children[child_idx] = joint_id_for_node;
-          }
-        }
         mesh->joint_hierarchy = hierarchy;
       }
     }
@@ -929,21 +856,13 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
     for (s32 prim_idx = 0; prim_idx < mesh->prim_count; prim_idx+=1) {
       Gltf_Prim *gprim = &gmesh->prims[prim_idx];
       Mesh_Primitive_Info *prim = &mesh->prims[prim_idx];
-      /*
-      prim->model = gprim->model_matrix;
-      prim->t = gprim->t;
-      prim->r = gprim->r;
-      prim->s = gprim->s;
-      */
 
-      // FIXME: This should be used for the material description ok?! Make a UBO and everything!
       Gltf_Material *material = &info.materials[gprim->material_idx];
       assert(material);
 
       prim->type = ogl_prim_type_from_gltf_prim_mode(gprim->mode);
       f32 *positions = (f32*)gltf_data_from_accessor(&info, gprim->attribs.pos_idx, nullptr);
 
-      // FIXME: For normals we have to compute them if not available..
       f32 *normals   = (f32*)gltf_data_from_accessor(&info, gprim->attribs.norm_idx, nullptr);
       f32 *tangents = (f32*)gltf_data_from_accessor(&info, gprim->attribs.tang_idx, nullptr);
 
@@ -957,10 +876,11 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       f32 *colors_2 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.col_idx[2], nullptr);
       f32 *colors_3 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.col_idx[3], nullptr);
 
-      f32 *joints_0 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[0], nullptr);
-      f32 *joints_1 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[1], nullptr);
-      f32 *joints_2 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[2], nullptr);
-      f32 *joints_3 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[3], nullptr);
+      // FIXME: JOINTS_n can also be u8 and not u16, is that possible though? in real-world scenarios..
+      u16 *joints_0 = (u16*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[0], nullptr);
+      u16 *joints_1 = (u16*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[1], nullptr);
+      u16 *joints_2 = (u16*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[2], nullptr);
+      u16 *joints_3 = (u16*)gltf_data_from_accessor(&info, gprim->attribs.joints_idx[3], nullptr);
 
       f32 *weights_0 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.weights_idx[0], nullptr);
       f32 *weights_1 = (f32*)gltf_data_from_accessor(&info, gprim->attribs.weights_idx[1], nullptr);
@@ -986,15 +906,31 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         verts[vidx].col_2 = (colors_2) ? *((v4*)&colors_2[4 * vidx]) : v4m(1,1,1,1);
         verts[vidx].col_3 = (colors_3) ? *((v4*)&colors_3[4 * vidx]) : v4m(1,1,1,1);
 
-        verts[vidx].joint_0 = (joints_0) ? *((v4*)&joints_0[4 * vidx]) : v4m(1,0,0,0);
-        verts[vidx].joint_1 = (joints_1) ? *((v4*)&joints_1[4 * vidx]) : v4m(1,0,0,0);
-        verts[vidx].joint_2 = (joints_2) ? *((v4*)&joints_2[4 * vidx]) : v4m(1,0,0,0);
-        verts[vidx].joint_3 = (joints_3) ? *((v4*)&joints_3[4 * vidx]) : v4m(1,0,0,0);
+        iv4_short data0 = (joints_0) ? *((iv4_short*)&joints_0[4 * vidx]) : iv4ms(1,0,0,0);
+        verts[vidx].joint_0 = iv4m(data0.x, data0.y, data0.z, data0.w);
+
+        iv4_short data1 = (joints_1) ? *((iv4_short*)&joints_1[4 * vidx]) : iv4ms(1,0,0,0);
+        verts[vidx].joint_1 = iv4m(data1.x, data1.y, data1.z, data1.w);
+
+        iv4_short data2 = (joints_2) ? *((iv4_short*)&joints_2[4 * vidx]) : iv4ms(1,0,0,0);
+        verts[vidx].joint_2 = iv4m(data2.x, data2.y, data2.z, data2.w);
+
+        iv4_short data3 = (joints_3) ? *((iv4_short*)&joints_3[4 * vidx]) : iv4ms(1,0,0,0);
+        verts[vidx].joint_3 = iv4m(data3.x, data3.y, data3.z, data3.w);
 
         verts[vidx].weight_0 = (weights_0) ? *((v4*)&weights_0[4 * vidx]) : v4m(0,0,0,0);
         verts[vidx].weight_1 = (weights_1) ? *((v4*)&weights_1[4 * vidx]) : v4m(0,0,0,0);
         verts[vidx].weight_2 = (weights_2) ? *((v4*)&weights_2[4 * vidx]) : v4m(0,0,0,0);
         verts[vidx].weight_3 = (weights_3) ? *((v4*)&weights_3[4 * vidx]) : v4m(0,0,0,0);
+      }
+      // Compute normal if not available
+      if (!normals) {
+        v3 a = v3_norm(v3_sub(verts[0].pos, verts[1].pos));
+        v3 b = v3_norm(v3_sub(verts[0].pos, verts[2].pos));
+        v3 n = v3_norm(v3_cross(a,b));
+        for (s64 vidx = 0; vidx < vcount; vidx+=1) {
+          verts[vidx].norm = n;
+        }
       }
 
       b32 mesh_has_idx = gltf_is_property_specified(gprim->indices_idx);
@@ -1071,7 +1007,6 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
             .active = gmat->emissive_texture.active,
           };
         }
-
       }
 
       release_scratch(temp);

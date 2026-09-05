@@ -57,7 +57,7 @@ layout(location=7)  in vec4 col_0;
 layout(location=8)  in vec4 col_1;
 layout(location=9)  in vec4 col_2;
 layout(location=10) in vec4 col_3;
-layout(location=11) in vec4 joint_0;
+layout(location=11) in ivec4 joint_0;
 //layout(location=12) in vec4 joint_1;
 //layout(location=13) in vec4 joint_2;
 //layout(location=14) in vec4 joint_3;
@@ -99,15 +99,11 @@ out vec2 f_tc[4];
 void main() { 
   f_color = col_0*base_color_factor;
 
-#if 0
   mat4 skinMat =
-    weight_0.x * joint_mat[int(joint_0.x)] +
-    weight_0.y * joint_mat[int(joint_0.y)] +
-    weight_0.z * joint_mat[int(joint_0.z)] +
-    weight_0.w * joint_mat[int(joint_0.w)];
-#else
-  mat4 skinMat = mat4(1.0);
-  #endif
+    weight_0.x * joint_mat[joint_0.x] +
+    weight_0.y * joint_mat[joint_0.y] +
+    weight_0.z * joint_mat[joint_0.z] +
+    weight_0.w * joint_mat[joint_0.w];
 
 	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
 
@@ -331,8 +327,8 @@ void r3d_try_load_shaders() {
             [9] =  { .location = 9,  .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, col_2),    .stride = sizeof(Uber_Vertex), .instanced = false, },
             [10] = { .location = 10, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, col_3),    .stride = sizeof(Uber_Vertex), .instanced = false, },
 
-            [11] = { .location = 11, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, joint_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
-            [12] = { .location = 11, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, weight_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
+            [11] = { .location = 11, .type = OGL_DATA_TYPE_IVEC4,  .offset = offsetof(Uber_Vertex, joint_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
+            [12] = { .location = 12, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, weight_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
             // FIXME: If we get only 2 joints and 2 weights max, 11 + 4 = 15 < 16 (Most OpenGL implementation MAX attribs) 
 #if 0
             [11] = { .location = 11, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Uber_Vertex, joint_0),  .stride = sizeof(Uber_Vertex), .instanced = false, },
@@ -466,14 +462,6 @@ void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 }
 
-void calc_global_transform(Mesh_Info *info, Mesh_Joint *root, m4 parent) {
-  m4 local = m4_mult(m4_translate(root->t), m4_mult(m4_from_quat(root->r), m4_scale(root->s)));
-  root->m = m4_mult(local, parent);
-  for (s32 child_idx = 0; child_idx < root->children_count; child_idx +=1) {
-    calc_global_transform(info, &info->joint_hierarchy.joints[root->children[child_idx]], root->m);
-  }
-}
-
 m4 node_transform(Transform_Node *node) {
   return m4_mult(m4_translate(node->t), m4_mult(m4_from_quat(node->r), m4_scale(node->s)));
 }
@@ -551,23 +539,13 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
-    m4 global_transform = calc_transform(info, mesh->node_idx);
-
-    if (mesh->joint_hierarchy.joint_count > 0) {
-      m4 root_bone_transform = m4d(1.0);
-      //m4_mult(m4_mult(m4_translate(root->t), m4_mult(m4_from_quat(root->r), m4_scale(root->s))), root->ibn); 
-      // FIXME: joint[0] isnt always the first joint right? or no idk, maybe the root has many such children
-      calc_global_transform(mesh, &mesh->joint_hierarchy.joints[0], root_bone_transform);
-    }
-
+    m4 mesh_global = calc_transform(info, mesh->node_idx);
+    m4 inv_mesh_global = m4_inv(mesh_global);
 
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
+      m4 model_matrix = model;
 
-      // FIXME why is the node TRS multiplied to the model matrix? This is for the whole mesh right?
-      m4 model_matrix = m4_mult(model, global_transform);
-
-      //m4 mvp = m4_mult(vp, model_matrix);
       uber_bundle.vbos[0].buffer = prim->vbo;
       uber_bundle.index_buffer = prim->ibo;
       uber_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
@@ -584,9 +562,16 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
       m4 joint_matrices[32];
       for (s32 i = 0; i < (s32)array_count(joint_matrices); i+=1) {
         joint_matrices[i] = m4d(1.0);
-        //joint_matrices[i] = mesh->joint_hierarchy.joints[i].ibn;
-        //joint_matrices[i] = m4_mult(mesh->joint_hierarchy.joints[i].m, mesh->joint_hierarchy.joints[i].ibn);
       }
+
+      for (s32 joint_idx = 0; joint_idx < mesh->joint_hierarchy.joint_count; joint_idx+=1) {
+        s32 node_idx = mesh->joint_hierarchy.joints[joint_idx].node_id;
+
+        m4 joint_global = calc_transform(info, node_idx);
+        m4 ibm = mesh->joint_hierarchy.joints[joint_idx].ibn;
+        joint_matrices[joint_idx] = m4_mult(inv_mesh_global, m4_mult(joint_global, ibm));
+      }
+
       ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(joint_matrices));
 
       r3d_set_material(prim, model_matrix);

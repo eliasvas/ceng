@@ -501,6 +501,53 @@ static quat quat_nlerp(quat a, quat b, f32 t) {
   return quat_norm(q);
 }
 
+static v3 m4_extract_trans(m4 m) {
+  return v3m(m.col[3][0], m.col[3][1], m.col[3][2]);
+}
+
+static v3 m4_extract_scale(m4 m) {
+  v3 scale;
+
+  scale.x = v3_len(v3m(
+    m.col[0][0],
+    m.col[0][1],
+    m.col[0][2]
+  ));
+
+  scale.y = v3_len(v3m(
+    m.col[1][0],
+    m.col[1][1],
+    m.col[1][2]
+  ));
+
+  scale.z = v3_len(v3m(
+    m.col[2][0],
+    m.col[2][1],
+    m.col[2][2]
+  ));
+
+  return scale;
+}
+static m4 m4_remove_scale(m4 m, v3 scale) {
+  if (scale.x > 0.00001f) {
+    for (s32 i = 0; i < 4; i+=1) {
+    m.col[0][i] /= scale.x;
+    }
+  }
+  if (scale.y > 0.00001f) {
+    for (s32 i = 0; i < 4; i+=1) {
+    m.col[1][i] /= scale.y;
+    }
+  }
+  if (scale.y > 0.00001f) {
+    for (s32 i = 0; i < 4; i+=1) {
+    m.col[2][i] /= scale.z;
+    }
+  }
+  return m;
+}
+
+
 typedef union {
   struct { f32 x,y,w,h; };
   struct { v2 p,dim; };
@@ -617,5 +664,23 @@ static rect rect_fit_inside(rect src, rect dest, Rect_Fit_Mode mode) {
 
 static b32 rect_equals(rect l, rect r) { return (equalf(l.x,r.x,0.01) && equalf(l.y,r.y,0.01) && equalf(l.w,r.w,0.01) && equalf(l.h,r.h,0.01)); }
 static rect rect_bl_to_tl(rect r, f32 screen_height) { return rec(r.x, screen_height - r.y - r.h, r.w, r.h); }
+
+
+
+typedef union {
+    struct { u16 x,y,z,w; };
+    struct { u16 r,g,b,a; };
+    u16 raw[4];
+} iv4_short;
+#define iv4ms(x, y, z, w)   ((iv4_short){{x, y, z, w}})
+
+typedef union iv4
+{
+    struct { s32 x,y,z,w; };
+    struct { s32 r,g,b,a; };
+    s32 raw[4];
+}iv4;
+
+#define iv4m(x, y, z, w)   ((iv4){{x, y, z, w}})
 
 #endif

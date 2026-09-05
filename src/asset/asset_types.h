@@ -31,10 +31,10 @@ typedef struct {
   v4 col_2;
   v4 col_3;
 
-  v4 joint_0;
-  v4 joint_1;
-  v4 joint_2;
-  v4 joint_3;
+  iv4 joint_0;
+  iv4 joint_1;
+  iv4 joint_2;
+  iv4 joint_3;
 
   v4 weight_0;
   v4 weight_1;
@@ -73,18 +73,10 @@ typedef struct {
 
 
 typedef struct {
-  s32 *children;
-  s32 children_count;
+  //s32 *children;
+  //s32 children_count;
   s32 node_id;
-
-  s32 parent;
-
-  v3 t;
-  quat r;
-  v3 s;
-
-  m4 m;
-
+  //s32 parent;
   m4 ibn;
 } Mesh_Joint;
 
