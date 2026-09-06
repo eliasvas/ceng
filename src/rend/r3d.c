@@ -105,7 +105,7 @@ void main() {
     weight_0.z * joint_mat[joint_0.z] +
     weight_0.w * joint_mat[joint_0.w];
 
-	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
+	gl_Position = view_proj * model_matrix * skinMat *vec4(pos, 1.0);
 
   f_tc[0] = tc_0;
   f_tc[1] = tc_1;
@@ -541,10 +541,11 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     m4 mesh_global = calc_transform(info, mesh->node_idx);
     m4 inv_mesh_global = m4_inv(mesh_global);
+    s32 joint_count = mesh->joint_hierarchy.joint_count;
 
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
-      m4 model_matrix = model;
+      m4 model_matrix = m4_mult(model, (joint_count) ? m4d(1.0) : mesh_global);
 
       uber_bundle.vbos[0].buffer = prim->vbo;
       uber_bundle.index_buffer = prim->ibo;

@@ -7,11 +7,6 @@
 // Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 // Ref: https://github.khronos.org/glTF-Tutorials/gltfTutorial/
 
-typedef struct {
-  v3 t;
-  quat r;
-  v3 s;
-} Gltf_Transform;
 
 typedef enum {
   GLTF_ARRAY_BUFFER,         // vertex buffer
@@ -347,17 +342,6 @@ static m4 json_parse_mat4(Json_Element *root, str8 path, m4 def) {
   return m;
 }
 
-static Gltf_Transform gltf_matrix_to_trs(m4 m) {
-  Gltf_Transform gt;
-  gt.t = m4_extract_trans(m);
-  gt.s = m4_extract_scale(m);
-
-  m4 rot = m4_remove_scale(m, gt.s);
-  gt.r = quat_from_m4(rot);
-
-  return gt;
-}
-
 static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   Gltf_Info info = {};
@@ -382,18 +366,17 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       Json_Element* matrix_json = json_lookup(n, STR8L("matrix"));
       if (matrix_json) {
         m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
-        Gltf_Transform trans = gltf_matrix_to_trs(m);
-        printf("we are screwed!!!!!\n");
+        transform xform = transform_from_m4(m);
         node->model_matrix = m;
-        node->t = trans.t;
-        node->r = trans.r;
-        node->s = trans.s;
+        node->t = xform.t;
+        node->r = xform.r;
+        node->s = xform.s;
       } else {
         v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
         quat r = json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
         v3 s = json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
-        m4 trs = m4_mult(m4_translate(t), m4_mult(m4_from_quat(r), m4_scale(s))); 
-        node->model_matrix = trs;
+        transform xform = (transform){ .t = t, .r = r, .s = s};
+        node->model_matrix = m4_from_transform(xform);
         node->t = t;
         node->r = r;
         node->s = s;
@@ -906,22 +889,29 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         verts[vidx].col_2 = (colors_2) ? *((v4*)&colors_2[4 * vidx]) : v4m(1,1,1,1);
         verts[vidx].col_3 = (colors_3) ? *((v4*)&colors_3[4 * vidx]) : v4m(1,1,1,1);
 
-        iv4_short data0 = (joints_0) ? *((iv4_short*)&joints_0[4 * vidx]) : iv4ms(1,0,0,0);
+
+        // FIXME: can't joint indices be u8 instead of u16? (from accessor)
+        typedef struct {
+          u16 x,y,z,w;
+        } Joint_Indices;
+        Joint_Indices def = (Joint_Indices) {1,0,0,0};
+
+        Joint_Indices data0 = (joints_0) ? *((Joint_Indices*)&joints_0[4 * vidx]) : def;
         verts[vidx].joint_0 = iv4m(data0.x, data0.y, data0.z, data0.w);
 
-        iv4_short data1 = (joints_1) ? *((iv4_short*)&joints_1[4 * vidx]) : iv4ms(1,0,0,0);
+        Joint_Indices data1 = (joints_1) ? *((Joint_Indices*)&joints_1[4 * vidx]) : def;
         verts[vidx].joint_1 = iv4m(data1.x, data1.y, data1.z, data1.w);
 
-        iv4_short data2 = (joints_2) ? *((iv4_short*)&joints_2[4 * vidx]) : iv4ms(1,0,0,0);
+        Joint_Indices data2 = (joints_2) ? *((Joint_Indices*)&joints_2[4 * vidx]) : def;
         verts[vidx].joint_2 = iv4m(data2.x, data2.y, data2.z, data2.w);
 
-        iv4_short data3 = (joints_3) ? *((iv4_short*)&joints_3[4 * vidx]) : iv4ms(1,0,0,0);
+        Joint_Indices data3 = (joints_3) ? *((Joint_Indices*)&joints_3[4 * vidx]) : def;
         verts[vidx].joint_3 = iv4m(data3.x, data3.y, data3.z, data3.w);
 
-        verts[vidx].weight_0 = (weights_0) ? *((v4*)&weights_0[4 * vidx]) : v4m(0,0,0,0);
-        verts[vidx].weight_1 = (weights_1) ? *((v4*)&weights_1[4 * vidx]) : v4m(0,0,0,0);
-        verts[vidx].weight_2 = (weights_2) ? *((v4*)&weights_2[4 * vidx]) : v4m(0,0,0,0);
-        verts[vidx].weight_3 = (weights_3) ? *((v4*)&weights_3[4 * vidx]) : v4m(0,0,0,0);
+        verts[vidx].weight_0 = (weights_0) ? *((v4*)&weights_0[4 * vidx]) : v4m(1,0,0,0);
+        verts[vidx].weight_1 = (weights_1) ? *((v4*)&weights_1[4 * vidx]) : v4m(1,0,0,0);
+        verts[vidx].weight_2 = (weights_2) ? *((v4*)&weights_2[4 * vidx]) : v4m(1,0,0,0);
+        verts[vidx].weight_3 = (weights_3) ? *((v4*)&weights_3[4 * vidx]) : v4m(1,0,0,0);
       }
       // Compute normal if not available
       if (!normals) {

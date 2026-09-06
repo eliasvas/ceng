@@ -110,13 +110,21 @@ void game_render(Game_State *gs, float dt) {
   game_draw_origin_grid(gs, 10);
   // Draw the test model
   m4 vp = m4_mult(gs->proj, gs->view);
-  Model_Info *mi = AM_GET(asset_id_from_path(STR8L("CesiumMan.gltf")), model);
-  //m4 model_for_mesh = m4_mult(m4_rotate(gs->time_sec * M_PI, v3m(0,1,0)), m4_scale(v3m(3,3,3)));
-  //Model_Info *mi = AM_GET(asset_id_from_path(STR8L("BoxAnimated.gltf")), model);
-  m4 model_for_mesh = m4_mult(m4_translate(v3m(0,3,4)), m4_mult(m4_rotate(0, v3m(0,1,0)), m4_scale(v3m(2,2,2))));
-  //Model_Info *mi = AM_GET(asset_id_from_path(STR8L("Avocado.gltf")), model);
-  //m4 model_for_mesh = m4_mult(m4_from_quat(quat_from_axis_angle(v3m(0,1,0), gs->time_sec*3.14)), m4_scale(v3m(50,50,50)));
-  r3d_imm_model(gs->game_viewport, mi, vp, model_for_mesh, cam_pos, gs->time_sec);
+
+  m4 static_model_matrix = m4_mult(m4_translate(v3m(0,0,0)), m4_scale(v3m(0.2,0.2,0.2)));
+  Model_Info *static_model = AM_GET(gs->static_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, static_model, vp, static_model_matrix, cam_pos, gs->time_sec);
+
+  m4 anim_model_matrix = m4_mult(
+      m4_translate(v3m(1,0,0)),
+      m4_mult(
+        m4_from_quat(quat_from_axis_angle(v3m(1,0,0), -M_PI/2)), 
+        m4_scale(v3m(2,2,2))
+      )
+  );
+  Model_Info *anim_model = AM_GET(gs->anim_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, anim_model, vp, anim_model_matrix, cam_pos, gs->time_sec);
+
 
   // Rest of the frame
   entity_store_update_render(gs, dt);

@@ -16,9 +16,7 @@
     - NLERP
 
 ## GLTF
-    - Embedded textures (base64 + jpeg/png)
-    - Skeletal Animations (prereq Quaternions)
-    - Node / Matrix thing, also TRS..
+    - .glb
 
 ## Physics
     - Integrate Box3D
@@ -29,7 +27,6 @@
 
 ## Graphics
     - Shadows!!!!
-    - Immediate mode API is dogshit, texture specific API is criminal almost OpenGL level
     - Shader permutations https://therealmjp.github.io/posts/shader-permutations-part1/
 
 ## Assets

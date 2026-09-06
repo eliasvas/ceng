@@ -666,14 +666,34 @@ static b32 rect_equals(rect l, rect r) { return (equalf(l.x,r.x,0.01) && equalf(
 static rect rect_bl_to_tl(rect r, f32 screen_height) { return rec(r.x, screen_height - r.y - r.h, r.w, r.h); }
 
 
+typedef struct {
+  v3 t;
+  quat r;
+  v3 s;
+} transform;
 
-typedef union {
-    struct { u16 x,y,z,w; };
-    struct { u16 r,g,b,a; };
-    u16 raw[4];
-} iv4_short;
-#define iv4ms(x, y, z, w)   ((iv4_short){{x, y, z, w}})
+static transform transform_from_m4(m4 m) {
+  transform xform;
+  xform.t = m4_extract_trans(m);
+  xform.s = m4_extract_scale(m);
 
+  m4 rot = m4_remove_scale(m, xform.s);
+  xform.r = quat_from_m4(rot);
+
+  return xform;
+}
+
+static m4 m4_from_transform(transform xform) {
+  m4 trs = m4_mult(
+      m4_translate(xform.t), 
+      m4_mult(m4_from_quat(xform.r), 
+        m4_scale(xform.s))
+  ); 
+  return trs;
+}
+
+
+// TODO: We should improve this ok?
 typedef union iv4
 {
     struct { s32 x,y,z,w; };
