@@ -47,8 +47,8 @@ Asset_Node *asset_cache_get(Asset_Cache *mgr, Asset_Id id) {
 Asset_Id asset_cache_load_from_data(Asset_Cache *mgr, str8 asset_fullpath, str8 asset_data) { // maybe pass this as argument we got from am_load_from_data(..)
   str8 dir = str8_extract_path(asset_fullpath);
   str8 file = str8_extract_filename(asset_fullpath);
-  printf("fullpath:%.*s\n", STR8_VARG(asset_fullpath));
-  printf("filepath:%.*s\n", STR8_VARG(file));
+  //printf("fullpath:%.*s\n", STR8_VARG(asset_fullpath));
+  //printf("filepath:%.*s\n", STR8_VARG(file));
   Asset_Id id = asset_id_from_path(file); 
   Asset_Node *node = arena_push_array(mgr->parent->arena, Asset_Node, 1);
   node->id = id;

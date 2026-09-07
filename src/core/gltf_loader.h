@@ -67,6 +67,7 @@ typedef struct {
   Gltf_Material_Tex_Info emissive_texture;
   Gltf_Material_Tex_Info occlusion_texture;
   v3 emissive_factor;
+  str8 name;
 } Gltf_Material;
 
 #define GLTF_PROPERTY_NOT_SPECIFIED (-1)
@@ -265,19 +266,6 @@ static s32 gltf_comp_count_from_type(str8 type) {
   return 1;
 }
 
-static Gltf_Material_Tex_Info json_parse_tex_info(Json_Element *root, str8 path) {
-  Gltf_Material_Tex_Info info = {};
-  Json_Element *bct = json_lookup(root, path);
-  if (bct) {
-    Json_Element *index = json_lookup(bct, STR8L("index"));
-    if (index) info.index = str8_to_int(index->value);
-    Json_Element *tex_coord = json_lookup(bct, STR8L("texCoord"));
-    if (tex_coord) info.tex_coord = str8_to_int(tex_coord->value);
-    if (index || tex_coord) info.active = true;
-  }
-  return info;
-}
-
 static s32 json_parse_int(Json_Element *root, str8 path, s32 def) {
   Json_Element *node = json_lookup(root, path);
   return (node) ? str8_to_int(node->value) : def;
@@ -342,7 +330,19 @@ static m4 json_parse_mat4(Json_Element *root, str8 path, m4 def) {
   return m;
 }
 
-static unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len);
+
+static Gltf_Material_Tex_Info json_parse_tex_info(Json_Element *root, str8 path) {
+  Gltf_Material_Tex_Info info = {};
+  Json_Element *bct = json_lookup(root, path);
+  if (bct) {
+    info.index = json_parse_int(bct, STR8L("index"), GLTF_PROPERTY_NOT_SPECIFIED);
+    info.tex_coord = json_parse_int(bct, STR8L("texCoord"), GLTF_PROPERTY_NOT_SPECIFIED);
+    if (gltf_is_property_specified(info.index) || gltf_is_property_specified(info.tex_coord)) info.active = true;
+  }
+  return info;
+}
+
+static unsigned char *base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   Gltf_Info info = {};
 
@@ -573,8 +573,10 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   if (materials_json) {
     s32 material_idx = 0;
     for (Json_Element *m= materials_json->first; m != nullptr; m = m->next, material_idx+=1) {
-      Json_Element* name = json_lookup(m, STR8L("name")); assert(name);
       Gltf_Material *material = &info.materials[material_idx];
+
+      Json_Element* name = json_lookup(m, STR8L("name"));
+      material->name = name->value;
 
       Json_Element* pbr_mr = json_lookup(m, STR8L("pbrMetallicRoughness"));
       if (pbr_mr) {
@@ -877,7 +879,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       for (s64 vidx = 0; vidx < vcount; vidx+=1) {
         verts[vidx].pos = *((v3*)&positions[3 * vidx]);
         verts[vidx].norm = (normals) ? *((v3*)&normals[3 * vidx]) : v3m(0,1,0);
-        verts[vidx].tangent = (tangents) ? *((v4*)&tangents[4 * vidx]) : v4m(0,0,0,0);
+        verts[vidx].tangent = (tangents) ? *((v4*)&tangents[4 * vidx]) : v4m(1,0,0,0);
 
         verts[vidx].tc_0 = (texcoords_0) ? *((v2*)&texcoords_0[2 * vidx]) : v2m(0,0);
         verts[vidx].tc_1 = (texcoords_1) ? *((v2*)&texcoords_1[2 * vidx]) : v2m(0,0);
@@ -945,8 +947,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
 
         // Base color
         material->base_color_factor = gmat->pbr.base_color_factor;
-        if (gltf_is_property_specified(gmat->pbr.base_color_texture.index) &&
-            gltf_is_property_specified(info.textures[gmat->pbr.base_color_texture.index].image_idx)) {
+        if (gmat->pbr.base_color_texture.active) {
           material->base_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->pbr.base_color_texture.index].image_idx].id,
             .tc_idx = gmat->pbr.base_color_texture.tex_coord,
@@ -957,8 +958,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         // Metallic Roughness
         material->metallic_factor = gmat->pbr.metallic_factor;
         material->roughness_factor = gmat->pbr.roughness_factor;
-        if (gltf_is_property_specified(gmat->pbr.metallic_roughness_texture.index) &&
-            gltf_is_property_specified(info.textures[gmat->pbr.metallic_roughness_texture.index].image_idx)) {
+        if (gmat->pbr.metallic_roughness_texture.active) {
           material->metallic_roughness_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->pbr.metallic_roughness_texture.index].image_idx].id,
             .tc_idx = gmat->pbr.metallic_roughness_texture.tex_coord,
@@ -966,10 +966,8 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
           };
         }
 
-
         // Normal texture
-        if (gltf_is_property_specified(gmat->normal_texture.index) &&
-            gltf_is_property_specified(info.textures[gmat->normal_texture.index].image_idx)) {
+        if (gmat->normal_texture.active) {
           material->normal_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->normal_texture.index].image_idx].id,
             .tc_idx = gmat->normal_texture.tex_coord,
@@ -978,8 +976,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         }
 
         // Occlusion
-        if (gltf_is_property_specified(gmat->occlusion_texture.index) &&
-            gltf_is_property_specified(info.textures[gmat->occlusion_texture.index].image_idx)) {
+        if (gmat->occlusion_texture.active) {
           material->occlusion_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->occlusion_texture.index].image_idx].id,
             .tc_idx = gmat->occlusion_texture.tex_coord,
@@ -989,15 +986,22 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
 
         // Emissive
         material->emissive_factor = gmat->emissive_factor;
-        if (gltf_is_property_specified(gmat->emissive_texture.index) &&
-            gltf_is_property_specified(info.textures[gmat->emissive_texture.index].image_idx)) {
+        if (gmat->emissive_texture.active) {
           material->emissive_tex = (Material_Tex) {
             .tex_asset_id = info.images[info.textures[gmat->emissive_texture.index].image_idx].id,
             .tc_idx = gmat->emissive_texture.tex_coord,
             .active = gmat->emissive_texture.active,
           };
         }
+
+        printf("material [%.*s] loaded inside mesh[%d] prim[%d]\n", STR8_VARG(gmat->name), mesh_idx, prim_idx);
+        printf("\tbase=%d,metallic=%d,normal=%d,occlusion=%d,emissive=%d\n",
+            material->base_tex.active,material->metallic_roughness_tex.active,
+            material->normal_tex.active,material->occlusion_tex.active,material->emissive_tex.active
+        );
+
       }
+      
 
       release_scratch(temp);
     }

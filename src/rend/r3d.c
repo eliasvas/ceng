@@ -170,7 +170,7 @@ uniform sampler2D occlusion_tex;
 
 void main() {
 
-#if 1
+#if 0
   ivec2 texture_size;
   vec2 tc;
   out_color = f_color * texture(base_color_tex, f_tc[base_tc_idx]);
@@ -242,7 +242,10 @@ void main() {
   color.rgb = color.rgb * NdotL;
   color = vec4(color.rgb, 1.0f);
 
-  out_color = color;
+  // Emissive color
+  vec3 emissive = texture(emissive_tex, f_tc[emissive_tc_idx]).rgb * emissive_factor.rgb;
+
+  out_color = color + vec4(emissive, 1.0);
 #endif
 }
 )";
