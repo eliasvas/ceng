@@ -465,31 +465,35 @@ void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 }
 
-m4 node_transform(Transform_Node *node) {
-  return m4_mult(m4_translate(node->t), m4_mult(m4_from_quat(node->r), m4_scale(node->s)));
-}
-
 m4 calc_transform(Model_Info *info, s32 node_idx) {
   Transform_Node *node = &info->nodes[node_idx];
-  m4 trans = node_transform(node);
+  m4 trans = m4_from_transform(node->xform);
 
   while (node->parent_idx != node_idx) {
     node_idx = node->parent_idx;
     node = &info->nodes[node->parent_idx];
-    trans = m4_mult(node_transform(node), trans);
+    trans = m4_mult(m4_from_transform(node->xform), trans);
   }
 
   return trans;
 }
 
-void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
 
-  //----------------
-  // Do animations!
-  //----------------
-  for (s64 anim_idx = 0; anim_idx < info->animation_count; anim_idx+=1) {
+// TODO: mesh_idx refers to specific skeleton, probably
+// FIXME: Doing all the operations in one step really hurts performance.. generally..
+#define JOINT_MAT_COUNT 32
+m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, f32 time_sec) {
+  if (info->animation_count == 0) {
+    m4 *joint_matrices = arena_push_array(arena, m4, JOINT_MAT_COUNT); 
+    for (s32 joint_idx = 0; joint_idx < JOINT_MAT_COUNT; joint_idx+=1) {
+      joint_matrices[joint_idx] = m4d(1.0f);
+    }
+    return joint_matrices;
+  }
+
+  for (s32 anim_idx = 0; anim_idx < info->animation_count; anim_idx+=1) {
     Node_Anim *anim = &info->animations[anim_idx];
-
+    // 0. Calculate animation percent ( e.g we are 0.3 through )
     f32 anim_time = fmodf(time_sec, anim->max_duration);
     s32 prev_kf_idx = 0;
     s32 next_kf_idx = anim->kf_count-1;
@@ -507,6 +511,7 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
     f32 percent = 0;
     if (next_timestamp - prev_timestamp != 0.0) percent = (anim_time - prev_timestamp) / (next_timestamp - prev_timestamp);
 
+    // 1. Update local transforms for all joints (maybe pull transforms to separate memory block?)
 
     // FIXME: Interpolate based on Interp_Type, dont do always linear!
     Transform_Node *tn = &info->nodes[anim->node_idx];
@@ -517,34 +522,75 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
       case NODE_ANIM_KIND_TRANSLATION:
         prev = ((v3*)(anim->values))[prev_kf_idx];
         next = ((v3*)(anim->values))[next_kf_idx];
-        //printf("[node:%ld] trans: (%f %f %f)\n", anim->node_idx, tn->t.x, tn->t.y, tn->t.z);
         interp = v3_lerp(prev, next, percent);
-        tn->t = interp;
+        tn->xform.t = interp;
         break;
       case NODE_ANIM_KIND_ROTATION:
         prev4 = ((quat*)(anim->values))[prev_kf_idx];
         next4 = ((quat*)(anim->values))[next_kf_idx];
         interp4 = quat_nlerp(prev4, next4, percent);
-        tn->r = interp4;
-        //printf("[node:%ld] rot: (%f %f %f %f)\n", anim->node_idx, tn->r.x, tn->r.y, tn->r.z, tn->r.w);
+        tn->xform.r = interp4;
         break;
       case NODE_ANIM_KIND_SCALE:
         prev = ((v3*)(anim->values))[prev_kf_idx];
         next = ((v3*)(anim->values))[next_kf_idx];
         interp = v3_lerp(prev, next, percent);
-        tn->s = interp;
+        tn->xform.s = interp;
         break;
       default:
         break;
     }
   }
 
+  // 2. Calculate the actual joint matrices
 
+  Mesh_Info *mesh = &info->meshes[mesh_idx];
+  m4 mesh_global = calc_transform(info, mesh->node_idx);
+  m4 inv_mesh_global = m4_inv(mesh_global);
+
+  m4 *joint_matrices = arena_push_array(arena, m4, JOINT_MAT_COUNT); 
+  for (s32 joint_idx = 0; joint_idx < mesh->joint_hierarchy.joint_count; joint_idx+=1) {
+    s32 node_idx = mesh->joint_hierarchy.joints[joint_idx].node_id;
+
+    m4 joint_global = calc_transform(info, node_idx);
+    m4 ibm = mesh->joint_hierarchy.joints[joint_idx].ibn;
+    joint_matrices[joint_idx] = m4_mult(inv_mesh_global, m4_mult(joint_global, ibm));
+  }
+
+  return joint_matrices;
+}
+
+
+void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     m4 mesh_global = calc_transform(info, mesh->node_idx);
-    m4 inv_mesh_global = m4_inv(mesh_global);
     s32 joint_count = mesh->joint_hierarchy.joint_count;
+
+    // Skeletal animation part..
+    Temp_Arena temp = get_scratch(0,0);
+    m4 *joint_matrices = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, time_sec);
+
+#if 0 
+    m4 *joint_matrices_a = calc_joint_mats_for_animation(temp.arena, info, 0, mesh_idx, time_sec);
+    m4 *joint_matrices_b = calc_joint_mats_for_animation(temp.arena, info, 0, mesh_idx, time_sec);
+
+    m4 *joint_matrices = arena_push_array(temp.arena, m4, JOINT_MAT_COUNT);
+    for (s32 joint_idx = 0; joint_idx < JOINT_MAT_COUNT; joint_idx+=1) {
+      transform t_a = transform_from_m4(joint_matrices_a[joint_idx]);
+      transform t_b = transform_from_m4(joint_matrices_b[joint_idx]);
+      transform blended = (transform) {
+        .t = v3_lerp(t_a.t, t_b.t, blend_factor),
+        .r = quat_nlerp(t_a.r, t_b.r, blend_factor),
+        .s = v3_lerp(t_a.s, t_b.s, blend_factor),
+      };
+      joint_matrices[joint_idx] = m4_from_transform(blended);
+      joint_matrices[joint_idx] = joint_matrices_a[joint_idx];
+    }
+#endif
+
+    ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(m4)*JOINT_MAT_COUNT);
+    release_scratch(temp);
 
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
@@ -561,22 +607,6 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
         .light_dir = v3_norm(v3m(0.2,1,-1)),
       };
       ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &pf_ubo, 1, sizeof(pf_ubo));
-
-      // We could set update frequence to 'per mesh' here
-      m4 joint_matrices[32];
-      for (s32 i = 0; i < (s32)array_count(joint_matrices); i+=1) {
-        joint_matrices[i] = m4d(1.0);
-      }
-
-      for (s32 joint_idx = 0; joint_idx < mesh->joint_hierarchy.joint_count; joint_idx+=1) {
-        s32 node_idx = mesh->joint_hierarchy.joints[joint_idx].node_id;
-
-        m4 joint_global = calc_transform(info, node_idx);
-        m4 ibm = mesh->joint_hierarchy.joints[joint_idx].ibn;
-        joint_matrices[joint_idx] = m4_mult(inv_mesh_global, m4_mult(joint_global, ibm));
-      }
-
-      ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(joint_matrices));
 
       r3d_set_material(prim, model_matrix);
 

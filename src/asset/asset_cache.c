@@ -5,7 +5,6 @@ Asset_Mgr g_am = {};
 
 extern u8* platform_img_to_raw(Arena *arena, str8 image_data_png, v2 *out_dim);
 
-
 Asset_Cache* asset_cache_init(Asset_Mgr *parent) {
   Asset_Cache *ac = arena_push_array(parent->arena, Asset_Cache, 1);
 

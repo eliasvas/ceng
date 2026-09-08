@@ -105,10 +105,7 @@ typedef struct {
 } Mesh_Info;
 
 typedef struct {
-  v3 t;
-  quat r;
-  v3 s;
-  m4 m;
+  transform xform;
 
   s32 *children;
   s32 children_count;
@@ -139,9 +136,6 @@ typedef struct {
 } Node_Anim;
 
 typedef struct Model_Info {
-  Tri_Vertex *verts;
-  s64 vert_count;
-
   Mesh_Info *meshes;
   s64 mesh_count;
 
@@ -213,6 +207,7 @@ struct Ogl_Tex;
 ASSET_TYPE_DEF(Tex, Ogl_Tex);
 
 ASSET_TYPE_DEF(Model, Model_Info);
+
 
 ///////////////////////////////
 // Asset_Mgr types

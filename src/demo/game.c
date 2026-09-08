@@ -118,8 +118,10 @@ void game_render(Game_State *gs, float dt) {
   m4 anim_model_matrix = m4_mult(
       m4_translate(v3m(1,0,0)),
       m4_mult(
-        m4_from_quat(quat_from_axis_angle(v3m(1,0,0), -M_PI/2)), 
-        m4_scale(v3m(2,2,2))
+        //m4_from_quat(quat_from_axis_angle(v3m(1,0,0), -M_PI/2)), 
+        //m4_scale(v3m(2,2,2))
+        m4_from_quat(quat_from_axis_angle(v3m(1,0,0), 0)), 
+        m4_scale(v3m(0.05,0.05,0.05))
       )
   );
   Model_Info *anim_model = AM_GET(gs->anim_model_asset_id, model);

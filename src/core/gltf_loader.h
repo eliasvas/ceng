@@ -13,7 +13,6 @@ typedef enum {
   GLTF_ELEMENT_ARRAY_BUFFER, // index buffer
 } Gltf_Buffer_Kind;
 
-//typedef struct { str8 data; s64 count; s64 offset; } Gltf_Buffer;
 typedef struct {
   s32 buf_idx;
   s64 byte_offset;
@@ -28,7 +27,7 @@ typedef struct {
   s64 count;
   s32 bytes_per_elem;
   s32 comp_per_elem;
-  s32 comp_type; // <----
+  s32 comp_type;
 } Gltf_Accessor;
 
 typedef struct {
@@ -105,11 +104,14 @@ typedef struct {
 typedef struct {
   s32 mesh_idx;
   s32 skin_idx;
-  m4 model_matrix;
 
+  /*
+  m4 m;
   v3 t;
   quat r;
   v3 s;
+  */
+  transform xform;
 
   s32 *children;
   s32 children_count;
@@ -367,19 +369,13 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       if (matrix_json) {
         m4 m = json_parse_mat4(n, STR8L("matrix"), m4d(1.0));
         transform xform = transform_from_m4(m);
-        node->model_matrix = m;
-        node->t = xform.t;
-        node->r = xform.r;
-        node->s = xform.s;
+        node->xform = xform;
       } else {
         v3 t =  json_parse_vec3(n, STR8L("translation"), v3m(0,0,0));
         quat r = json_parse_quat(n, STR8L("rotation"), qu(0,0,0,1));
         v3 s = json_parse_vec3(n, STR8L("scale"), v3m(1,1,1));
         transform xform = (transform){ .t = t, .r = r, .s = s};
-        node->model_matrix = m4_from_transform(xform);
-        node->t = t;
-        node->r = r;
-        node->s = s;
+        node->xform = xform;
       }
 
       Json_Element *children = json_lookup(n, STR8L("children"));
@@ -641,12 +637,14 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
         sampler->output = json_parse_int(s, STR8L("output"), 0);
         Json_Element *interp = json_lookup(s, STR8L("interpolation"));
         sampler->type = GLTF_INTERP_TYPE_LINEAR;
-        if (str8_eq(interp->value, STR8L("LINEAR"))) {
-          sampler->type = GLTF_INTERP_TYPE_LINEAR;
-        } else if (str8_eq(interp->value, STR8L("STEP"))) {
-          sampler->type = GLTF_INTERP_TYPE_STEP;
-        } else {
-          sampler->type = GLTF_INTERP_TYPE_CUBIC_SPLINE;
+        if (interp) {
+          if (str8_eq(interp->value, STR8L("LINEAR"))) {
+            sampler->type = GLTF_INTERP_TYPE_LINEAR;
+          } else if (str8_eq(interp->value, STR8L("STEP"))) {
+            sampler->type = GLTF_INTERP_TYPE_STEP;
+          } else {
+            sampler->type = GLTF_INTERP_TYPE_CUBIC_SPLINE;
+          }
         }
       }
 
@@ -702,13 +700,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
   for (s32 node_idx = 0; node_idx < info.node_count; node_idx+=1) {
     Gltf_Node_Info *gnode = &info.nodes[node_idx];
     Transform_Node *node = &model.nodes[node_idx];
-
-    //node->mesh_idx = gnode->mesh_idx;
-    //node->skin_idx = gnode->skin_idx;
-
-    node->t = gnode->t;
-    node->r = gnode->r;
-    node->s = gnode->s;
+    node->xform = gnode->xform;
 
     node->children_count = gnode->children_count;
     node->children = arena_push_array(arena, s32, node->children_count);
@@ -725,7 +717,6 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
       child->parent_idx = node_idx; 
     }
   }
-
 
 
   s32 animation_count = 0;
@@ -924,10 +915,17 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
           verts[vidx].norm = n;
         }
       }
+      // Compute tangent if not available (its probably wrong but..)
+      if (!tangents) {
+        v3 b = v3_norm(v3_sub(verts[0].pos, verts[2].pos));
+        for (s64 vidx = 0; vidx < vcount; vidx+=1) {
+          verts[vidx].norm = b;
+        }
+      }
 
       b32 mesh_has_idx = gltf_is_property_specified(gprim->indices_idx);
 
-      Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, verts, 1, sizeof(Uber_Vertex)*vcount);
+      Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_STATIC, verts, vcount, sizeof(Uber_Vertex));
       prim->vbo = vbo;
 
       if (mesh_has_idx) {
