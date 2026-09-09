@@ -718,25 +718,20 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
     }
   }
 
-
-  s32 animation_count = 0;
+  model.animation_count = info.animation_count;
+  model.animations = arena_push_array(arena, Animation, model.animation_count);
   for (s32 anim_idx = 0; anim_idx < info.animation_count; anim_idx+=1) {
-    Gltf_Animation *anim = &info.animations[anim_idx];
-    for (s32 channel_idx = 0; channel_idx < anim->channel_count; channel_idx+=1) {
-      animation_count += 1; 
-    }
-  }
+    Gltf_Animation *ganim = &info.animations[anim_idx];
+    Animation *anim = &model.animations[anim_idx];
 
-  s32 running_anim_idx = 0;
-  model.animation_count = animation_count;
-  model.animations = arena_push_array(arena, Node_Anim, model.animation_count);
-  for (s32 anim_idx = 0; anim_idx < info.animation_count; anim_idx+=1) {
-    Gltf_Animation *anim = &info.animations[anim_idx];
-    for (s32 channel_idx = 0; channel_idx < anim->channel_count; channel_idx+=1) {
-      Gltf_Animation_Channel *channel = &anim->channels[channel_idx];
+    anim->node_anim_count = ganim->channel_count;
+    anim->node_anims = arena_push_array(arena, Node_Anim, anim->node_anim_count);
+
+    for (s32 channel_idx = 0; channel_idx < ganim->channel_count; channel_idx+=1) {
+      Gltf_Animation_Channel *channel = &ganim->channels[channel_idx];
       s32 node_idx = channel->target_node_id;
       s32 sampler_idx = channel->sampler_id;
-      Gltf_Animation_Sampler *sampler = &anim->samplers[sampler_idx];
+      Gltf_Animation_Sampler *sampler = &ganim->samplers[sampler_idx];
       f32 *timestamps = (f32*)gltf_data_from_accessor(&info, sampler->input, nullptr);
       s64 timestamp_count = info.accessors[sampler->input].count;
       f32 *values = (f32*)gltf_data_from_accessor(&info, sampler->output, nullptr);
@@ -789,7 +784,7 @@ static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
         }
       }
       new_anim.max_duration = new_anim.kf_timestamps[new_anim.kf_count - 1];
-      model.animations[running_anim_idx++] = new_anim;
+      anim->node_anims[channel_idx] = new_anim;
     }
   }
 

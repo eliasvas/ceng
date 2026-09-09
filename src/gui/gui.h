@@ -132,6 +132,15 @@ Gui_Signal gui_pane(str8 label);
 Gui_Signal gui_spacer(Gui_Axis layout_axis, Gui_Size size);
 
 
+// Low-level API exposed as well.. for custom widgets
+Gui_Box *gui_box_make(str8 label, Gui_Box_Flags flags);
+Gui_Signal gui_signal_from_box(Gui_Box *box);
+Gui_Size gui_set_next_pref_size(Gui_Axis axis, Gui_Size v);
+Gui_Axis gui_axis_flip(Gui_Axis axis);
+Gui_ID gui_id_eq(Gui_ID a, Gui_ID b);
+Gui_Axis gui_set_next_child_layout_axis(Gui_Axis v);
+
+
 typedef struct {
   f32 scroll_percent;
   f32 item_px;

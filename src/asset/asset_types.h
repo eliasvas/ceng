@@ -135,12 +135,22 @@ typedef struct {
   Node_Anim_Kind kind;
 } Node_Anim;
 
+typedef struct {
+  Node_Anim *node_anims;
+  s32 node_anim_count;
+} Animation;
+
 typedef struct Model_Info {
   Mesh_Info *meshes;
   s64 mesh_count;
 
+  Animation *animations;
+  s32 animation_count;
+
+#if 0
   Node_Anim *animations;
   s64 animation_count;
+#endif
 
   Transform_Node *nodes;
   s32 node_count;

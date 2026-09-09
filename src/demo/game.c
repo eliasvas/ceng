@@ -5,9 +5,12 @@
 #include "game.h"
 #include "entity.h"
 #include "gui/gui.h"
+#include "gui_extra.h"
 
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
+
+extern f32 _blend_factor;
 
 extern void platform_play_sound(const char *sound);
 
@@ -140,7 +143,7 @@ void game_render(Game_State *gs, float dt) {
 
   static Gui_Scroll_Data sdata = {
     .item_px = 30, // FIXME change this to 60 to see some weird stuff..
-    .item_count = 8,
+    .item_count = 9,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
     .scroll_button_color = col(0.5,1,0.4,1),
@@ -151,6 +154,7 @@ void game_render(Game_State *gs, float dt) {
   Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
   assert(scroll_list.box);
   gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 400.0, 1.0});
+    gui_slider01(STR8L("blendFactor"), &_blend_factor, sdata.item_px, GUI_AXIS_X);
     if (gui_button(STR8L("AAAA")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
     gui_button(STR8L("BBBB"));
     gui_button(STR8L("CCCC"));
@@ -160,7 +164,7 @@ void game_render(Game_State *gs, float dt) {
     gui_button(STR8L("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"));
     gui_button(STR8L("HHHH"));
     gui_pop_pref_width();
-  gui_scroll_list_end(STR8L("MyScrollTest"));
+    gui_scroll_list_end(STR8L("MyScrollTest"));
   gui_end();
 #endif
 

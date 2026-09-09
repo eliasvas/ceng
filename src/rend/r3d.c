@@ -482,8 +482,8 @@ m4 calc_transform(Model_Info *info, s32 node_idx) {
 // TODO: mesh_idx refers to specific skeleton, probably
 // FIXME: Doing all the operations in one step really hurts performance.. generally..
 #define JOINT_MAT_COUNT 32
-m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, f32 time_sec) {
-  if (info->animation_count == 0) {
+m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec) {
+  if (info->animation_count == 0 || anim_idx > info->animation_count) {
     m4 *joint_matrices = arena_push_array(arena, m4, JOINT_MAT_COUNT); 
     for (s32 joint_idx = 0; joint_idx < JOINT_MAT_COUNT; joint_idx+=1) {
       joint_matrices[joint_idx] = m4d(1.0f);
@@ -491,8 +491,9 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
     return joint_matrices;
   }
 
-  for (s32 anim_idx = 0; anim_idx < info->animation_count; anim_idx+=1) {
-    Node_Anim *anim = &info->animations[anim_idx];
+  Animation *animation = &info->animations[anim_idx];
+  for (s32 node_anim_idx = 0; node_anim_idx < animation->node_anim_count; node_anim_idx+=1) {
+    Node_Anim *anim = &animation->node_anims[node_anim_idx];
     // 0. Calculate animation percent ( e.g we are 0.3 through )
     f32 anim_time = fmodf(time_sec, anim->max_duration);
     s32 prev_kf_idx = 0;
@@ -560,6 +561,7 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
   return joint_matrices;
 }
 
+f32 _blend_factor = 0.0;
 
 void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
@@ -569,24 +571,24 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
 
     // Skeletal animation part..
     Temp_Arena temp = get_scratch(0,0);
-    m4 *joint_matrices = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, time_sec);
-
-#if 0 
-    m4 *joint_matrices_a = calc_joint_mats_for_animation(temp.arena, info, 0, mesh_idx, time_sec);
-    m4 *joint_matrices_b = calc_joint_mats_for_animation(temp.arena, info, 0, mesh_idx, time_sec);
+#if 1 
+    //f32 _blend_factor = 0.5;
+    m4 *joint_matrices_a = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 0, time_sec);
+    m4 *joint_matrices_b = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 1, time_sec);
 
     m4 *joint_matrices = arena_push_array(temp.arena, m4, JOINT_MAT_COUNT);
     for (s32 joint_idx = 0; joint_idx < JOINT_MAT_COUNT; joint_idx+=1) {
       transform t_a = transform_from_m4(joint_matrices_a[joint_idx]);
       transform t_b = transform_from_m4(joint_matrices_b[joint_idx]);
       transform blended = (transform) {
-        .t = v3_lerp(t_a.t, t_b.t, blend_factor),
-        .r = quat_nlerp(t_a.r, t_b.r, blend_factor),
-        .s = v3_lerp(t_a.s, t_b.s, blend_factor),
+        .t = v3_lerp(t_a.t, t_b.t, _blend_factor),
+        .r = quat_nlerp(t_a.r, t_b.r, _blend_factor),
+        .s = v3_lerp(t_a.s, t_b.s, _blend_factor),
       };
       joint_matrices[joint_idx] = m4_from_transform(blended);
-      joint_matrices[joint_idx] = joint_matrices_a[joint_idx];
     }
+#else
+    m4 *joint_matrices = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 0, time_sec);
 #endif
 
     ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(m4)*JOINT_MAT_COUNT);
