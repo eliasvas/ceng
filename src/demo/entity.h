@@ -5,8 +5,7 @@
 #include "base/base_inc.h"
 #include "core/core_inc.h"
 
-// Generation scheme taken from here, I think? https://bitsquid.blogspot.com/2014/08/building-data-oriented-entity-system.html
-
+// Generation scheme inspired from here, I think? https://bitsquid.blogspot.com/2014/08/building-data-oriented-entity-system.html
 // TODO: Read this about serialization: https://jorenjoestar.github.io/post/serialization_for_games/ 
 
 typedef struct {
@@ -103,5 +102,7 @@ void entity_store_update_render(Game_State *gs, f32 dt);
 Entity *setup_hero(Entity *e, v3 pos);
 Entity *setup_wall(Entity *e, v3 pos);
 Entity *setup_coin(Entity *e, v3 pos);
+
+void entity_serialize_store(Entity_Store *store);
 
 #endif

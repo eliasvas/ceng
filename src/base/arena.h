@@ -44,6 +44,7 @@ typedef struct {
   void scratch_init(u64 size);
   Temp_Arena get_scratch(Arena **conflicts, u64 conflict_count);
   void release_scratch(Temp_Arena ta);
+  f32 arena_get_pct_filled(Arena *arena);
 #else
 
 void arena_align_forward(Arena *arena) {
@@ -198,6 +199,10 @@ void scratch_init(u64 size) {
   for (u64 i = 0; i < array_count(arena_scratch); i+=1) {
     arena_scratch[i] = arena_make(size);
   }
+}
+
+f32 arena_get_pct_filled(Arena *arena) {
+  return (f32)((arena->current) / (f64)(arena->committed));
 }
 
 #endif

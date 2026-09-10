@@ -478,7 +478,6 @@ m4 calc_transform(Model_Info *info, s32 node_idx) {
   return trans;
 }
 
-
 // TODO: mesh_idx refers to specific skeleton, probably
 // FIXME: Doing all the operations in one step really hurts performance.. generally..
 #define JOINT_MAT_COUNT 32

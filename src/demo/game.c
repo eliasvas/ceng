@@ -143,7 +143,7 @@ void game_render(Game_State *gs, float dt) {
 
   static Gui_Scroll_Data sdata = {
     .item_px = 30, // FIXME change this to 60 to see some weird stuff..
-    .item_count = 9,
+    .item_count = 7,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
     .scroll_button_color = col(0.5,1,0.4,1),
@@ -154,18 +154,35 @@ void game_render(Game_State *gs, float dt) {
   Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
   assert(scroll_list.box);
   gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 400.0, 1.0});
+
+    // Animation blending factor (for testing currently)
     gui_slider01(STR8L("blendFactor"), &_blend_factor, sdata.item_px, GUI_AXIS_X);
-    if (gui_button(STR8L("AAAA")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
-    gui_button(STR8L("BBBB"));
-    gui_button(STR8L("CCCC"));
-    gui_button(STR8L("DDDD"));
-    gui_button(STR8L("EEEE"));
-    gui_button(STR8L("FFFF"));
-    gui_button(STR8L("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"));
-    gui_button(STR8L("HHHH"));
+
+    // Good to have buttons
+    if (gui_button(STR8L("Print")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
+    if (gui_button(STR8L("Serialize")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) entity_serialize_store(gs->entity_store);
+    if (gui_button(STR8L("Reset")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
+
+    // This is just for frame arena to have enough data to cause a spike in memory..
+    f32 *random_yuge_alloc = arena_push_array(gs->frame_arena, char, MB(10)); 
+    assert(random_yuge_alloc);
+
+    // Usage percentages for persistent frame and scratch arenas
+    f32 pers_pct = arena_get_pct_filled(gs->persistent_arena); 
+    str8 pers_pct_label = str8_sprintf(gs->frame_arena, "persistent: %ld%%", (s32)(100.0*pers_pct));
+    gui_label(pers_pct_label);
+    f32 frame_pct = arena_get_pct_filled(gs->frame_arena); 
+    str8 frame_pct_label = str8_sprintf(gs->frame_arena, "frame: %ld%%", (s32)(100.0*frame_pct));
+    gui_label(frame_pct_label);
+    f32 scratch_pct = arena_get_pct_filled(get_scratch(0,0).arena); 
+    str8 scratch_pct_label = str8_sprintf(gs->frame_arena, "scratch: %ld%%", (s32)(100.0*scratch_pct));
+    gui_label(scratch_pct_label);
+
     gui_pop_pref_width();
     gui_scroll_list_end(STR8L("MyScrollTest"));
   gui_end();
+
+
 #endif
 
 }

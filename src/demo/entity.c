@@ -344,4 +344,17 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
   // TBA TBA TBA TBA TBA
 }
 
+void entity_serialize_store(Entity_Store *store) {
+  printf("-----------SERIALIZATION---------------\n");
+  Temp_Arena temp = get_scratch(0,0);
+  str8_list list = {};
+  str8_list_push_back(temp.arena, &list, STR8L("\'SomeData\'{\n"));
+  str8_list_push_back(temp.arena, &list, STR8L("\'value\': 123\n"));
+  str8_list_push_back(temp.arena, &list, STR8L("}\n"));
+  str8 final = str8_list_join(temp.arena, &list);
+  printf("%.*s", STR8_VARG(final));
+  release_scratch(temp);
+  printf("---------------------------------------\n");
+
+}
 

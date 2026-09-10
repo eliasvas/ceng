@@ -7,12 +7,6 @@
 // TODO: Positional animations
 // TODO: Keyboard NAV
 
-/*
-FIXME FIXME FIXME
-The  number of drawcalls explodes (one per rectangle/string of text) because:
-- We do hardware clipping (We need to flush before continuing to apply the scissor rect) - We use 2 different textures for 'white' and text (and probably non-ASCII glyphs as well) We Should do the clipping on the fragment shader somehow (probably via discard) + combine our textures to one (or clamp to white??).
-*/
-
 #define GUI_STACKS_IMPLEMENTATION
 #include "gui_stacks.h"
 
@@ -96,7 +90,7 @@ Gui_Box *gui_box_make(str8 label, Gui_Box_Flags flags) {
     box->last_frame_used = ctx.frame_idx;
     box->child_count = 0;
     box->id = id;
-    //box->label = label;
+    // FIXME: This is gonna byte me in the ASS, labels should be allocated per-node, right now we just shallow copy
     box->label = gui_get_label_no_hh(label); // we chop any ##abcd diversifiers
     box->flags = flags;
 
@@ -221,6 +215,12 @@ Gui_Signal gui_signal_from_box(Gui_Box *box) {
   return sig;
 }
 
+Gui_Signal gui_label(str8 label) {
+  u32 flags = (GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+  Gui_Box *box = gui_box_make(label, flags);
+  return gui_signal_from_box(box);
+}
+
 Gui_Signal gui_button(str8 label) {
   u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
   Gui_Box *box = gui_box_make(label, flags);
@@ -269,8 +269,8 @@ void gui_begin(rect viewport, f32 dt) {
   // TODO: ROOTBOX should finally be the whole screen space and this rect should be in user-code
   gui_set_next_fixed_x(5);
   gui_set_next_fixed_y(10);
-  gui_set_next_fixed_width(200);
-  gui_set_next_fixed_height(200);
+  gui_set_next_fixed_width(250);
+  gui_set_next_fixed_height(150);
   //ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
   ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX);
 
