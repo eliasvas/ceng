@@ -6,6 +6,7 @@
 #include "entity.h"
 #include "gui/gui.h"
 #include "gui_extra.h"
+#include "serializer.h"
 
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
@@ -47,6 +48,7 @@ void game_init(Game_State *gs) {
   // Base64 test.. no reason
   base_64_test(gs->frame_arena);
 
+  // str8 test..
   str8_list list = {};
   str8_list_push_back(gs->persistent_arena, &list, STR8L("One"));
   str8_list_push_back(gs->persistent_arena, &list, STR8L("Two"));
@@ -57,6 +59,10 @@ void game_init(Game_State *gs) {
   str8 joined = str8_list_join(gs->persistent_arena, &list);
   assert(str8_eq(joined, STR8L("TwoThree")));
   str8_list_print(&list);
+
+  // serializer test
+  serializer_test();
+
 }
 
 void game_update(Game_State *gs, float dt) {
