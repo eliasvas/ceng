@@ -3,10 +3,10 @@
 #include "base/base_inc.h"
 
 #include "game.h"
-#include "entity.h"
+#include "world.h"
 #include "gui/gui.h"
 #include "gui_extra.h"
-#include "serializer.h"
+#include "world_serializer.h"
 
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
@@ -16,19 +16,19 @@ extern f32 _blend_factor;
 extern void platform_play_sound(const char *sound);
 
 void game_init(Game_State *gs) {
-  gs->entity_store = arena_push_array(gs->persistent_arena, Entity_Store, 1);
-  entity_store_init(gs->entity_store);
+  gs->world = arena_push_array(gs->persistent_arena, World, 1);
+  world_init(gs->world);
   gs->pmgr = arena_push_array(gs->persistent_arena, Particle_Mgr, 1);
   particle_mgr_init(gs->pmgr, gs->persistent_arena);
 
   // Make the hero
-  Entity *hero = setup_hero(entity_store_add(gs->entity_store), v3m(1,4,1));
+  Entity *hero = setup_hero(world_add(gs->world), v3m(1,4,1));
   assert(hero);
 
   // Make the pillars
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
-      setup_wall(entity_store_add(gs->entity_store), v3m(width,height,1));
+      setup_wall(world_add(gs->world), v3m(width,height,1));
 #if 0
       Particle_Emitter *emitter = particle_mgr_new_emitter(gs->pmgr);
       emitter->pos = v3m(width, height, 1);
@@ -38,7 +38,7 @@ void game_init(Game_State *gs) {
   }
 
   // Make the ground
-  Entity *ground = setup_wall(entity_store_add(gs->entity_store), v3m(0,-1.01,0));
+  Entity *ground = setup_wall(world_add(gs->world), v3m(0,-1.01,0));
   ground->box.col_hdim = v3m(4,1,4),
   ground->box.hdim = v3m(4,1,4),
   ground->col = v4m(0.4,0.4,0.4,1.0);
@@ -65,7 +65,7 @@ void game_init(Game_State *gs) {
 #endif
 
   // serializer test
-  serializer_test(gs->persistent_arena);
+  wserializer_test(gs->persistent_arena);
 
 }
 
@@ -75,9 +75,9 @@ void game_update(Game_State *gs, float dt) {
   particle_mgr_update(gs, gs->pmgr, dt);
 
   // Make a test coin if none exists
-  if (entity_store_count_entities(gs->entity_store, ENTITY_KIND_COIN) == 0) {
+  if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
     Entity *test_coin = setup_coin(
-        entity_store_add(gs->entity_store), v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0)
+        world_add(gs->world), v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0)
     );
     assert(test_coin);
   }
@@ -142,7 +142,7 @@ void game_render(Game_State *gs, float dt) {
 
 
   // Rest of the frame
-  entity_store_update_render(gs, dt);
+  world_update_render(gs, dt);
   particle_mgr_render(gs, gs->pmgr);
 
   // Gui Test
@@ -170,8 +170,12 @@ void game_render(Game_State *gs, float dt) {
 
     // Good to have buttons
     if (gui_button(STR8L("Print")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
-    if (gui_button(STR8L("Serialize")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) entity_serialize_store(gs->entity_store);
-    if (gui_button(STR8L("Reset")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) printf("AAAA\n");
+    if (gui_button(STR8L("Serialize")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) world_serialize(gs);
+    if (gui_button(STR8L("Deserialize")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) world_deserialize(gs);
+    if (gui_button(STR8L("Reload")).sflags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
+      printf("Reloading game dynamic lib (with init)\n");
+      gs->request_reload = true;
+    }
 
     // This is just for frame arena to have enough data to cause a spike in memory..
     f32 *random_yuge_alloc = arena_push_array(gs->frame_arena, char, MB(10)); 

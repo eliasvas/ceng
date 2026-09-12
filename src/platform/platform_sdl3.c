@@ -308,7 +308,7 @@ void platform_try_reload_gamelib(Game_State *gs, Game_Api *game_api, b32 call_in
     // If its a reload (not first time, copy the dll to another file first
     static int reload_count = 0;
     if (reload_count > 0) {
-      if (mod_time != game_api->last_modified) {
+      if (gs->request_reload || mod_time != game_api->last_modified) {
         if (game_api->lib) {
           dlclose(game_api->lib);
         }            
@@ -457,6 +457,11 @@ int main(void) {
     /////////////////////////////////////////////////////
     if (frame_count % 60 == 0) {
       platform_try_reload_gamelib(&gs, &game_api, false);
+    }
+
+    if (gs.request_reload) {
+      platform_try_reload_gamelib(&gs, &game_api, true);
+      gs.request_reload = false;
     }
 
     /////////////////////////////////////////////////////

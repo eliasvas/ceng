@@ -5,7 +5,7 @@
 #include "core/core_inc.h"
 
 typedef struct Game_State Game_State;
-#include "entity.h"
+#include "world.h"
 
 typedef struct Particle_Mgr Particle_Mgr;
 #include "particle/particle_inc.h"
@@ -34,7 +34,7 @@ struct Game_State {
   b32 request_reload;
 
   // Game specific stuff
-  Entity_Store *entity_store;
+  World *world;
   Particle_Mgr *pmgr;
 
   // Loaded Asset resources (TODO: Asset system)

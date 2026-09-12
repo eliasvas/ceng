@@ -1,18 +1,30 @@
 #include "rend/rend_inc.h"
 #include "core/core_inc.h"
 #include "game.h"
-#include "entity.h"
+#include "world.h"
+#include "world_serializer.h"
 
-u64 entity_id(Entity_ID id) {
-  return ((u64)id.generation << 32) | (id.index);
+static u64 entity_hash_id(World *world, Entity_ID id) {
+  return (entity_id(id) % world->slot_count);
 }
 
-u64 entity_hash_id(Entity_Store *store, Entity_ID id) {
-  return (entity_id(id) % store->slot_count);
+s64 world_count_entity_chunks(World *world, s64 *entity_count) {
+  s64 chunk_count = 0;
+  Entity_Chunk *chunk = world->entities;
+
+  while (chunk != nullptr) {
+    chunk_count+=1;
+    if (entity_count) {
+      *(entity_count)+=chunk->count;
+    }
+    chunk = chunk->next;
+  }
+
+  return chunk_count;
 }
 
-Entity* entity_store_add(Entity_Store *store) {
-  Entity_Chunk *entities = store->entities;
+Entity* world_add(World *world) {
+  Entity_Chunk *entities = world->entities;
 
   // 0. Check if there is opportunity for reuse
   b32 entity_index_reuse = (entities->first_free_idx != -1);
@@ -35,17 +47,17 @@ Entity* entity_store_add(Entity_Store *store) {
 
 #if 0
   // 2. Hook up to hash-map (Entity_id -> Entity*)
-  Entity_Node *enode = arena_push_array(store->entity_arena, Entity_Node, 1);
+  Entity_Node *enode = arena_push_array(world->entity_arena, Entity_Node, 1);
   enode->e = &entities->e[new_idx];
-  u64 hash_slot = entity_hash_id(store, enode->e->id);
-  dll_insert_NPZ(nullptr, store->slots[hash_slot].hash_first, store->slots[hash_slot].hash_last, store->slots[hash_slot].hash_last, enode, hash_next, hash_prev);
+  u64 hash_slot = entity_hash_id(world, enode->e->id);
+  dll_insert_NPZ(nullptr, world->slots[hash_slot].hash_first, world->slots[hash_slot].hash_last, world->slots[hash_slot].hash_last, enode, hash_next, hash_prev);
 #endif
 
   return &entities->e[new_idx];
 }
 
-Entity* entity_store_remove(Entity_Store *store, Entity_ID eid) {
-  Entity_Chunk *entities = store->entities;
+Entity* world_remove(World *world, Entity_ID eid) {
+  Entity_Chunk *entities = world->entities;
 
   // first call any shutdown/kill method here, e.g hero_shutdown(..)
   M_ZERO_STRUCT(&entities->e[eid.index]);
@@ -56,33 +68,37 @@ Entity* entity_store_remove(Entity_Store *store, Entity_ID eid) {
   return nullptr;
 }
 
-void entity_store_init(Entity_Store *store) {
-  store->entity_arena = arena_make(MB(256));
+void world_init(World *world) {
+  world->entity_arena = arena_make(MB(256));
 
-  store->entities = arena_push_array(store->entity_arena, Entity_Chunk, 1);
-  store->entities->first_free_idx = -1;
+  // FIXME: Support multiple chunks!!!!! Add support to world_add/world_remove as well..
+  world->entities = arena_push_array(world->entity_arena, Entity_Chunk, 1);
+  world->chunk_count = 1;
 
-  store->slot_count = 64;
-  store->slots = arena_push_array(store->entity_arena, Entity_Hash_Slot, store->slot_count);
+
+  world->entities->first_free_idx = -1;
+
+  world->slot_count = 64;
+  world->slots = arena_push_array(world->entity_arena, Entity_Hash_Slot, world->slot_count);
 }
 
-Entity *entity_store_find(Entity_Store *store, Entity_ID id) {
+Entity *world_find(World *world, Entity_ID id) {
   assert(id.index < ENTITIES_PER_CHUNK);
 
-  Entity *e = &store->entities->e[id.index];
-  b32 alive = store->entities->alive[id.index];
-  u32 gen = store->entities->gen[id.index];
+  Entity *e = &world->entities->e[id.index];
+  b32 alive = world->entities->alive[id.index];
+  u32 gen = world->entities->gen[id.index];
   if (gen == id.generation && alive) {
     return e;
   }
   return nullptr;
 }
 
-u32 entity_store_count_entities(Entity_Store *store, Entity_Kind kind) {
+u32 world_count_entities(World *world, Entity_Kind kind) {
   u32 count = 0;
-  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
-    Entity *test = &store->entities->e[idx];
-    if (store->entities->alive[idx] && test->kind == kind) count+=1;
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *test = &world->entities->e[idx];
+    if (world->entities->alive[idx] && test->kind == kind) count+=1;
   }
 
   return count;
@@ -96,15 +112,15 @@ b32 pb_isect(Phys_Box *a, Phys_Box* b) {
 }
 
 // FIXME: Here especially we need a spatial partition..
-Entity *entity_collides(Entity_Store *store, Entity_ID id, v3 candidate_pos) {
-  Entity *e = entity_store_find(store, id);
+Entity *entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
+  Entity *e = world_find(world, id);
   Phys_Box col_box = e->box;
   col_box.pos = v3_add(candidate_pos, col_box.col_off);
 
-  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
-    Entity *test = &store->entities->e[idx];
-    if (store->entities->alive[idx] && entity_id(test->id) != entity_id(id) ) {
-      b32 test_alive = store->entities->alive[idx];
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *test = &world->entities->e[idx];
+    if (world->entities->alive[idx] && entity_id(test->id) != entity_id(id) ) {
+      b32 test_alive = world->entities->alive[idx];
       Phys_Box testbox = test->box;
       testbox.pos = v3_add(testbox.pos, testbox.col_off);
 
@@ -123,7 +139,7 @@ Entity *entity_collides(Entity_Store *store, Entity_ID id, v3 candidate_pos) {
 ////////////////////////////////////////////
 
 void update_hero(Game_State *gs, Entity *e, f32 dt) {
-  Entity_Store *store = gs->entity_store;
+  World *world = gs->world;
   // Movement dir
   v3 move_dir = v3m(0,0,0);
   if (input_key_down(&gs->input, KEY_SCANCODE_RIGHT)) { move_dir.x+=1; }
@@ -168,13 +184,13 @@ void update_hero(Game_State *gs, Entity *e, f32 dt) {
   for (s32 axis = 0; axis < 3; axis += 1) {
     v3 candidate_pos_axis = e->box.pos;
     candidate_pos_axis.raw[axis] += e->box.vel.raw[axis] * dt;
-    Entity *collides_with = entity_collides(store, e->id, candidate_pos_axis);
+    Entity *collides_with = entity_collides(world, e->id, candidate_pos_axis);
     if (!collides_with) e->box.pos = candidate_pos_axis;
     else if (collides_with->kind == ENTITY_KIND_COIN) {
       // Remove the coin
       color obj_color = collides_with->col;
       v3 obj_pos = collides_with->box.pos;
-      entity_store_remove(store, collides_with->id);
+      world_remove(world, collides_with->id);
       // Spawn a short emitter
       Particle_Emitter *death_coin_particles = particle_mgr_new_emitter(gs->pmgr);
       death_coin_particles->lifespan = 0.1;
@@ -292,12 +308,12 @@ Entity *setup_coin(Entity *e, v3 pos) {
   return e;
 }
 
-void entity_store_update_render(Game_State *gs, f32 dt) {
-  Entity_Store *store = gs->entity_store;
+void world_update_render(Game_State *gs, f32 dt) {
+  World *world = gs->world;
   // Update all the entities
-  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
-    Entity *e = &store->entities->e[idx];
-    if (store->entities->alive[idx]) {
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
+    if (world->entities->alive[idx]) {
       //e->update_fn(gs, e, dt);
       switch(e->kind) {
         case ENTITY_KIND_HERO:
@@ -318,10 +334,10 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
   }
 
   // Draw all the entities
-  for (s64 idx = 0; idx < store->entities->count; idx+=1) {
-    Entity *e = &store->entities->e[idx];
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
     //e->update_fn(gs, e, dt);
-    if (store->entities->alive[idx]) {
+    if (world->entities->alive[idx]) {
       switch(e->kind) {
         case ENTITY_KIND_HERO:
           draw_hero(gs, e);
@@ -339,22 +355,33 @@ void entity_store_update_render(Game_State *gs, f32 dt) {
       }
     }
   }
-  //for (s64 idx = 0; idx < store->entities->count; idx+=1) { Entity *e = &store->entities->e[idx]; e->draw_fn(gs, e); }
+  //for (s64 idx = 0; idx < world->entities->count; idx+=1) { Entity *e = &world->entities->e[idx]; e->draw_fn(gs, e); }
   // Cleanup to-be-deleted entities
   // TBA TBA TBA TBA TBA
 }
 
-void entity_serialize_store(Entity_Store *store) {
-  printf("-----------SERIALIZATION---------------\n");
-  Temp_Arena temp = get_scratch(0,0);
-  str8_list list = {};
-  str8_list_push_back(temp.arena, &list, STR8L("\'SomeData\'{\n"));
-  str8_list_push_back(temp.arena, &list, STR8L("\'value\': 123\n"));
-  str8_list_push_back(temp.arena, &list, STR8L("}\n"));
-  str8 final = str8_list_join(temp.arena, &list);
-  printf("%.*s", STR8_VARG(final));
-  release_scratch(temp);
-  printf("---------------------------------------\n");
+void world_serialize(Game_State *gs) {
+  Arena *arena = gs->persistent_arena;
+  assert(arena);
 
+  World_Serializer s = wserializer_from_fullpath(arena, STR8L(".savegame"));
+  serialize_all_inc_version(&s, gs->world);
+  // FIXME: We need an api for serialization_finish or something, why call cstdlib here? we dum
+  fclose(s.fptr);
+
+  printf("SERIALIZE!!\n");
 }
+
+void world_deserialize(Game_State *gs) {
+  Arena *arena = gs->persistent_arena;
+  assert(arena);
+
+  // FIXME: Should we retain the same arena? for the world? at least we need to clear? or no?
+  World_Serializer d = wdeserializer_from_fullpath(arena, STR8L(".savegame"));
+  serialize_all_inc_version(&d, gs->world);
+  fclose(d.fptr);
+
+  printf("DESERIALIZE!!\n");
+}
+
 

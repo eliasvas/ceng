@@ -1,13 +1,6 @@
 #ifndef ENTITY_H__
 #define ENTITY_H__
 
-#include "game.h"
-#include "base/base_inc.h"
-#include "core/core_inc.h"
-
-// Generation scheme inspired from here, I think? https://bitsquid.blogspot.com/2014/08/building-data-oriented-entity-system.html
-// TODO: Read this about serialization: https://jorenjoestar.github.io/post/serialization_for_games/ 
-
 typedef struct {
  v3 pos;
  v3 vel;
@@ -38,10 +31,10 @@ typedef struct  {
 typedef struct Entity Entity;
 struct Entity {
   Entity_ID id;
-  color col;
-
-  b32 dynamic;
   Phys_Box box;
+
+  color col;
+  b32 dynamic;
   v3 move_dir;
 
   b32 grounded;
@@ -51,58 +44,12 @@ struct Entity {
   Entity_Kind kind;
 };
 
-#define ENTITIES_PER_CHUNK 1024
-typedef struct Entity_Chunk Entity_Chunk;
-struct Entity_Chunk {
-  Entity e[ENTITIES_PER_CHUNK];
-  u32 gen[ENTITIES_PER_CHUNK];
-  b32 alive[ENTITIES_PER_CHUNK];
-  b32 next_idx[ENTITIES_PER_CHUNK];
-  s64 first_free_idx;
-  s64 count;
-
-  Entity_Chunk *next;
-};
-
-typedef struct Entity_Node Entity_Node;
-struct Entity_Node {
-  Entity_Node *hash_next;
-  Entity_Node *hash_prev;
-
-  Entity *e;
-};
-
-typedef struct Entity_Hash_Slot Entity_Hash_Slot;
-struct Entity_Hash_Slot {
-  Entity_Node *hash_first;
-  Entity_Node *hash_last;
-};
-
-// TODO: Make this a hash structure
-typedef struct Entity_Store {
-  Arena *entity_arena;
-  u64 next_id;
-
-  // We need two maps one for id->entity and another for coords->entity
-  Entity_Hash_Slot *slots;
-  u64 slot_count;
-
-  Entity_Chunk *entities;
-
-  // More stuff
-} Entity_Store;
-
-Entity* entity_store_add(Entity_Store *store);
-Entity* entity_store_remove(Entity_Store *store, Entity_ID id);
-void entity_store_init(Entity_Store *store);
-u32 entity_store_count_entities(Entity_Store *store, Entity_Kind kind);
-u64 entity_hash_id(Entity_Store *store, Entity_ID id);
-void entity_store_update_render(Game_State *gs, f32 dt);
+static u64 entity_id(Entity_ID id) {
+  return ((u64)id.generation << 32) | (id.index);
+}
 
 Entity *setup_hero(Entity *e, v3 pos);
 Entity *setup_wall(Entity *e, v3 pos);
 Entity *setup_coin(Entity *e, v3 pos);
-
-void entity_serialize_store(Entity_Store *store);
 
 #endif
