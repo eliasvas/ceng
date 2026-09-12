@@ -22,7 +22,7 @@ typedef struct {
  f32 mass;
 } Phys_Box;
 
-typedef enum {
+typedef enum : s32 {
   ENTITY_KIND_HERO,
   ENTITY_KIND_WALL,
   ENTITY_KIND_COIN,

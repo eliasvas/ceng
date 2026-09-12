@@ -407,9 +407,11 @@ int main(void) {
   printf("OpenGL renderer: %s\n", glGetString(GL_RENDERER));
   printf("OpenGL version:  %s\n", glGetString(GL_VERSION));
   printf("GLSL version:    %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+#if 0 
   GLint maxAttribs = 0;
   glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttribs);
   printf("Max vertex attributes: %d\n", maxAttribs);
+#endif
 
   /////////////////////////////////////////////////////
   // 2. Game_State initialization

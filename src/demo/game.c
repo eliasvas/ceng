@@ -45,9 +45,12 @@ void game_init(Game_State *gs) {
 
   gui_init(gs->frame_arena, &gs->font, &gs->input);
 
+#if 0 
   // Base64 test.. no reason
   base_64_test(gs->frame_arena);
+#endif
 
+#if 0
   // str8 test..
   str8_list list = {};
   str8_list_push_back(gs->persistent_arena, &list, STR8L("One"));
@@ -59,9 +62,10 @@ void game_init(Game_State *gs) {
   str8 joined = str8_list_join(gs->persistent_arena, &list);
   assert(str8_eq(joined, STR8L("TwoThree")));
   str8_list_print(&list);
+#endif
 
   // serializer test
-  serializer_test();
+  serializer_test(gs->persistent_arena);
 
 }
 
