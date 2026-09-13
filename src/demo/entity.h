@@ -1,6 +1,9 @@
 #ifndef ENTITY_H__
 #define ENTITY_H__
 
+struct Game_State;
+#include "base/base_inc.h"
+
 typedef struct {
  v3 pos;
  v3 vel;
@@ -16,6 +19,7 @@ typedef struct {
 } Phys_Box;
 
 typedef enum : s32 {
+  ENTITY_KIND_NONE,
   ENTITY_KIND_HERO,
   ENTITY_KIND_WALL,
   ENTITY_KIND_COIN,
@@ -42,6 +46,10 @@ struct Entity {
   v3 dash_dir;
 
   Entity_Kind kind;
+
+  void (*update_fn)(struct Game_State *gs, Entity *e, f32 dt); // @NoSerialize
+  void (*draw_fn)(struct Game_State *gs, Entity *e); // @NoSerialize
+
 };
 
 static u64 entity_id(Entity_ID id) {
@@ -49,7 +57,23 @@ static u64 entity_id(Entity_ID id) {
 }
 
 Entity *setup_hero(Entity *e, v3 pos);
+void update_hero(struct Game_State *gs, Entity *e, f32 dt);
+void draw_hero(struct Game_State *gs, Entity *e);
+
 Entity *setup_wall(Entity *e, v3 pos);
+void update_wall(struct Game_State *gs, Entity *e, f32 dt);
+void draw_wall(struct Game_State *gs, Entity *e);
+
 Entity *setup_coin(Entity *e, v3 pos);
+void update_coin(struct Game_State *gs, Entity *e, f32 dt);
+void draw_coin(struct Game_State *gs, Entity *e);
+
+Entity *setup_enemy(Entity *e, v3 pos);
+void update_enemy(struct Game_State *gs, Entity *e, f32 dt);
+void draw_enemy(struct Game_State *gs, Entity *e);
+
+Entity *setup_bullet(Entity *e, v3 pos);
+void update_bullet(struct Game_State *gs, Entity *e, f32 dt);
+void draw_bullet(struct Game_State *gs, Entity *e);
 
 #endif

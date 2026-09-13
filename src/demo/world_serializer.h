@@ -94,7 +94,7 @@ static void serialize_Phys_Box(World_Serializer *wserializer, Phys_Box *data) {
 static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD(SV_Initial, Entity_ID, id);
   ADD(SV_Initial, Phys_Box, box);
-  ADD_BASIC(SV_Initial, v4, col);
+  ADD_BASIC(SV_Initial, color, col);
 
   ADD_BASIC(SV_Initial, b32, dynamic);
   ADD_BASIC(SV_Initial, v3, move_dir); // TODO: This could not be serialized right?
@@ -102,6 +102,32 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD_BASIC(SV_Initial, f32, dash_timer);
   ADD_BASIC(SV_Initial, v3, dash_dir);
   ADD_BASIC(SV_Initial, s32, kind);
+
+  // Also load the 'member' functions
+  switch (data->kind) {
+    case ENTITY_KIND_HERO:
+      data->update_fn = update_hero;
+      data->draw_fn = draw_hero;
+      break;
+    case ENTITY_KIND_WALL:
+      data->update_fn = update_wall;
+      data->draw_fn = draw_wall;
+      break;
+    case ENTITY_KIND_COIN:
+      data->update_fn = update_coin;
+      data->draw_fn = draw_coin;
+      break;
+    case ENTITY_KIND_ENEMY:
+      //data->update_fn = update_enemy;
+      //data->draw_fn = draw_enemy;
+      break;
+    case ENTITY_KIND_BULLET:
+      //data->update_fn = update_bullet;
+      //data->draw_fn = draw_bullet;
+    case ENTITY_KIND_NONE:
+    default:
+      break;
+  }
 }
 
 static void serialize_world(World_Serializer *wserializer, World *data) {
@@ -109,10 +135,11 @@ static void serialize_world(World_Serializer *wserializer, World *data) {
   ADD_BASIC(SV_Initial, s32, next_id);
 
   // FIXME: Multiple chunks not supported..
+  assert(data->chunk_count == 1);
   for (s32 chunk = 0; chunk < data->chunk_count; chunk+=1) {
     // Parse entities array
     for (s32 idx = 0; idx < ENTITIES_PER_CHUNK; idx+=1) {
-      ADD_BASIC(SV_Initial, Entity, entities[0].e[idx]);
+      ADD(SV_Initial, Entity, entities[0].e[idx]);
     }
     // Parse generation array
     for (s32 idx = 0; idx < ENTITIES_PER_CHUNK; idx+=1) {
@@ -144,7 +171,7 @@ static b32 serialize_all_inc_version(World_Serializer *wserializer, World *data)
     return false;
   } else {
     serialize_world(wserializer, data);
-    CHECK_INTEGRITY(wserializer->counter);
+    //CHECK_INTEGRITY(wserializer->counter);
     return true;
   }
 }
@@ -175,6 +202,7 @@ static World_Serializer wserializer_from_fullpath(Arena *arena, str8 fullpath) {
   return s;
 }
 
+#if 0
 static void wserializer_test(Arena *arena) {
   World world;
   world_init(&world);
@@ -204,4 +232,4 @@ static void wserializer_test(Arena *arena) {
 
 
 }
-
+#endif

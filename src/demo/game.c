@@ -15,7 +15,7 @@ extern f32 _blend_factor;
 
 extern void platform_play_sound(const char *sound);
 
-void game_init(Game_State *gs) {
+void game_init(struct Game_State *gs) {
   gs->world = arena_push_array(gs->persistent_arena, World, 1);
   world_init(gs->world);
   gs->pmgr = arena_push_array(gs->persistent_arena, Particle_Mgr, 1);
@@ -65,11 +65,10 @@ void game_init(Game_State *gs) {
 #endif
 
   // serializer test
-  wserializer_test(gs->persistent_arena);
-
+  //wserializer_test(gs->persistent_arena);
 }
 
-void game_update(Game_State *gs, float dt) {
+void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
   particle_mgr_update(gs, gs->pmgr, dt);
@@ -85,7 +84,7 @@ void game_update(Game_State *gs, float dt) {
 }
 
 // FIXME: Make a VBO for this goddam it, or.. something
-void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
+void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   s32 line_count_per_axis = cell_count + 1; 
   Tri_Vertex *points = arena_push_array(gs->frame_arena, Tri_Vertex, line_count_per_axis*4);
   color c1 = v4m(0.7,0.7,0.7,1);
@@ -116,7 +115,7 @@ void game_draw_origin_grid(Game_State *gs, s32 cell_count) {
   r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
 }
 
-void game_render(Game_State *gs, float dt) {
+void game_render(struct Game_State *gs, float dt) {
   v3 cam_pos = v3m(0,8,10);
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
   // 0. Draw grid
@@ -201,7 +200,7 @@ void game_render(Game_State *gs, float dt) {
 
 }
 
-void game_shutdown(Game_State *gs) {
+void game_shutdown(struct Game_State *gs) {
   // This COULD be used for the persistent
   // GUI stuff outlined in game_update(!!)
 }

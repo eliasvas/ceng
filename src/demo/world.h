@@ -1,10 +1,10 @@
 #ifndef WORLD_H__
 #define WORLD_H__
 
+#include "entity.h"
 #include "game.h"
 #include "base/base_inc.h"
 #include "core/core_inc.h"
-#include "entity.h"
 
 #define ENTITIES_PER_CHUNK 1024
 typedef struct Entity_Chunk Entity_Chunk;
@@ -43,9 +43,9 @@ typedef struct World {
   u64 slot_count; // @NoSerialize
 
   Entity_Chunk *entities; // @Serialize
-  s32 chunk_count;
+  s32 chunk_count; // @Serialize
 
-  u64 next_id; // @Serialize
+  s32 next_id; // @Serialize
 
   // More stuff
 } World;
