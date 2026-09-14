@@ -108,22 +108,27 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
     case ENTITY_KIND_HERO:
       data->update_fn = update_hero;
       data->draw_fn = draw_hero;
+      data->kill_fn = kill_hero;
       break;
     case ENTITY_KIND_WALL:
       data->update_fn = update_wall;
       data->draw_fn = draw_wall;
+      data->kill_fn = kill_wall;
       break;
     case ENTITY_KIND_COIN:
       data->update_fn = update_coin;
       data->draw_fn = draw_coin;
+      data->kill_fn = kill_coin;
       break;
     case ENTITY_KIND_ENEMY:
       //data->update_fn = update_enemy;
       //data->draw_fn = draw_enemy;
+      //data->kill_fn = kill_enemy;
       break;
     case ENTITY_KIND_BULLET:
       //data->update_fn = update_bullet;
       //data->draw_fn = draw_bullet;
+      //data->kill_fn = kill_bullet;
     case ENTITY_KIND_NONE:
     default:
       break;

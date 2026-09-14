@@ -17,7 +17,8 @@ s64 world_count_entity_chunks(World *world, s64 *entity_count) {
     if (entity_count) {
       *(entity_count)+=chunk->count;
     }
-    chunk = chunk->next;
+    break;
+    //chunk = chunk->next;
   }
 
   return chunk_count;
@@ -57,9 +58,9 @@ Entity* world_add(World *world) {
 }
 
 Entity* world_remove(World *world, Entity_ID eid) {
-  Entity_Chunk *entities = world->entities;
-
-  // first call any shutdown/kill method here, e.g hero_shutdown(..)
+  Entity_Chunk *entities = &world->entities[0];
+  Entity *e = &entities->e[eid.index];
+  e->kill_fn(world, e);
 
   u32 prev_gen = entities->gen[eid.index];
   M_ZERO_STRUCT(&entities->e[eid.index]);
@@ -83,6 +84,12 @@ void world_init(World *world) {
 
   world->slot_count = 64;
   world->slots = arena_push_array(world->entity_arena, Entity_Hash_Slot, world->slot_count);
+
+  world->pmgr = arena_push_array(world->entity_arena, Particle_Mgr, 1);
+  particle_mgr_init(world->pmgr, world->entity_arena);
+
+  world->rcommands = arena_push_array(world->entity_arena, Entity_Render_Command, ENTITIES_PER_CHUNK);
+  world->rcommand_count = 0;
 }
 
 Entity *world_find(World *world, Entity_ID id) {
@@ -137,9 +144,12 @@ Entity *entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
   return nullptr;
 }
 
-
 void world_update_render(Game_State *gs, f32 dt) {
   World *world = gs->world;
+  world->input = &gs->input;
+  world->rcommand_count = 0;
+
+  particle_mgr_update(world->pmgr, dt);
 
   // For serialization testing, not really needed tbh..
   s64 entity_count = 0;
@@ -151,7 +161,7 @@ void world_update_render(Game_State *gs, f32 dt) {
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
     if (world->entities->alive[idx]) {
-      e->update_fn(gs, e, dt);
+      e->update_fn(world, e, dt);
     }
   }
 
@@ -159,9 +169,12 @@ void world_update_render(Game_State *gs, f32 dt) {
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
     if (world->entities->alive[idx]) {
-      e->draw_fn(gs, e);
+      e->draw_fn(world, e);
     }
   }
+
+
+  particle_mgr_render(gs, world->pmgr);
   //for (s64 idx = 0; idx < world->entities->count; idx+=1) { Entity *e = &world->entities->e[idx]; e->draw_fn(gs, e); }
   // Cleanup to-be-deleted entities
   // TBA TBA TBA TBA TBA

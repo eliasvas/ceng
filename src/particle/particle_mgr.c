@@ -50,7 +50,7 @@ void particle_mgr_kill_emitter(Particle_Mgr *pmgr, Particle_Emitter *emitter) {
   sll_stack_push(pmgr->free_emitter_nodes, emitter);
 }
 
-void particle_mgr_update(Game_State *gs, Particle_Mgr *pmgr, f32 dt) {
+void particle_mgr_update(Particle_Mgr *pmgr, f32 dt) {
   // Spawn the new particles from the emitters
   for (Particle_Emitter *emitter = pmgr->emitter_first; emitter != nullptr;) {
     Particle_Emitter *next = emitter->next;

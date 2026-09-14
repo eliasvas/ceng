@@ -62,7 +62,7 @@ Particle *particle_mgr_new_particle(Particle_Mgr *pmgr);
 void particle_mgr_kill_particle(Particle_Mgr *pmgr, Particle *particle);
 Particle_Emitter *particle_mgr_new_emitter(Particle_Mgr *pmgr);
 void particle_mgr_kill_emitter(Particle_Mgr *pmgr, Particle_Emitter *emitter);
-void particle_mgr_update(Game_State *gs, Particle_Mgr *pmgr, f32 dt);
+void particle_mgr_update(Particle_Mgr *pmgr, f32 dt);
 void particle_mgr_render(Game_State *gs, Particle_Mgr *pmgr);
 
 #endif

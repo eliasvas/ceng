@@ -7,9 +7,6 @@
 typedef struct Game_State Game_State;
 #include "world.h"
 
-typedef struct Particle_Mgr Particle_Mgr;
-#include "particle/particle_inc.h"
-
 typedef struct {
   s32 current_sine_sample; // not needed
   s32 sample_rate;
@@ -35,7 +32,6 @@ struct Game_State {
 
   // Game specific stuff
   World *world;
-  Particle_Mgr *pmgr;
 
   // Loaded Asset resources (TODO: Asset system)
   Asset_Id static_model_asset_id;

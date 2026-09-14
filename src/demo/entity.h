@@ -4,6 +4,8 @@
 struct Game_State;
 #include "base/base_inc.h"
 
+struct World;
+
 typedef struct {
  v3 pos;
  v3 vel;
@@ -47,9 +49,9 @@ struct Entity {
 
   Entity_Kind kind;
 
-  void (*update_fn)(struct Game_State *gs, Entity *e, f32 dt); // @NoSerialize
-  void (*draw_fn)(struct Game_State *gs, Entity *e); // @NoSerialize
-
+  void (*update_fn)(struct World *world, Entity *e, f32 dt); // @NoSerialize
+  void (*draw_fn)(struct World *world, Entity *e); // @NoSerialize
+  void (*kill_fn)(struct World *world, Entity *e); // @NoSerialize
 };
 
 static u64 entity_id(Entity_ID id) {
@@ -57,23 +59,28 @@ static u64 entity_id(Entity_ID id) {
 }
 
 Entity *setup_hero(Entity *e, v3 pos);
-void update_hero(struct Game_State *gs, Entity *e, f32 dt);
-void draw_hero(struct Game_State *gs, Entity *e);
+void update_hero(struct World *world, Entity *e, f32 dt);
+void draw_hero(struct World *world, Entity *e);
+void kill_hero(struct World *world, Entity *e);
 
 Entity *setup_wall(Entity *e, v3 pos);
-void update_wall(struct Game_State *gs, Entity *e, f32 dt);
-void draw_wall(struct Game_State *gs, Entity *e);
+void update_wall(struct World *world, Entity *e, f32 dt);
+void draw_wall(struct World *world, Entity *e);
+void kill_wall(struct World *world, Entity *e);
 
 Entity *setup_coin(Entity *e, v3 pos);
-void update_coin(struct Game_State *gs, Entity *e, f32 dt);
-void draw_coin(struct Game_State *gs, Entity *e);
+void update_coin(struct World *world, Entity *e, f32 dt);
+void draw_coin(struct World *world, Entity *e);
+void kill_coin(struct World *world, Entity *e);
 
 Entity *setup_enemy(Entity *e, v3 pos);
-void update_enemy(struct Game_State *gs, Entity *e, f32 dt);
-void draw_enemy(struct Game_State *gs, Entity *e);
+void update_enemy(struct World *world, Entity *e, f32 dt);
+void draw_enemy(struct World *world, Entity *e);
+void kill_enemy(struct World *world, Entity *e);
 
 Entity *setup_bullet(Entity *e, v3 pos);
-void update_bullet(struct Game_State *gs, Entity *e, f32 dt);
-void draw_bullet(struct Game_State *gs, Entity *e);
+void update_bullet(struct World *world, Entity *e, f32 dt);
+void draw_bullet(struct World *world, Entity *e);
+void kill_bullet(struct World *world, Entity *e);
 
 #endif

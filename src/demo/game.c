@@ -18,8 +18,6 @@ extern void platform_play_sound(const char *sound);
 void game_init(struct Game_State *gs) {
   gs->world = arena_push_array(gs->persistent_arena, World, 1);
   world_init(gs->world);
-  gs->pmgr = arena_push_array(gs->persistent_arena, Particle_Mgr, 1);
-  particle_mgr_init(gs->pmgr, gs->persistent_arena);
 
   // Make the hero
   Entity *hero = setup_hero(world_add(gs->world), v3m(1,4,1));
@@ -71,7 +69,6 @@ void game_init(struct Game_State *gs) {
 void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
-  particle_mgr_update(gs, gs->pmgr, dt);
 
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
@@ -142,7 +139,17 @@ void game_render(struct Game_State *gs, float dt) {
 
   // Rest of the frame
   world_update_render(gs, dt);
-  particle_mgr_render(gs, gs->pmgr);
+  // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
+  for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
+    Entity_Render_Command *cmd = &gs->world->rcommands[i];
+    m4 world = m4_from_transform(cmd->xform);
+    m4 mvp = m4_mult(vp, world);
+    r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, cmd->col);
+    // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
+    m4 world_collider = m4_from_transform(cmd->collider_xform);
+    m4 cmvp = m4_mult(vp, world_collider);
+    r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&cmvp, cmd->collider_col);
+  }
 
   // Gui Test
 #if 1

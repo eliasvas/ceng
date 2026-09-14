@@ -6,6 +6,9 @@
 #include "base/base_inc.h"
 #include "core/core_inc.h"
 
+typedef struct Particle_Mgr Particle_Mgr;
+#include "particle/particle_inc.h"
+
 #define ENTITIES_PER_CHUNK 1024
 typedef struct Entity_Chunk Entity_Chunk;
 struct Entity_Chunk {
@@ -15,8 +18,6 @@ struct Entity_Chunk {
   u32 next_idx[ENTITIES_PER_CHUNK];
   s64 first_free_idx;
   s64 count;
-
-  Entity_Chunk *next;
 };
 
 typedef struct Entity_Node Entity_Node;
@@ -33,6 +34,15 @@ struct Entity_Hash_Slot {
   Entity_Node *hash_last;
 };
 
+typedef struct {
+  transform xform;
+  Asset_Id asset_id;
+  color col;
+
+  transform collider_xform;
+  color collider_col;
+} Entity_Render_Command;
+
 // TODO: Make this a hash structure
 typedef struct World {
   Arena *entity_arena; // @NoSerialize
@@ -47,14 +57,25 @@ typedef struct World {
 
   s32 next_id; // @Serialize
 
-  // More stuff
+  Particle_Mgr *pmgr; // @NoSerialize for now
+
+  Entity_Render_Command *rcommands; // FIXME: make this a chunked array
+  s32 rcommand_count;
+
+  Input *input; // Stolen from Game_State for now!
 } World;
 
 void world_init(World *world);
 
 Entity* world_add(World *world);
 Entity* world_remove(World *world, Entity_ID id);
+
+// WTF is this
+void world_kill_entity(Game_State *gs, Entity_ID entity);
+
 u32 world_count_entities(World *world, Entity_Kind kind);
+
+
 void world_update_render(Game_State *gs, f32 dt);
 
 void world_serialize(Game_State *gs);
