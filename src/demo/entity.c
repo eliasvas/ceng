@@ -147,7 +147,6 @@ Entity *setup_wall(Entity *e, v3 pos) {
 ////////////////////////////////////////////
 // Coin Entity
 ////////////////////////////////////////////
-
 void update_coin(World *world, Entity *e, f32 dt) {
 
 }

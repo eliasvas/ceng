@@ -68,7 +68,6 @@ void game_init(struct Game_State *gs) {
 
 void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
-  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
 
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
@@ -115,6 +114,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 void game_render(struct Game_State *gs, float dt) {
   v3 cam_pos = v3m(0,8,10);
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
+  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
   // Draw the test model
@@ -135,6 +135,28 @@ void game_render(struct Game_State *gs, float dt) {
   );
   Model_Info *anim_model = AM_GET(gs->anim_model_asset_id, model);
   r3d_imm_model(gs->game_viewport, anim_model, vp, anim_model_matrix, cam_pos, gs->time_sec);
+
+  // Do world picking..
+  b32 lmb_pressed = input_mkey_pressed(&gs->input, INPUT_MOUSE_LMB);
+  if (lmb_pressed) {
+    m4 inv_vp = m4_inv(vp);
+    v2 mp = input_get_mouse_pos(&gs->input);
+
+    v3 near = world_from_screen(v3m(mp.x, mp.y, -1.0), v2m(800,600), inv_vp);
+    v3 far = world_from_screen(v3m(mp.x, mp.y, 1.0), v2m(800,600), inv_vp);
+    v3 dir = v3_norm(v3_sub(far, near));
+
+    ray r = (ray) {
+      .orig = cam_pos,
+      .dir = dir,
+      .t = 0,
+    };
+
+    Entity *e = world_pick_entity(gs->world, r);
+    if (e) {
+      e->col = v4m(1,0,0,1);
+    }
+  }
 
 
   // Rest of the frame

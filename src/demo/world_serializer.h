@@ -136,34 +136,31 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
 }
 
 static void serialize_world(World_Serializer *wserializer, World *data) {
-  ADD_BASIC(SV_Initial, s32, chunk_count);
   ADD_BASIC(SV_Initial, s32, next_id);
 
-  // FIXME: Multiple chunks not supported..
-  assert(data->chunk_count == 1);
-  for (s32 chunk = 0; chunk < data->chunk_count; chunk+=1) {
+  //for (s32 block = 0; block < 1; block+=1) {
     // Parse entities array
-    for (s32 idx = 0; idx < ENTITIES_PER_CHUNK; idx+=1) {
-      ADD(SV_Initial, Entity, entities[0].e[idx]);
+    for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
+      ADD(SV_Initial, Entity, entities->e[idx]);
     }
     // Parse generation array
-    for (s32 idx = 0; idx < ENTITIES_PER_CHUNK; idx+=1) {
-      ADD_BASIC(SV_Initial, u32, entities[0].gen[idx]);
+    for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
+      ADD_BASIC(SV_Initial, u32, entities->gen[idx]);
     }
     // Parse alive array 
-    for (s32 idx = 0; idx < ENTITIES_PER_CHUNK; idx+=1) {
-      ADD_BASIC(SV_Initial, b32, entities[0].alive[idx]);
+    for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
+      ADD_BASIC(SV_Initial, b32, entities->alive[idx]);
     }
     // Parse next_idx array
-    for (s32 idx = 0; idx < ENTITIES_PER_CHUNK; idx+=1) {
-      ADD_BASIC(SV_Initial, u32, entities[0].next_idx[idx]);
+    for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
+      ADD_BASIC(SV_Initial, u32, entities->next_idx[idx]);
     }
     // Parse first_free_idx
-    ADD_BASIC(SV_Initial, s64, entities[0].first_free_idx);
+    ADD_BASIC(SV_Initial, s64, entities->first_free_idx);
 
     // Parse count
-    ADD_BASIC(SV_Initial, s64, entities[0].count);
-  }
+    ADD_BASIC(SV_Initial, s64, entities->count);
+  //}
 }
 
 static b32 serialize_all_inc_version(World_Serializer *wserializer, World *data) {

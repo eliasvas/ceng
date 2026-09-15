@@ -4,28 +4,31 @@
 #include "world.h"
 #include "world_serializer.h"
 
+// TODO: world_place(..) ?? for the acceleration structure?
+
 static u64 entity_hash_id(World *world, Entity_ID id) {
   return (entity_id(id) % world->slot_count);
 }
 
-s64 world_count_entity_chunks(World *world, s64 *entity_count) {
-  s64 chunk_count = 0;
-  Entity_Chunk *chunk = world->entities;
+void world_init(World *world) {
+  world->entity_arena = arena_make(MB(256));
 
-  while (chunk != nullptr) {
-    chunk_count+=1;
-    if (entity_count) {
-      *(entity_count)+=chunk->count;
-    }
-    break;
-    //chunk = chunk->next;
-  }
+  world->entities = arena_push_array(world->entity_arena, Entity_Block, 1);
+  world->entities->first_free_idx = -1;
 
-  return chunk_count;
+  world->slot_count = 64;
+  world->slots = arena_push_array(world->entity_arena, Entity_Hash_Slot, world->slot_count);
+
+  world->pmgr = arena_push_array(world->entity_arena, Particle_Mgr, 1);
+  particle_mgr_init(world->pmgr, world->entity_arena);
+
+  world->rcommands = arena_push_array(world->entity_arena, Entity_Render_Command, ENTITIES_PER_BLOCK);
+  world->rcommand_count = 0;
 }
 
+
 Entity* world_add(World *world) {
-  Entity_Chunk *entities = world->entities;
+  Entity_Block *entities = world->entities;
 
   // 0. Check if there is opportunity for reuse
   b32 entity_index_reuse = (entities->first_free_idx != -1);
@@ -58,7 +61,7 @@ Entity* world_add(World *world) {
 }
 
 Entity* world_remove(World *world, Entity_ID eid) {
-  Entity_Chunk *entities = &world->entities[0];
+  Entity_Block *entities = world->entities;
   Entity *e = &entities->e[eid.index];
   e->kill_fn(world, e);
 
@@ -72,28 +75,26 @@ Entity* world_remove(World *world, Entity_ID eid) {
   return nullptr;
 }
 
-void world_init(World *world) {
-  world->entity_arena = arena_make(MB(256));
+s64 world_count_entity_chunks(World *world, s64 *entity_count) {
+  s64 chunk_count = 0;
+  Entity_Block *chunk = world->entities;
 
-  // FIXME: Support multiple chunks!!!!! Add support to world_add/world_remove as well..
-  world->entities = arena_push_array(world->entity_arena, Entity_Chunk, 1);
-  world->chunk_count = 1;
+  while (chunk != nullptr) {
+    chunk_count+=1;
+    if (entity_count) {
+      *(entity_count)+=chunk->count;
+    }
+    break;
+    //chunk = chunk->next;
+  }
 
-
-  world->entities->first_free_idx = -1;
-
-  world->slot_count = 64;
-  world->slots = arena_push_array(world->entity_arena, Entity_Hash_Slot, world->slot_count);
-
-  world->pmgr = arena_push_array(world->entity_arena, Particle_Mgr, 1);
-  particle_mgr_init(world->pmgr, world->entity_arena);
-
-  world->rcommands = arena_push_array(world->entity_arena, Entity_Render_Command, ENTITIES_PER_CHUNK);
-  world->rcommand_count = 0;
+  return chunk_count;
 }
 
+
+
 Entity *world_find(World *world, Entity_ID id) {
-  assert(id.index < ENTITIES_PER_CHUNK);
+  assert(id.index < ENTITIES_PER_BLOCK);
 
   Entity *e = &world->entities->e[id.index];
   b32 alive = world->entities->alive[id.index];
@@ -143,6 +144,30 @@ Entity *entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
   }
   return nullptr;
 }
+
+// Simple linear search for now
+Entity *world_pick_entity(World *world, ray r) {
+  Entity *entity = nullptr;
+  f32 min_len = F32_MAX;
+
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
+    if (world->entities->alive[idx]) {
+      v3 entity_center = v3_add(e->box.pos, e->box.col_off);
+      if (ray_isect_bbox(r, bbox_from_center_hdim(entity_center, e->box.col_hdim))) {
+        // FIXME: its not correct to check length, we must do the projection
+        f32 length = v3_len(v3_sub(entity_center, r.orig));
+        if (length < min_len) {
+          min_len = length;
+          entity = e;
+        }
+      }
+    }
+  }
+
+  return entity;
+}
+
 
 void world_update_render(Game_State *gs, f32 dt) {
   World *world = gs->world;

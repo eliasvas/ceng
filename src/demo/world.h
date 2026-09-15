@@ -9,15 +9,19 @@
 typedef struct Particle_Mgr Particle_Mgr;
 #include "particle/particle_inc.h"
 
-#define ENTITIES_PER_CHUNK 1024
-typedef struct Entity_Chunk Entity_Chunk;
-struct Entity_Chunk {
-  Entity e[ENTITIES_PER_CHUNK];
-  u32 gen[ENTITIES_PER_CHUNK];
-  b32 alive[ENTITIES_PER_CHUNK];
-  u32 next_idx[ENTITIES_PER_CHUNK];
+//https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+
+#define ENTITIES_PER_BLOCK 1024
+typedef struct Entity_Block Entity_Block;
+struct Entity_Block {
+  Entity e[ENTITIES_PER_BLOCK];
+  u32 gen[ENTITIES_PER_BLOCK];
+  b32 alive[ENTITIES_PER_BLOCK];
+  u32 next_idx[ENTITIES_PER_BLOCK];
   s64 first_free_idx;
   s64 count;
+
+  b32 allocated;
 };
 
 typedef struct Entity_Node Entity_Node;
@@ -52,8 +56,8 @@ typedef struct World {
   Entity_Hash_Slot *slots; // @NoSerialize
   u64 slot_count; // @NoSerialize
 
-  Entity_Chunk *entities; // @Serialize
-  s32 chunk_count; // @Serialize
+  // TODO: For now only 1 block supported, maybe increase this to multiple, when the time is right...
+  Entity_Block *entities; // @Serialize
 
   s32 next_id; // @Serialize
 
@@ -66,19 +70,19 @@ typedef struct World {
 } World;
 
 void world_init(World *world);
-
 Entity* world_add(World *world);
 Entity* world_remove(World *world, Entity_ID id);
 
-// WTF is this
-void world_kill_entity(Game_State *gs, Entity_ID entity);
+Entity *world_pick_entity(World *world, ray r);
 
 u32 world_count_entities(World *world, Entity_Kind kind);
-
-
 void world_update_render(Game_State *gs, f32 dt);
 
 void world_serialize(Game_State *gs);
 void world_deserialize(Game_State *gs);
+
+
+// Before BVH do a dummy implementation where we interset on a ray and change the color maybe.. or something
+
 
 #endif

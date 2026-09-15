@@ -703,4 +703,84 @@ typedef union iv4
 
 #define iv4m(x, y, z, w)   ((iv4){{x, y, z, w}})
 
+#if 0
+// TBA
+static v3 screen_from_world(v3 coords, v2 win_dim, m4 vp) {
+  return v3m(0,0,0);
+}
+#endif
+
+static v3 world_from_screen(v3 coords, v2 win_dim, m4 inv_vp) {
+  // We first get the NDC coords
+  v4 p = v4m(
+      2.0 * (coords.x/win_dim.x) - 1.0,
+      2.0 * (coords.y/win_dim.y) - 1.0,
+      coords.z,
+      1.0
+  );
+  // We unproject the NDC coords to go NDC -> view -> world
+  p = m4_multv(inv_vp, p);
+
+  // Finally we restore to pre-projected coords
+  return v3m(p.x/p.w, p.y/p.w, p.z/p.w);
+}
+
+
+typedef struct {
+  union {
+    struct {
+      v3 min, max;
+    };
+    v3 bounds[2];
+  };
+} bbox;
+
+
+static bbox bbox_from_center_hdim(v3 center, v3 hdim) {
+  assert(hdim.x > 0);
+  assert(hdim.y > 0);
+  assert(hdim.z > 0);
+
+  bbox box = (bbox){
+    .min = v3_sub(center, hdim),
+    .max = v3_add(center, hdim),
+  };
+
+  return box;
+}
+
+typedef struct {
+  v3 orig;
+  v3 dir;
+  f32 t;
+} ray;
+
+#define SWAP(_type, a,b) do { _type temp = a; a = b; b = temp;}while (false);
+static b32 ray_isect_bbox(ray r, bbox box) {
+  f32 txmin = (box.min.x - r.orig.x) / r.dir.x;
+  f32 tmax = (box.max.x - r.orig.x) / r.dir.x;
+  if (txmin > tmax) SWAP(f32, txmin, tmax);
+
+  f32 tymin = (box.min.y - r.orig.y) / r.dir.y;
+  f32 tymax = (box.max.y - r.orig.y) / r.dir.y;
+  if (tymin > tymax) SWAP(f32, tymin, tymax);
+
+  if ((txmin > tymax) || (tymin > tmax)) return false;
+
+  if (tymin > txmin) txmin = tymin;
+  if (tymax < tmax) tmax = tymax;
+
+  f32 tzmin = (box.min.z - r.orig.z) / r.dir.z;
+  f32 tzmax = (box.max.z - r.orig.z) / r.dir.z;
+  if (tzmin > tzmax) SWAP(f32, tzmin, tzmax);
+
+  if ((txmin > tzmax) || (tzmin > tmax)) return false;
+
+  if (tzmin > txmin) txmin = tzmin;
+  if (tzmax < tmax) tmax = tzmax;
+
+  return true;
+}
+
+
 #endif
