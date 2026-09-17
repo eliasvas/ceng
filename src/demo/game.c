@@ -154,7 +154,7 @@ void game_render(struct Game_State *gs, float dt) {
 
     Entity *e = world_pick_entity(gs->world, r);
     if (e) {
-      e->col = v4m(1,0,0,1);
+      e->col = v4m(brand_frange(0,1),brand_range(0,1),brand_range(0,1),1);
     }
   }
 

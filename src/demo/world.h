@@ -69,15 +69,18 @@ typedef struct World {
   Input *input; // Stolen from Game_State for now!
 } World;
 
+// World interaction
 void world_init(World *world);
 Entity* world_add(World *world);
 Entity* world_remove(World *world, Entity_ID id);
-
-Entity *world_pick_entity(World *world, ray r);
-
-u32 world_count_entities(World *world, Entity_Kind kind);
 void world_update_render(Game_State *gs, f32 dt);
 
+// Entity queries
+Entity *world_pick_entity(World *world, ray r);
+Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
+u32 world_count_entities(World *world, Entity_Kind kind);
+
+// World serialization
 void world_serialize(Game_State *gs);
 void world_deserialize(Game_State *gs);
 

@@ -755,31 +755,28 @@ typedef struct {
   f32 t;
 } ray;
 
-#define SWAP(_type, a,b) do { _type temp = a; a = b; b = temp;}while (false);
-static b32 ray_isect_bbox(ray r, bbox box) {
-  f32 txmin = (box.min.x - r.orig.x) / r.dir.x;
-  f32 tmax = (box.max.x - r.orig.x) / r.dir.x;
-  if (txmin > tmax) SWAP(f32, txmin, tmax);
+// We have collision if (t_near < t_far)
+static v2 ray_isect_bbox_t(ray r, bbox box) {
 
-  f32 tymin = (box.min.y - r.orig.y) / r.dir.y;
-  f32 tymax = (box.max.y - r.orig.y) / r.dir.y;
-  if (tymin > tymax) SWAP(f32, tymin, tymax);
+  v3 t_min = v3_div(v3_sub(box.min, r.orig), r.dir);
+  v3 t_max = v3_div(v3_sub(box.max, r.orig), r.dir);
 
-  if ((txmin > tymax) || (tymin > tmax)) return false;
+  v3 t1 = v3m(
+      minimum(t_min.x, t_max.x),
+      minimum(t_min.y, t_max.y),
+      minimum(t_min.z, t_max.z)
+  );
 
-  if (tymin > txmin) txmin = tymin;
-  if (tymax < tmax) tmax = tymax;
+  v3 t2 = v3m(
+      maximum(t_min.x, t_max.x),
+      maximum(t_min.y, t_max.y),
+      maximum(t_min.z, t_max.z)
+  );
 
-  f32 tzmin = (box.min.z - r.orig.z) / r.dir.z;
-  f32 tzmax = (box.max.z - r.orig.z) / r.dir.z;
-  if (tzmin > tzmax) SWAP(f32, tzmin, tzmax);
+  f32 t_near = maximum(maximum(t1.x, t1.y), t1.z);
+  f32 t_far = minimum(minimum(t2.x, t2.y), t2.z);
 
-  if ((txmin > tzmax) || (tzmin > tmax)) return false;
-
-  if (tzmin > txmin) txmin = tzmin;
-  if (tzmax < tmax) tmax = tzmax;
-
-  return true;
+  return v2m(t_near, t_far);
 }
 
 

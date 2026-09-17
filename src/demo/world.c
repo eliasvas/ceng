@@ -122,8 +122,9 @@ b32 pb_isect(Phys_Box *a, Phys_Box* b) {
   return true;
 }
 
+
 // FIXME: Here especially we need a spatial partition..
-Entity *entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
+Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
   Entity *e = world_find(world, id);
   Phys_Box col_box = e->box;
   col_box.pos = v3_add(candidate_pos, col_box.col_off);
@@ -148,17 +149,20 @@ Entity *entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
 // Simple linear search for now
 Entity *world_pick_entity(World *world, ray r) {
   Entity *entity = nullptr;
-  f32 min_len = F32_MAX;
+  f32 entity_min_ray_t = F32_MAX;
 
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
+
+
     if (world->entities->alive[idx]) {
       v3 entity_center = v3_add(e->box.pos, e->box.col_off);
-      if (ray_isect_bbox(r, bbox_from_center_hdim(entity_center, e->box.col_hdim))) {
-        // FIXME: its not correct to check length, we must do the projection
-        f32 length = v3_len(v3_sub(entity_center, r.orig));
-        if (length < min_len) {
-          min_len = length;
+      v2 intersection = ray_isect_bbox_t(r, bbox_from_center_hdim(entity_center, e->box.col_hdim));
+      b32 intersected = (intersection.x < intersection.y);
+      if (intersected) {
+        f32 min_t = intersection.x;
+        if (min_t < entity_min_ray_t) {
+          entity_min_ray_t = min_t;
           entity = e;
         }
       }

@@ -2,7 +2,7 @@
 #include "game.h"
 
 // Forward declaration from World..
-Entity *entity_collides(World *world, Entity_ID id, v3 candidate_pos);
+Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
 
 void entity_common_draw(World *world, Entity *e) {
   transform xform = {
@@ -78,7 +78,7 @@ void update_hero(World *world, Entity *e, f32 dt) {
   for (s32 axis = 0; axis < 3; axis += 1) {
     v3 candidate_pos_axis = e->box.pos;
     candidate_pos_axis.raw[axis] += e->box.vel.raw[axis] * dt;
-    Entity *collides_with = entity_collides(world, e->id, candidate_pos_axis);
+    Entity *collides_with = world_entity_collides(world, e->id, candidate_pos_axis);
     if (!collides_with) e->box.pos = candidate_pos_axis;
     else if (collides_with->kind == ENTITY_KIND_COIN) {
       // KILL the coin
