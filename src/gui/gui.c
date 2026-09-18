@@ -535,7 +535,7 @@ Gui_Axis gui_axis_flip(Gui_Axis axis) {
 }
 
 Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) {
-  gui_push_bg_color(col(0.2,0.2,0.2,1.0));
+  gui_push_bg_color(clr(0.2,0.2,0.2,1.0));
   // Scroll list should fit in parent space right?
   gui_set_next_pref_size(axis, (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 1.0});
   gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 1.0});

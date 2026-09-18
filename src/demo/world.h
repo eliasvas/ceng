@@ -47,6 +47,17 @@ typedef struct {
   color collider_col;
 } Entity_Render_Command;
 
+typedef struct BVH_Node BVH_Node;
+struct BVH_Node {
+  bbox box;
+
+  b32 is_leaf;
+  Entity_ID id;
+
+  BVH_Node *first; // Should have only two children (if !is_leaf)
+  BVH_Node *next; // Should have at most one sibling
+};
+
 // TODO: Make this a hash structure
 typedef struct World {
   Arena *entity_arena; // @NoSerialize
@@ -66,6 +77,9 @@ typedef struct World {
   Entity_Render_Command *rcommands; // FIXME: make this a chunked array
   s32 rcommand_count;
 
+  // @NoSerialize: These are STRICTLY per-frame data!!
+  BVH_Node *bvh_root;
+
   Input *input; // Stolen from Game_State for now!
 } World;
 
@@ -84,8 +98,15 @@ u32 world_count_entities(World *world, Entity_Kind kind);
 void world_serialize(Game_State *gs);
 void world_deserialize(Game_State *gs);
 
+typedef enum {
+  BVH_AXIS_X,
+  BVH_AXIS_Y,
+  BVH_AXIS_Z,
+} BVH_Axis;
 
-// Before BVH do a dummy implementation where we interset on a ray and change the color maybe.. or something
+// World BVH stuff
+void world_build_bvh(World *world);
+
 
 
 #endif

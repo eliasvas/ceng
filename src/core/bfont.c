@@ -95,7 +95,7 @@ void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect cli
     R_Quad quad = (R_Quad) {
         .clip_rect = clip_rect,
         .dst_rect = tr,
-        .c = col(0.9,0.4,0.4,1.0),
+        .c = clr(0.9,0.4,0.4,1.0),
     };
     r2d_push_quad(r2d_pass_front(), quad);
   }

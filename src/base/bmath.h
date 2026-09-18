@@ -735,6 +735,23 @@ typedef struct {
   };
 } bbox;
 
+static v3 bbox_get_center(bbox box) {
+  v3 max = v3m(
+      minimum(box.min.x, box.max.x),
+      minimum(box.min.y, box.max.y),
+      minimum(box.min.z, box.max.z)
+  );
+
+  v3 min = v3m(
+      maximum(box.min.x, box.max.x),
+      maximum(box.min.y, box.max.y),
+      maximum(box.min.z, box.max.z)
+  );
+
+  v3 center = v3_add(v3_divf(v3_sub(max, min), 2), min);
+
+  return center;
+}
 
 static bbox bbox_from_center_hdim(v3 center, v3 hdim) {
   assert(hdim.x > 0);

@@ -184,7 +184,7 @@ void game_render(struct Game_State *gs, float dt) {
     .item_count = 7,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
-    .scroll_button_color = col(0.5,1,0.4,1),
+    .scroll_button_color = clr(0.5,1,0.4,1),
     .scroll_speed = 1,
     .scroll_percent = 0,
   };

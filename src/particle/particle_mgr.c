@@ -35,7 +35,7 @@ Particle_Emitter *particle_mgr_new_emitter(Particle_Mgr *pmgr) {
   // Default values for pos,vel, col, hdim (you can override them)
   emitter->pos = v3m(0,0,0);
   emitter->vel = v3m(0,10,0);
-  emitter->col = col(1,0.6,0.3,1);
+  emitter->col = CLR_YELLOW;
   emitter->hdim = v3m(0.2,0.2,0.2);
   emitter->particle_life_min = 0.4;
   emitter->particle_life_max = 3.4;
@@ -63,7 +63,7 @@ void particle_mgr_update(Particle_Mgr *pmgr, f32 dt) {
       // Naive heterogeneity
       p->pos = emitter->pos;
       p->vel = v3_multf(v3_add(emitter->vel, v3m(2*(brand_f01()-0.5), 0, 2*(brand_f01()-0.5))), 0.5*brand_f01()+0.5);
-      p->col = v4_multf(emitter->col, 0.5*brand_f01()+0.5);
+      p->col = v4_multf(emitter->col, 0.3*brand_f01()+0.7);
       p->hdim = v3_multf(emitter->hdim, 0.8*brand_f01()+0.5);
       p->lifespan = brand_frange(emitter->particle_life_min, emitter->particle_life_max);
     }

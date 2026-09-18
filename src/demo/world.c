@@ -178,6 +178,7 @@ void world_update_render(Game_State *gs, f32 dt) {
   world->input = &gs->input;
   world->rcommand_count = 0;
 
+  world_build_bvh(world);
   particle_mgr_update(world->pmgr, dt);
 
   // For serialization testing, not really needed tbh..
@@ -232,5 +233,27 @@ void world_deserialize(Game_State *gs) {
 
   printf("DESERIALIZE!!\n");
 }
+
+
+//static v3 bbox_get_center(bbox box) {
+
+// Currently we just leak! we need a frame_arena in here ok?! or some reuse strategy
+void world_build_bvh(World *world) {
+  world->bvh_root = arena_push_array(world->entity_arena, BVH_Node, 1);
+
+
+#if 0
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
+    if (world->entities->alive[idx]) {
+      // Should we take into account the aabb / only the aabb 
+      v3 entity_center = v3_add(e->box.pos, e->box.col_off);
+    }
+  }
+#endif
+
+
+}
+
 
 

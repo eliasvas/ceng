@@ -18,7 +18,7 @@ Gui_Signal gui_slider01(str8 label, f32 *value, f32 button_px, Gui_Axis axis) {
   gui_set_next_box_softness(2.0);
   gui_set_next_pref_size((axis), (Gui_Size){.kind = GUI_SIZEKIND_PIXELS, scroll_button_dim, 1.0});
   gui_set_next_pref_size(gui_axis_flip(axis), (Gui_Size){.kind = GUI_SIZEKIND_PERCENT_OF_PARENT, 1.0, 0.0});
-  gui_set_next_bg_color(v4_multf(col(0.3,0.3,0.9,1.0), 0.9));
+  gui_set_next_bg_color(v4_multf(clr(0.3,0.3,0.9,1.0), 0.9));
   //gui_set_next_bg_color(sdata->scroll_button_color);
   str8 scroll_button_text = str8_sprintf(ctx.temp_arena, "%.*s_sbutton", (int)label.count, label.data);
   Gui_Box *scroll_button = gui_box_make(scroll_button_text, GUI_BOX_FLAG_DRAW_BOX|GUI_BOX_FLAG_CLICKABLE);

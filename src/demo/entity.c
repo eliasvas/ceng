@@ -22,7 +22,7 @@ void entity_common_draw(World *world, Entity *e) {
     .col = e->col,
 
     .collider_xform = collider_xform, 
-    .collider_col = (e->dynamic) ? col(1,1,1,1) : col(0,0,0,1),
+    .collider_col = (e->dynamic) ? clr(1,1,1,1) : clr(0,0,0,1),
   };
 
   world->rcommands[world->rcommand_count++] = cmd;
@@ -154,12 +154,12 @@ void update_coin(World *world, Entity *e, f32 dt) {
 void kill_coin(struct World *world, Entity *e) {
   printf("COIN killed!\n");
 
-  color obj_color = e->col;
+  //color obj_color = e->col;
   v3 obj_pos = e->box.pos;
   // Spawn a short emitter
   Particle_Emitter *death_coin_particles = particle_mgr_new_emitter(world->pmgr);
   death_coin_particles->lifespan = 0.1;
-  death_coin_particles->col = obj_color;
+  //death_coin_particles->col = obj_color;
   death_coin_particles->pos = obj_pos;
   death_coin_particles->sec_per_particle = 0.003;
   death_coin_particles->particle_life_min = 0.1;

@@ -19,11 +19,11 @@ typedef struct {
   v4 color;
 } FRZ_Vertex;
 
-#define FRZ_WHITE color_from_rgba8(255,255,255,255)
-#define FRZ_RED color_from_rgba8(255, 0, 0, 255)
-#define FRZ_GREEN color_from_rgba8(0, 255, 0, 255)
-#define FRZ_BLUE color_from_rgba8(0, 0, 255, 255)
-#define FRZ_BLACK color_from_rgba8(0, 0, 0, 255)
+#define FRZ_WHITE clr_256(255,255,255,255)
+#define FRZ_RED clr_256(255, 0, 0, 255)
+#define FRZ_GREEN clr_256(0, 255, 0, 255)
+#define FRZ_BLUE clr_256(0, 0, 255, 255)
+#define FRZ_BLACK clr_256(0, 0, 0, 255)
 
 #ifndef FRZ_IMPLEMENTATION
 void frz_begin_frame(u32 *backbuffer, v2 dim, Arena *talloc);
