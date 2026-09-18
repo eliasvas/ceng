@@ -58,6 +58,21 @@ struct BVH_Node {
   BVH_Node *next; // Should have at most one sibling
 };
 
+
+typedef enum {
+  BVH_RENDER_EVERYTHING,
+  BVH_RENDER_LEVEL_BY_LEVEL,
+} BVH_Render_Kind;
+
+typedef struct {
+#define BVH_RENDER_COLOR_COUNT 16
+  color colors[BVH_RENDER_COLOR_COUNT];
+
+  f32 seconds_per_level;
+
+  BVH_Render_Kind kind;
+} BVH_Render_Config;
+
 // TODO: Make this a hash structure
 typedef struct World {
   Arena *entity_arena; // @NoSerialize
@@ -102,11 +117,10 @@ typedef enum {
   BVH_AXIS_X,
   BVH_AXIS_Y,
   BVH_AXIS_Z,
-} BVH_Axis;
+} BVH_Split_Axis;
 
 // World BVH stuff
 void world_build_bvh(World *world);
-
-
+void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, s32 clr_idx);
 
 #endif

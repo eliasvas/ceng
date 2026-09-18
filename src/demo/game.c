@@ -172,6 +172,10 @@ void game_render(struct Game_State *gs, float dt) {
     m4 cmvp = m4_mult(vp, world_collider);
     r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&cmvp, cmd->collider_col);
   }
+  BVH_Node *root = gs->world->bvh_root;
+  assert(root);
+  world_render_bvh(gs->world, gs->world->bvh_root, vp, gs->game_viewport, 0);
+
 
   // Gui Test
 #if 1

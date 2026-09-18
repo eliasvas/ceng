@@ -18,7 +18,6 @@
 ////////////////////////////////////////////////////////////
 
 // TODO: Should we add integer vector types here? We would also need direction e.g WESN
-// TODO: Quaternions :|
 // TODO: SIMD
 
 #ifndef BMATH_BAKED_MATH_FUNCTIONS
@@ -70,6 +69,7 @@ INLINE f32 v2_len(v2 a)                { return sqrt_f32(v2_dot(a,a)); }
 INLINE v2  v2_norm(v2 a)               { f32 vl=v2_len(a);return v2_divf(a,vl); }
 INLINE b32 v2_eq(v2 a, v2 b)           { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001)); }
 INLINE v2  v2_rot(v2 a, f32 arad)      { return v2m(a.x*cos(arad)-a.y*sin(arad), a.x*sin(arad)+a.y*cos(arad)); }
+#define V2_VARG(v) (v).x, (v).y
 
 typedef union v3
 {
@@ -96,6 +96,7 @@ INLINE v3  v3_cross(v3 a,v3 b)        { v3 res; res.x=(a.y*b.z)-(a.z*b.y); res.y
 INLINE v3  v3_rot_x(v3 a, f32 arad)   { return v3m(a.x,a.y*cos_f32(arad)-a.z*sin_f32(arad),a.y*sin_f32(arad)+a.z*cos_f32(arad)); }
 INLINE v3  v3_rot_y(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)+a.z*sin_f32(arad),a.y,-a.x*sin_f32(arad)+a.z*cos_f32(arad)); }
 INLINE v3  v3_rot_z(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)-a.y*sin_f32(arad),a.x*sin_f32(arad)+a.y*cos_f32(arad),a.z); }
+#define V3_VARG(v) (v).x, (v).y, (v).z
 
 typedef union v4
 {
@@ -120,6 +121,7 @@ INLINE f32 v4_dot(v4 a, v4 b)         { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z)+(a.
 INLINE f32 v4_len(v4 a)               { return sqrt_f32(v4_dot(a,a)); }
 INLINE v4  v4_norm(v4 a)              { f32 vl=v4_len(a);assert(!equalf(vl,0.0,0.01));return v4_divf(a,vl); }
 INLINE b32 v4_eq(v4 a, v4 b)          { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001) && equalf(a.w,b.w,0.001)); }
+#define V4_VARG(v) (v).x, (v).y, (v).z, (v).w
 
 
 // Vector convertion functions
@@ -735,21 +737,53 @@ typedef struct {
   };
 } bbox;
 
-static v3 bbox_get_center(bbox box) {
+static bbox bbox_normalize(bbox box) {
   v3 max = v3m(
-      minimum(box.min.x, box.max.x),
-      minimum(box.min.y, box.max.y),
-      minimum(box.min.z, box.max.z)
-  );
-
-  v3 min = v3m(
       maximum(box.min.x, box.max.x),
       maximum(box.min.y, box.max.y),
       maximum(box.min.z, box.max.z)
   );
 
-  v3 center = v3_add(v3_divf(v3_sub(max, min), 2), min);
+  v3 min = v3m(
+      minimum(box.min.x, box.max.x),
+      minimum(box.min.y, box.max.y),
+      minimum(box.min.z, box.max.z)
+  );
 
+  return (bbox){.min = min, .max = max};
+} 
+
+static bbox bbox_union(bbox a, bbox b) {
+  a = bbox_normalize(a);
+  b = bbox_normalize(b);
+
+  v3 max = v3m(
+      maximum(a.max.x, b.max.x),
+      maximum(a.max.y, b.max.y),
+      maximum(a.max.z, b.max.z)
+  );
+
+  v3 min = v3m(
+      minimum(a.min.x, b.min.x),
+      minimum(a.min.y, b.min.y),
+      minimum(a.min.z, b.min.z)
+  );
+
+  return (bbox){
+    .min = min, 
+    .max = max
+  };
+}
+
+static v3 bbox_get_hdim(bbox box) {
+  box = bbox_normalize(box);
+  v3 hdim = v3_multf(v3_sub(box.max, box.min), 0.5);
+  return hdim;
+}
+
+static v3 bbox_get_center(bbox box) {
+  box = bbox_normalize(box);
+  v3 center = v3_add(v3_divf(v3_sub(box.max, box.min), 2), box.min);
   return center;
 }
 

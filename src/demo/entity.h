@@ -83,4 +83,6 @@ void update_bullet(struct World *world, Entity *e, f32 dt);
 void draw_bullet(struct World *world, Entity *e);
 void kill_bullet(struct World *world, Entity *e);
 
+bbox entity_get_collider_bbox(Entity *entity);
+
 #endif

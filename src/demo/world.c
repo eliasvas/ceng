@@ -234,26 +234,167 @@ void world_deserialize(Game_State *gs) {
   printf("DESERIALIZE!!\n");
 }
 
+void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis);
 
-//static v3 bbox_get_center(bbox box) {
 
-// Currently we just leak! we need a frame_arena in here ok?! or some reuse strategy
+// FIXME: Currently we just leak! we need a frame_arena in here ok?! or some reuse strategy
+// TODO: For going FAST with bvh we need integer coordinates AND radix sort
 void world_build_bvh(World *world) {
+  // 0. Allocate root node
   world->bvh_root = arena_push_array(world->entity_arena, BVH_Node, 1);
+  //world->bvh_root->box = bbox_from_center_hdim(v3m(0,0,0), v3m(5,5,5));
+  //world->bvh_root->is_leaf = false;
 
-
-#if 0
+  // 1. Allocate and populat the (to be) sorted entity array
+  s32 ecount = world->entities->count;
+  Entity *entities = arena_push_array(world->entity_arena, Entity, ecount);
+  s32 alloc_idx = 0;
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
     if (world->entities->alive[idx]) {
-      // Should we take into account the aabb / only the aabb 
-      v3 entity_center = v3_add(e->box.pos, e->box.col_off);
+      entities[alloc_idx++] = *(e);
     }
   }
-#endif
 
+  // 2. Calculate the actual BVH structure .. (!!)
+
+  world_bvh_calc(world, world->bvh_root, entities, ecount, BVH_AXIS_X);
+
+  // 3. JUNK
+#if 0
+  BVH_Node *c0 = arena_push_array(world->entity_arena, BVH_Node, 1);
+  assert(c0);
+  c0->box = bbox_from_center_hdim(v3m(2.5,0,0), v3m(2.5,5,5));
+  c0->is_leaf = true;
+
+
+  BVH_Node *c1 = arena_push_array(world->entity_arena, BVH_Node, 1);
+  assert(c1);
+  c1->box = bbox_from_center_hdim(v3m(-2.5,0,0), v3m(2.5,5,5));
+  c1->is_leaf = true;
+
+  sll_stack_push(root->next, c0);
+  sll_stack_push(root->next, c1);
+#endif
 
 }
 
+int entity_compare_x(void *a, void *b) {
+    Entity *e_a = (Entity *)a;
+    Entity *e_b = (Entity *)b;
+
+    v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
+    v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
+    if (a_center.x < b_center.x) {
+      return -1;
+    } else {
+      return +1;
+    }
+}
+int entity_compare_y(void *a, void *b) {
+    Entity *e_a = (Entity *)a;
+    Entity *e_b = (Entity *)b;
+
+    v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
+    v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
+    if (a_center.x < b_center.x) {
+      return -1;
+    } else {
+      return +1;
+    }
+}
+int entity_compare_z(void *a, void *b) {
+    Entity *e_a = (Entity *)a;
+    Entity *e_b = (Entity *)b;
+
+    v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
+    v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
+    if (a_center.x < b_center.x) {
+      return -1;
+    } else {
+      return +1;
+    }
+}
+
+
+//static v3 bbox_get_center(bbox box) {
+void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis) {
+  b32 is_leaf = (count == 1);
+
+  // 0. Calculate the bbox for the entity slice
+  bbox super_box = entity_get_collider_bbox(&entities[0]);
+  for (s32 entity_idx = 0; entity_idx < count; entity_idx +=1) {
+    Entity *e = &entities[entity_idx];
+    super_box = bbox_union(super_box, entity_get_collider_bbox(e));
+  }
+
+  // 1. Sort entity slice based on axis
+  void *comp = nullptr;
+  switch (axis) {
+    case BVH_AXIS_X: 
+      comp = entity_compare_x;
+      break;
+    case BVH_AXIS_Y: 
+      comp = entity_compare_y;
+      break;
+    case BVH_AXIS_Z: 
+      comp = entity_compare_z;
+      break;
+    default:
+      break;
+  }
+  qsort(entities, count, sizeof(entities[0]), comp);
+
+  // 2. Set other entity properties
+  node->is_leaf = is_leaf;
+  node->box = super_box;
+
+  // 3. If its not leaf add left/right children + recurse
+  if (!is_leaf) {
+    BVH_Node *left = arena_push_array(world->entity_arena, BVH_Node, 1);
+    BVH_Node *right = arena_push_array(world->entity_arena, BVH_Node, 1);
+
+    BVH_Split_Axis new_split_axis = (axis+1) % 3;
+
+    // because its a stack, so left is first
+    sll_stack_push(node->first, right);
+    sll_stack_push(node->first, left);
+
+    world_bvh_calc(world, left, entities, count/2, new_split_axis);
+    world_bvh_calc(world, right, (entities+count/2), count - (count/2), new_split_axis);
+  } else {
+    node->id = entities[0].id;
+  }
+}
+
+void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, s32 clr_idx) {
+  color colors[] = {
+    [0] = v4_multf(CLR_GREEN_EVA, 0.5),
+    [1] = v4_multf(CLR_RED_PINK, 0.5),
+    [2] = v4_multf(CLR_PURPLE_C64, 0.5),
+    [3] = v4_multf(CLR_BLUE_HIPPIE, 0.5),
+    [4] = v4_multf(CLR_GREEN_CLASSIC, 0.5),
+    [5] = v4_multf(CLR_BLUE_DAMSELFLY, 0.5),
+    [6] = v4_multf(CLR_RED_RICH, 0.5),
+    [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
+  };
+
+  while(node) {
+    v3 hdim = bbox_get_hdim(node->box);
+    hdim = v3_multf(hdim, 2.0); // this is because the default cube is [-0.5, 0.5]
+    v3 trans = bbox_get_center(node->box);
+    m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
+    m4 mvp = m4_mult(vp, worldmat);
+
+    //if (node->is_leaf) r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, colors[clr_idx++ % array_count(colors)]);
+    r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, colors[clr_idx++ % array_count(colors)]);
+
+    for (BVH_Node *child = node->first; child != nullptr; child=child->next) {
+      world_render_bvh(world, child, vp, viewport, clr_idx);
+    }
+
+    node=node->next;
+  }
+}
 
 

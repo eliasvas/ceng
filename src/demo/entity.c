@@ -4,6 +4,11 @@
 // Forward declaration from World..
 Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
 
+bbox entity_get_collider_bbox(Entity *entity) {
+  v3 collider_center = v3_add(entity->box.pos, entity->box.col_off);
+  return bbox_from_center_hdim(collider_center, entity->box.col_hdim);
+}
+
 void entity_common_draw(World *world, Entity *e) {
   transform xform = {
     .t = e->box.pos,

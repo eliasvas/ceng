@@ -105,12 +105,6 @@ typedef struct {
   s32 mesh_idx;
   s32 skin_idx;
 
-  /*
-  m4 m;
-  v3 t;
-  quat r;
-  v3 s;
-  */
   transform xform;
 
   s32 *children;
