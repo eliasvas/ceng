@@ -56,6 +56,7 @@ struct BVH_Node {
 
   BVH_Node *first; // Should have only two children (if !is_leaf)
   BVH_Node *next; // Should have at most one sibling
+  BVH_Node *parent;
 };
 
 
@@ -69,6 +70,9 @@ typedef struct {
   color colors[BVH_RENDER_COLOR_COUNT];
 
   f32 seconds_per_level;
+  f32 running_time_sec;
+
+  s32 clr_idx;
 
   BVH_Render_Kind kind;
 } BVH_Render_Config;
@@ -121,6 +125,6 @@ typedef enum {
 
 // World BVH stuff
 void world_build_bvh(World *world);
-void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, s32 clr_idx);
+void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Render_Config rc);
 
 #endif

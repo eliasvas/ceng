@@ -162,6 +162,7 @@ void game_render(struct Game_State *gs, float dt) {
   // Rest of the frame
   world_update_render(gs, dt);
   // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
+#if 1 
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -172,9 +173,31 @@ void game_render(struct Game_State *gs, float dt) {
     m4 cmvp = m4_mult(vp, world_collider);
     r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&cmvp, cmd->collider_col);
   }
+#endif
+
+  // BVH vis
+  BVH_Render_Config bvh_rc = {
+    .colors = {
+      [0] = v4_multf(CLR_GREEN_EVA, 0.5),
+      [1] = v4_multf(CLR_RED_PINK, 0.5),
+      [2] = v4_multf(CLR_PURPLE_C64, 0.5),
+      [3] = v4_multf(CLR_BLUE_HIPPIE, 0.5),
+      [4] = v4_multf(CLR_GREEN_CLASSIC, 0.5),
+      [5] = v4_multf(CLR_BLUE_DAMSELFLY, 0.5),
+      [6] = v4_multf(CLR_RED_RICH, 0.5),
+      [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
+    },
+    .running_time_sec = gs->time_sec,
+#if 0
+    .kind = BVH_RENDER_EVERYTHING,
+#else
+    .seconds_per_level = 0.5,
+    .kind = BVH_RENDER_LEVEL_BY_LEVEL,
+#endif
+  };
   BVH_Node *root = gs->world->bvh_root;
   assert(root);
-  world_render_bvh(gs->world, gs->world->bvh_root, vp, gs->game_viewport, 0);
+  world_render_bvh(gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
 
 
   // Gui Test

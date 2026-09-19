@@ -234,6 +234,38 @@ void world_deserialize(Game_State *gs) {
   printf("DESERIALIZE!!\n");
 }
 
+
+s32 bvh_count_levels(BVH_Node *node, s32 level_idx) {
+  s32 max_level = level_idx;
+
+  for (BVH_Node *sib = node->next; sib != nullptr; sib=sib->next) {
+    s32 sib_level = bvh_count_levels(sib, level_idx);
+    if (sib_level > max_level) {
+      max_level = sib_level;
+    }
+  }
+
+  for (BVH_Node *child = node->first; child!= nullptr; child=child->next) {
+    s32 child_level = bvh_count_levels(child, level_idx+1);
+    if (child_level > max_level) {
+      max_level = child_level;
+    }
+  }
+
+  return max_level;
+}
+
+s32 bvh_get_node_depth(BVH_Node *node) {
+  s32 depth = 0;
+
+  while (node) {
+    depth+=1;
+    node = node->parent;
+  }
+
+  return depth-1;
+}
+
 void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis);
 
 
@@ -278,6 +310,7 @@ void world_build_bvh(World *world) {
 #endif
 
 }
+
 
 int entity_compare_x(void *a, void *b) {
     Entity *e_a = (Entity *)a;
@@ -352,7 +385,9 @@ void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, B
   // 3. If its not leaf add left/right children + recurse
   if (!is_leaf) {
     BVH_Node *left = arena_push_array(world->entity_arena, BVH_Node, 1);
+    left->parent = node;
     BVH_Node *right = arena_push_array(world->entity_arena, BVH_Node, 1);
+    right->parent = node;
 
     BVH_Split_Axis new_split_axis = (axis+1) % 3;
 
@@ -367,33 +402,36 @@ void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, B
   }
 }
 
-void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, s32 clr_idx) {
-  color colors[] = {
-    [0] = v4_multf(CLR_GREEN_EVA, 0.5),
-    [1] = v4_multf(CLR_RED_PINK, 0.5),
-    [2] = v4_multf(CLR_PURPLE_C64, 0.5),
-    [3] = v4_multf(CLR_BLUE_HIPPIE, 0.5),
-    [4] = v4_multf(CLR_GREEN_CLASSIC, 0.5),
-    [5] = v4_multf(CLR_BLUE_DAMSELFLY, 0.5),
-    [6] = v4_multf(CLR_RED_RICH, 0.5),
-    [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
-  };
+void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Render_Config rc) {
+  rc.clr_idx += 1;
 
-  while(node) {
+  if (node) {
     v3 hdim = bbox_get_hdim(node->box);
     hdim = v3_multf(hdim, 2.0); // this is because the default cube is [-0.5, 0.5]
     v3 trans = bbox_get_center(node->box);
     m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
     m4 mvp = m4_mult(vp, worldmat);
 
-    //if (node->is_leaf) r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, colors[clr_idx++ % array_count(colors)]);
-    r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, colors[clr_idx++ % array_count(colors)]);
-
     for (BVH_Node *child = node->first; child != nullptr; child=child->next) {
-      world_render_bvh(world, child, vp, viewport, clr_idx);
+      world_render_bvh(world, child, vp, viewport, rc);
     }
 
-    node=node->next;
+
+    if (rc.kind == BVH_RENDER_EVERYTHING) {
+      r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % array_count(rc.colors)]);
+    } else if (rc.kind == BVH_RENDER_LEVEL_BY_LEVEL) {
+      // FIXME: level_count is calculated for every node, VERY wasteful!!!
+      s32 level_count = bvh_count_levels(world->bvh_root, 0);
+
+      s32 depth = bvh_get_node_depth(node);
+      s32 wanted_depth = (s32)(rc.running_time_sec / rc.seconds_per_level) % (level_count); 
+      if (depth == wanted_depth) {
+        r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % array_count(rc.colors)]);
+      }
+    }
+
+
+    //world_render_bvh(world, node->next, vp, viewport, rc);
   }
 }
 
