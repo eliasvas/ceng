@@ -753,6 +753,11 @@ static bbox bbox_normalize(bbox box) {
   return (bbox){.min = min, .max = max};
 } 
 
+static f32 bbox_area(bbox box)  {
+  v3 a = v3_sub(box.max, box.min);
+  return (a.x * a.y * a.z);
+}
+
 static bbox bbox_union(bbox a, bbox b) {
   a = bbox_normalize(a);
   b = bbox_normalize(b);

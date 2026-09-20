@@ -27,7 +27,6 @@ set errorformat=%f:%l:%c:\ %trror:\ %m,%f:%l:%c:\ %tarning:\ %m,%f:%l:%c:\ %m,%-
 nnoremap <silent> <C-k> :cnext<CR>zz
 nnoremap <silent> <C-j> :cprev<CR>zz
 ```
-
 ## Module Architecture
 ```mermaid
 flowchart LR

@@ -146,30 +146,20 @@ Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
   return nullptr;
 }
 
-// Simple linear search for now
+BVH_Node *bvh_pick(BVH_Node *node, ray r);
+
 Entity *world_pick_entity(World *world, ray r) {
-  Entity *entity = nullptr;
-  f32 entity_min_ray_t = F32_MAX;
 
-  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
-    Entity *e = &world->entities->e[idx];
-
-
-    if (world->entities->alive[idx]) {
-      v3 entity_center = v3_add(e->box.pos, e->box.col_off);
-      v2 intersection = ray_isect_bbox_t(r, bbox_from_center_hdim(entity_center, e->box.col_hdim));
-      b32 intersected = (intersection.x < intersection.y);
-      if (intersected) {
-        f32 min_t = intersection.x;
-        if (min_t < entity_min_ray_t) {
-          entity_min_ray_t = min_t;
-          entity = e;
-        }
-      }
-    }
+  BVH_Node *bvh_node = bvh_pick(world->bvh_root, r);
+  if (bvh_node && bvh_node->is_leaf) {
+    Entity_ID id = bvh_node->id;
+    // TODO: perform a generation compare here too!
+    // TODO: We can do an actual collision check here if collider not AABB (!!)
+    Entity *e = &world->entities->e[id.index];
+    return e;
+  } else {
+    return nullptr;
   }
-
-  return entity;
 }
 
 
@@ -266,9 +256,31 @@ s32 bvh_get_node_depth(BVH_Node *node) {
   return depth-1;
 }
 
+f32 ray_isect_bvh_node(BVH_Node *node, ray r) {
+  f32 t_min = F32_MAX;
+  v2 interseciont = ray_isect_bbox_t(r, node->box);
+  if (interseciont.x < interseciont.y) {
+    t_min = interseciont.x;
+  }
+
+  return t_min;
+}
+
+BVH_Node *bvh_pick(BVH_Node *node, ray r) {
+  if (node->is_leaf) return node;
+
+  f32 t_node = ray_isect_bvh_node(node, r);
+  if (t_node != F32_MAX) {
+    BVH_Node *left = bvh_pick(node->first, r);
+    f32 t_left = (left) ? ray_isect_bvh_node(left, r) : F32_MAX;
+    BVH_Node *right = bvh_pick(node->first->next, r);
+    f32 t_right = (right) ? ray_isect_bvh_node(right, r) : F32_MAX;
+    return (t_left < t_right) ? left : right;
+  }
+  return nullptr;
+}
+
 void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis);
-
-
 // FIXME: Currently we just leak! we need a frame_arena in here ok?! or some reuse strategy
 // TODO: For going FAST with bvh we need integer coordinates AND radix sort
 void world_build_bvh(World *world) {
@@ -352,8 +364,6 @@ int entity_compare_z(void *a, void *b) {
 
 //static v3 bbox_get_center(bbox box) {
 void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis) {
-  b32 is_leaf = (count == 1);
-
   // 0. Calculate the bbox for the entity slice
   bbox super_box = entity_get_collider_bbox(&entities[0]);
   for (s32 entity_idx = 0; entity_idx < count; entity_idx +=1) {
@@ -361,7 +371,12 @@ void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, B
     super_box = bbox_union(super_box, entity_get_collider_bbox(e));
   }
 
-  // 1. Sort entity slice based on axis
+  // 1. Set other entity properties
+  node->is_leaf = (count == 1);
+  node->box = super_box;
+  node->split_axis = axis;
+
+  // 2. Sort entity slice based on axis
   void *comp = nullptr;
   switch (axis) {
     case BVH_AXIS_X: 
@@ -378,12 +393,8 @@ void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, B
   }
   qsort(entities, count, sizeof(entities[0]), comp);
 
-  // 2. Set other entity properties
-  node->is_leaf = is_leaf;
-  node->box = super_box;
-
   // 3. If its not leaf add left/right children + recurse
-  if (!is_leaf) {
+  if (!node->is_leaf) {
     BVH_Node *left = arena_push_array(world->entity_arena, BVH_Node, 1);
     left->parent = node;
     BVH_Node *right = arena_push_array(world->entity_arena, BVH_Node, 1);
@@ -416,7 +427,6 @@ void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Re
       world_render_bvh(world, child, vp, viewport, rc);
     }
 
-
     if (rc.kind == BVH_RENDER_EVERYTHING) {
       r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % array_count(rc.colors)]);
     } else if (rc.kind == BVH_RENDER_LEVEL_BY_LEVEL) {
@@ -424,15 +434,12 @@ void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Re
       s32 level_count = bvh_count_levels(world->bvh_root, 0);
 
       s32 depth = bvh_get_node_depth(node);
-      s32 wanted_depth = (s32)(rc.running_time_sec / rc.seconds_per_level) % (level_count); 
-      if (depth == wanted_depth) {
+      s32 wanted_depth = (s32)(rc.running_time_sec / rc.seconds_per_level) % (level_count+1); 
+      if (depth == wanted_depth || (node->is_leaf && depth < wanted_depth)) {
         r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % array_count(rc.colors)]);
       }
     }
-
-
     //world_render_bvh(world, node->next, vp, viewport, rc);
   }
 }
-
 

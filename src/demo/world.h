@@ -9,7 +9,10 @@
 typedef struct Particle_Mgr Particle_Mgr;
 #include "particle/particle_inc.h"
 
-//https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+
+/////////////////////////////////////////
+// Entity basics
+/////////////////////////////////////////
 
 #define ENTITIES_PER_BLOCK 1024
 typedef struct Entity_Block Entity_Block;
@@ -38,6 +41,10 @@ struct Entity_Hash_Slot {
   Entity_Node *hash_last;
 };
 
+/////////////////////////////////////////
+// Entity Rendering
+/////////////////////////////////////////
+
 typedef struct {
   transform xform;
   Asset_Id asset_id;
@@ -47,9 +54,20 @@ typedef struct {
   color collider_col;
 } Entity_Render_Command;
 
+/////////////////////////////////////////
+// BVH stuff
+/////////////////////////////////////////
+
+typedef enum {
+  BVH_AXIS_X,
+  BVH_AXIS_Y,
+  BVH_AXIS_Z,
+} BVH_Split_Axis;
+
 typedef struct BVH_Node BVH_Node;
 struct BVH_Node {
   bbox box;
+  BVH_Split_Axis split_axis;
 
   b32 is_leaf;
   Entity_ID id;
@@ -58,7 +76,6 @@ struct BVH_Node {
   BVH_Node *next; // Should have at most one sibling
   BVH_Node *parent;
 };
-
 
 typedef enum {
   BVH_RENDER_EVERYTHING,
@@ -77,7 +94,10 @@ typedef struct {
   BVH_Render_Kind kind;
 } BVH_Render_Config;
 
-// TODO: Make this a hash structure
+/////////////////////////////////////////
+// World
+/////////////////////////////////////////
+
 typedef struct World {
   Arena *entity_arena; // @NoSerialize
 
@@ -116,12 +136,6 @@ u32 world_count_entities(World *world, Entity_Kind kind);
 // World serialization
 void world_serialize(Game_State *gs);
 void world_deserialize(Game_State *gs);
-
-typedef enum {
-  BVH_AXIS_X,
-  BVH_AXIS_Y,
-  BVH_AXIS_Z,
-} BVH_Split_Axis;
 
 // World BVH stuff
 void world_build_bvh(World *world);
