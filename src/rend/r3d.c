@@ -301,7 +301,7 @@ void r3d_try_load_shaders() {
       },
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_ENABLED,
-        .dfunc  = OGL_DFUNC_LESS,
+        .dfunc  = OGL_DFUNC_LEQUAL,
       },
     };
   }

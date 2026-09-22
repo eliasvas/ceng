@@ -4,8 +4,6 @@
 #include "world.h"
 #include "world_serializer.h"
 
-// TODO: world_place(..) ?? for the acceleration structure?
-
 static u64 entity_hash_id(World *world, Entity_ID id) {
   return (entity_id(id) % world->slot_count);
 }
@@ -92,7 +90,6 @@ s64 world_count_entity_chunks(World *world, s64 *entity_count) {
 }
 
 
-
 Entity *world_find(World *world, Entity_ID id) {
   assert(id.index < ENTITIES_PER_BLOCK);
 
@@ -115,35 +112,56 @@ u32 world_count_entities(World *world, Entity_Kind kind) {
   return count;
 }
 
-b32 pb_isect(Phys_Box *a, Phys_Box* b) {
-  if (fabsf(a->pos.x - b->pos.x) > (a->col_hdim.x + b->col_hdim.x)) return false;
-  if (fabsf(a->pos.y - b->pos.y) > (a->col_hdim.y + b->col_hdim.y)) return false;
-  if (fabsf(a->pos.z - b->pos.z) > (a->col_hdim.z + b->col_hdim.z)) return false;
-  return true;
+void common_collide_cb(World *world, Entity_ID a, Entity_ID b) {
+    Entity *ea = &world->entities->e[a.index];
+    assert(ea);
+    Entity *eb = &world->entities->e[b.index];
+    assert(eb);
+
+    switch(ea->kind) {
+      case ENTITY_KIND_NONE:
+        break;
+      case ENTITY_KIND_HERO:
+        if (eb->kind == ENTITY_KIND_COIN) {
+          world_remove(world, b);
+        }
+        break;
+      case ENTITY_KIND_WALL:
+        break;
+      case ENTITY_KIND_COIN:
+        break;
+      case ENTITY_KIND_ENEMY:
+        break;
+      case ENTITY_KIND_BULLET:
+        break;
+    }
 }
 
-
-// FIXME: Here especially we need a spatial partition..
-Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
+b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world_collide_cb cb);
+b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
   Entity *e = world_find(world, id);
   Phys_Box col_box = e->box;
-  col_box.pos = v3_add(candidate_pos, col_box.col_off);
+  col_box.pos = candidate_pos;
+
+#if 1
+  return bvh_collide(world, world->bvh_root, bbox_from_phys_box(&col_box), id, common_collide_cb);
+#else
 
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *test = &world->entities->e[idx];
     if (world->entities->alive[idx] && entity_id(test->id) != entity_id(id) ) {
       b32 test_alive = world->entities->alive[idx];
       Phys_Box testbox = test->box;
-      testbox.pos = v3_add(testbox.pos, testbox.col_off);
 
       if (entity_id(test->id) != entity_id(id) && test_alive) {
-        if (pb_isect(&col_box, &testbox)) {
+        if (bbox_isect(bbox_from_phys_box(&col_box), bbox_from_phys_box(&testbox))) {
           return test;
         }
       }
     }
   }
   return nullptr;
+#endif
 }
 
 BVH_Node *bvh_pick(BVH_Node *node, ray r);
@@ -280,6 +298,23 @@ BVH_Node *bvh_pick(BVH_Node *node, ray r) {
   return nullptr;
 }
 
+
+b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world_collide_cb collide_cb) {
+  if (!node || entity_id(node->id) == entity_id(self_id)) return false;
+
+  f32 box_overlap = v3_min_comp(bbox_calc_overlap(node->box, box));
+  if (box_overlap > 0 && node->is_leaf) {
+    collide_cb(world, self_id, node->id);
+    return true;
+  } else if (box_overlap > 0) {
+    b32 lres = bvh_collide(world, node->first, box, self_id, collide_cb);
+    b32 rres = bvh_collide(world, node->first->next, box, self_id, collide_cb);
+    return (lres || rres);
+  }
+  return false;
+}
+
+
 void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis);
 // FIXME: Currently we just leak! we need a frame_arena in here ok?! or some reuse strategy
 // TODO: For going FAST with bvh we need integer coordinates AND radix sort
@@ -342,7 +377,7 @@ int entity_compare_y(void *a, void *b) {
 
     v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
     v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
-    if (a_center.x < b_center.x) {
+    if (a_center.y < b_center.y) {
       return -1;
     } else {
       return +1;
@@ -354,7 +389,7 @@ int entity_compare_z(void *a, void *b) {
 
     v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
     v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
-    if (a_center.x < b_center.x) {
+    if (a_center.z < b_center.z) {
       return -1;
     } else {
       return +1;

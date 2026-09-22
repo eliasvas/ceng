@@ -81,6 +81,8 @@ typedef union v3
 #define v3_zero ((v3){{0, 0, 0}})
 #define v3_one ((v3){{1, 1, 1}})
 #define v3m(x, y, z)   ((v3){{x, y, z}})
+INLINE f32 v3_min_comp(v3 a)          { return minimum(a.x, minimum(a.y, a.z));}
+INLINE f32 v3_max_comp(v3 a)          { return maximum(a.x, maximum(a.y, a.z));}
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
 INLINE v3  v3_mult(v3 a, v3 b)        { return v3m(a.x*b.x,a.y*b.y,a.z*b.z); }
@@ -805,6 +807,19 @@ static bbox bbox_from_center_hdim(v3 center, v3 hdim) {
   return box;
 }
 
+static v3 bbox_calc_overlap(bbox a, bbox b) {
+  f32 overlap_x = minimum(a.max.x, b.max.x) - maximum(a.min.x, b.min.x);
+  f32 overlap_y = minimum(a.max.y, b.max.y) - maximum(a.min.y, b.min.y);
+  f32 overlap_z = minimum(a.max.z, b.max.z) - maximum(a.min.z, b.min.z);
+
+  return v3m(overlap_x, overlap_y, overlap_z);
+}
+
+static b32 bbox_isect(bbox a, bbox b) {
+  v3 overlap = bbox_calc_overlap(a, b);
+  return (overlap.x > 0) && (overlap.y > 0) && (overlap.z > 0);
+}
+
 typedef struct {
   v3 orig;
   v3 dir;
@@ -834,6 +849,7 @@ static v2 ray_isect_bbox_t(ray r, bbox box) {
 
   return v2m(t_near, t_far);
 }
+
 
 
 #endif

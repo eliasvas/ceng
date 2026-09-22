@@ -188,8 +188,8 @@ void game_render(struct Game_State *gs, float dt) {
       [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
     },
     .running_time_sec = gs->time_sec,
-#if 0
-    .kind = BVH_RENDER_EVERYTHING,
+#if 1
+    .kind = BVH_RENDER_OFF,
 #else
     .seconds_per_level = 0.5,
     .kind = BVH_RENDER_LEVEL_BY_LEVEL,

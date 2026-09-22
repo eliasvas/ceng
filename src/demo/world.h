@@ -78,6 +78,7 @@ struct BVH_Node {
 };
 
 typedef enum {
+  BVH_RENDER_OFF,
   BVH_RENDER_EVERYTHING,
   BVH_RENDER_LEVEL_BY_LEVEL,
 } BVH_Render_Kind;
@@ -130,7 +131,9 @@ void world_update_render(Game_State *gs, f32 dt);
 
 // Entity queries
 Entity *world_pick_entity(World *world, ray r);
-Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
+// FIXME: why do we provide a callback here? maybe we should make a collision array for narrow-phase later on
+typedef void (*world_collide_cb) (World *world, Entity_ID a, Entity_ID b);
+b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world_collide_cb cb);
 u32 world_count_entities(World *world, Entity_Kind kind);
 
 // World serialization

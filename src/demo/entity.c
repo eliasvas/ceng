@@ -2,11 +2,15 @@
 #include "game.h"
 
 // Forward declaration from World..
-Entity *world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
+b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
+
+bbox bbox_from_phys_box(Phys_Box *box) {
+  v3 collider_center = v3_add(box->pos, box->col_off);
+  return bbox_normalize(bbox_from_center_hdim(collider_center, box->col_hdim));
+}
 
 bbox entity_get_collider_bbox(Entity *entity) {
-  v3 collider_center = v3_add(entity->box.pos, entity->box.col_off);
-  return bbox_from_center_hdim(collider_center, entity->box.col_hdim);
+  return bbox_from_phys_box(&entity->box);
 }
 
 void entity_common_draw(World *world, Entity *e) {
@@ -83,12 +87,8 @@ void update_hero(World *world, Entity *e, f32 dt) {
   for (s32 axis = 0; axis < 3; axis += 1) {
     v3 candidate_pos_axis = e->box.pos;
     candidate_pos_axis.raw[axis] += e->box.vel.raw[axis] * dt;
-    Entity *collides_with = world_entity_collides(world, e->id, candidate_pos_axis);
-    if (!collides_with) e->box.pos = candidate_pos_axis;
-    else if (collides_with->kind == ENTITY_KIND_COIN) {
-      // KILL the coin
-      world_remove(world, collides_with->id);
-    }
+    b32 collides = world_entity_collides(world, e->id, candidate_pos_axis);
+    if (!collides) e->box.pos = candidate_pos_axis;
 
   }
 }
