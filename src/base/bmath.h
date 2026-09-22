@@ -67,7 +67,7 @@ INLINE v2  v2_lerp(v2 a, v2 b, f32 x)  { return v2m(a.x*(1.0-x) + b.x*x,a.y*(1.0
 INLINE f32 v2_dot(v2 a, v2 b)          { return (a.x*b.x)+(a.y*b.y); }
 INLINE f32 v2_len(v2 a)                { return sqrt_f32(v2_dot(a,a)); }
 INLINE v2  v2_norm(v2 a)               { f32 vl=v2_len(a);return v2_divf(a,vl); }
-INLINE b32 v2_eq(v2 a, v2 b)           { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001)); }
+INLINE b32 v2_eq(v2 a, v2 b)           { return (EQUALF(a.x,b.x,0.001) && EQUALF(a.y,b.y,0.001)); }
 INLINE v2  v2_rot(v2 a, f32 arad)      { return v2m(a.x*cos(arad)-a.y*sin(arad), a.x*sin(arad)+a.y*cos(arad)); }
 #define V2_VARG(v) (v).x, (v).y
 
@@ -81,8 +81,8 @@ typedef union v3
 #define v3_zero ((v3){{0, 0, 0}})
 #define v3_one ((v3){{1, 1, 1}})
 #define v3m(x, y, z)   ((v3){{x, y, z}})
-INLINE f32 v3_min_comp(v3 a)          { return minimum(a.x, minimum(a.y, a.z));}
-INLINE f32 v3_max_comp(v3 a)          { return maximum(a.x, maximum(a.y, a.z));}
+INLINE f32 v3_min_comp(v3 a)          { return MIN(a.x, MIN(a.y, a.z));}
+INLINE f32 v3_max_comp(v3 a)          { return MAX(a.x, MAX(a.y, a.z));}
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
 INLINE v3  v3_mult(v3 a, v3 b)        { return v3m(a.x*b.x,a.y*b.y,a.z*b.z); }
@@ -92,8 +92,8 @@ INLINE v3  v3_divf(v3 a, f32 b)       { return v3m(a.x/b,a.y/b,a.z/b); }
 INLINE v3  v3_lerp(v3 a, v3 b, f32 x) { return v3m(a.x*(1.0-x) + b.x*x,a.y*(1.0-x) + b.y*x,a.z*(1.0-x)+b.z*x); }
 INLINE f32 v3_dot(v3 a, v3 b)         { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z); }
 INLINE f32 v3_len(v3 a)               { return sqrt_f32(v3_dot(a,a)); }
-INLINE v3  v3_norm(v3 a)              { f32 vl=v3_len(a);if (equalf(vl,0.0,0.000001))return a; else return v3_divf(a,vl); }
-INLINE b32 v3_eq(v3 a, v3 b)          { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001)); }
+INLINE v3  v3_norm(v3 a)              { f32 vl=v3_len(a);if (EQUALF(vl,0.0,0.000001))return a; else return v3_divf(a,vl); }
+INLINE b32 v3_eq(v3 a, v3 b)          { return (EQUALF(a.x,b.x,0.001) && EQUALF(a.y,b.y,0.001) && EQUALF(a.z,b.z,0.001)); }
 INLINE v3  v3_cross(v3 a,v3 b)        { v3 res; res.x=(a.y*b.z)-(a.z*b.y); res.y=(a.z*b.x)-(a.x*b.z); res.z=(a.x*b.y)-(a.y*b.x); return (res); }
 INLINE v3  v3_rot_x(v3 a, f32 arad)   { return v3m(a.x,a.y*cos_f32(arad)-a.z*sin_f32(arad),a.y*sin_f32(arad)+a.z*cos_f32(arad)); }
 INLINE v3  v3_rot_y(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)+a.z*sin_f32(arad),a.y,-a.x*sin_f32(arad)+a.z*cos_f32(arad)); }
@@ -121,8 +121,8 @@ INLINE v4  v4_divf(v4 a, f32 b)       { return v4m(a.x/b,a.y/b,a.z/b,a.w/b); }
 INLINE v4  v4_lerp(v4 a, v4 b, f32 x) { return v4m(a.x*(1.0-x) + b.x*x,a.y*(1.0-x) + b.y*x,a.z*(1.0-x)+b.z*x,a.w*(1.0-x)+b.w*x); }
 INLINE f32 v4_dot(v4 a, v4 b)         { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z)+(a.w*b.w); }
 INLINE f32 v4_len(v4 a)               { return sqrt_f32(v4_dot(a,a)); }
-INLINE v4  v4_norm(v4 a)              { f32 vl=v4_len(a);assert(!equalf(vl,0.0,0.01));return v4_divf(a,vl); }
-INLINE b32 v4_eq(v4 a, v4 b)          { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001) && equalf(a.w,b.w,0.001)); }
+INLINE v4  v4_norm(v4 a)              { f32 vl=v4_len(a);assert(!EQUALF(vl,0.0,0.01));return v4_divf(a,vl); }
+INLINE b32 v4_eq(v4 a, v4 b)          { return (EQUALF(a.x,b.x,0.001) && EQUALF(a.y,b.y,0.001) && EQUALF(a.z,b.z,0.001) && EQUALF(a.w,b.w,0.001)); }
 #define V4_VARG(v) (v).x, (v).y, (v).z, (v).w
 
 
@@ -577,26 +577,26 @@ static b32 rect_isect_rect(rect a, rect b) {
 }
 
 static rect rect_clip_against(rect clipey, rect clipper) {
-    f32 clipey_min_x = minimum(clipey.x, clipey.x + clipey.w);
-    f32 clipey_max_x = maximum(clipey.x, clipey.x + clipey.w);
-    f32 clipey_min_y = minimum(clipey.y, clipey.y + clipey.h);
-    f32 clipey_max_y = maximum(clipey.y, clipey.y + clipey.h);
+    f32 clipey_min_x = MIN(clipey.x, clipey.x + clipey.w);
+    f32 clipey_max_x = MAX(clipey.x, clipey.x + clipey.w);
+    f32 clipey_min_y = MIN(clipey.y, clipey.y + clipey.h);
+    f32 clipey_max_y = MAX(clipey.y, clipey.y + clipey.h);
 
-    f32 clipper_min_x = minimum(clipper.x, clipper.x + clipper.w);
-    f32 clipper_max_x = maximum(clipper.x, clipper.x + clipper.w);
-    f32 clipper_min_y = minimum(clipper.y, clipper.y + clipper.h);
-    f32 clipper_max_y = maximum(clipper.y, clipper.y + clipper.h);
+    f32 clipper_min_x = MIN(clipper.x, clipper.x + clipper.w);
+    f32 clipper_max_x = MAX(clipper.x, clipper.x + clipper.w);
+    f32 clipper_min_y = MIN(clipper.y, clipper.y + clipper.h);
+    f32 clipper_max_y = MAX(clipper.y, clipper.y + clipper.h);
 
-    f32 isec_min_x = maximum(clipey_min_x, clipper_min_x);
-    f32 isec_max_x = minimum(clipey_max_x, clipper_max_x);
-    f32 isec_min_y = maximum(clipey_min_y, clipper_min_y);
-    f32 isec_max_y = minimum(clipey_max_y, clipper_max_y);
+    f32 isec_min_x = MAX(clipey_min_x, clipper_min_x);
+    f32 isec_max_x = MIN(clipey_max_x, clipper_max_x);
+    f32 isec_min_y = MAX(clipey_min_y, clipper_min_y);
+    f32 isec_max_y = MIN(clipey_max_y, clipper_max_y);
 
     rect final;
     final.x = isec_min_x;
     final.y = isec_min_y;
-    final.w = maximum(0.0, isec_max_x - isec_min_x);
-    final.h = maximum(0.0, isec_max_y - isec_min_y);
+    final.w = MAX(0.0, isec_max_x - isec_min_x);
+    final.h = MAX(0.0, isec_max_y - isec_min_y);
 
     return final;
 }
@@ -610,13 +610,13 @@ static b32 rect_inside_rect(rect b, rect s) {
 
 static rect rect_calc_bounding_rect(rect r0, rect r1) {
   v2 p0 = v2m(
-    minimum(r0.x, minimum(r0.x+r0.w, minimum(r1.x, r1.x+r1.w))),
-    minimum(r0.y, minimum(r0.y+r0.h, minimum(r1.y, r1.y+r1.h)))
+    MIN(r0.x, MIN(r0.x+r0.w, MIN(r1.x, r1.x+r1.w))),
+    MIN(r0.y, MIN(r0.y+r0.h, MIN(r1.y, r1.y+r1.h)))
   );
 
   v2 p1 = v2m(
-    maximum(r0.x, maximum(r0.x+r0.w, maximum(r1.x, r1.x+r1.w))),
-    maximum(r0.y, maximum(r0.y+r0.h, maximum(r1.y, r1.y+r1.h)))
+    MAX(r0.x, MAX(r0.x+r0.w, MAX(r1.x, r1.x+r1.w))),
+    MAX(r0.y, MAX(r0.y+r0.h, MAX(r1.y, r1.y+r1.h)))
   );
 
   return (rect) {
@@ -666,7 +666,7 @@ static rect rect_fit_inside(rect src, rect dest, Rect_Fit_Mode mode) {
   };
 }
 
-static b32 rect_equals(rect l, rect r) { return (equalf(l.x,r.x,0.01) && equalf(l.y,r.y,0.01) && equalf(l.w,r.w,0.01) && equalf(l.h,r.h,0.01)); }
+static b32 rect_equals(rect l, rect r) { return (EQUALF(l.x,r.x,0.01) && EQUALF(l.y,r.y,0.01) && EQUALF(l.w,r.w,0.01) && EQUALF(l.h,r.h,0.01)); }
 static rect rect_bl_to_tl(rect r, f32 screen_height) { return rec(r.x, screen_height - r.y - r.h, r.w, r.h); }
 
 
@@ -741,15 +741,15 @@ typedef struct {
 
 static bbox bbox_normalize(bbox box) {
   v3 max = v3m(
-      maximum(box.min.x, box.max.x),
-      maximum(box.min.y, box.max.y),
-      maximum(box.min.z, box.max.z)
+      MAX(box.min.x, box.max.x),
+      MAX(box.min.y, box.max.y),
+      MAX(box.min.z, box.max.z)
   );
 
   v3 min = v3m(
-      minimum(box.min.x, box.max.x),
-      minimum(box.min.y, box.max.y),
-      minimum(box.min.z, box.max.z)
+      MIN(box.min.x, box.max.x),
+      MIN(box.min.y, box.max.y),
+      MIN(box.min.z, box.max.z)
   );
 
   return (bbox){.min = min, .max = max};
@@ -765,15 +765,15 @@ static bbox bbox_union(bbox a, bbox b) {
   b = bbox_normalize(b);
 
   v3 max = v3m(
-      maximum(a.max.x, b.max.x),
-      maximum(a.max.y, b.max.y),
-      maximum(a.max.z, b.max.z)
+      MAX(a.max.x, b.max.x),
+      MAX(a.max.y, b.max.y),
+      MAX(a.max.z, b.max.z)
   );
 
   v3 min = v3m(
-      minimum(a.min.x, b.min.x),
-      minimum(a.min.y, b.min.y),
-      minimum(a.min.z, b.min.z)
+      MIN(a.min.x, b.min.x),
+      MIN(a.min.y, b.min.y),
+      MIN(a.min.z, b.min.z)
   );
 
   return (bbox){
@@ -808,9 +808,9 @@ static bbox bbox_from_center_hdim(v3 center, v3 hdim) {
 }
 
 static v3 bbox_calc_overlap(bbox a, bbox b) {
-  f32 overlap_x = minimum(a.max.x, b.max.x) - maximum(a.min.x, b.min.x);
-  f32 overlap_y = minimum(a.max.y, b.max.y) - maximum(a.min.y, b.min.y);
-  f32 overlap_z = minimum(a.max.z, b.max.z) - maximum(a.min.z, b.min.z);
+  f32 overlap_x = MIN(a.max.x, b.max.x) - MAX(a.min.x, b.min.x);
+  f32 overlap_y = MIN(a.max.y, b.max.y) - MAX(a.min.y, b.min.y);
+  f32 overlap_z = MIN(a.max.z, b.max.z) - MAX(a.min.z, b.min.z);
 
   return v3m(overlap_x, overlap_y, overlap_z);
 }
@@ -833,19 +833,19 @@ static v2 ray_isect_bbox_t(ray r, bbox box) {
   v3 t_max = v3_div(v3_sub(box.max, r.orig), r.dir);
 
   v3 t1 = v3m(
-      minimum(t_min.x, t_max.x),
-      minimum(t_min.y, t_max.y),
-      minimum(t_min.z, t_max.z)
+      MIN(t_min.x, t_max.x),
+      MIN(t_min.y, t_max.y),
+      MIN(t_min.z, t_max.z)
   );
 
   v3 t2 = v3m(
-      maximum(t_min.x, t_max.x),
-      maximum(t_min.y, t_max.y),
-      maximum(t_min.z, t_max.z)
+      MAX(t_min.x, t_max.x),
+      MAX(t_min.y, t_max.y),
+      MAX(t_min.z, t_max.z)
   );
 
-  f32 t_near = maximum(maximum(t1.x, t1.y), t1.z);
-  f32 t_far = minimum(minimum(t2.x, t2.y), t2.z);
+  f32 t_near = MAX(MAX(t1.x, t1.y), t1.z);
+  f32 t_far = MIN(MIN(t2.x, t2.y), t2.z);
 
   return v2m(t_near, t_far);
 }

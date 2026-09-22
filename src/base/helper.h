@@ -46,36 +46,33 @@ static f32 F32_MIN_POS = 1.175494351e-38F;
 // Helpful Macros
 ///////////////////
 
-// FIXME: Why are all these macros not ALL_CAPS?
 #define KB(val) ((val)*1024LL)
 #define MB(val) ((KB(val))*1024LL)
 #define GB(val) ((MB(val))*1024LL)
 #define TB(val) ((GB(val))*1024LL)
-#define align_pow2(val, align) (((val) + ((align) - 1)) & ~(((val) - (val)) + (align) - 1))
-#define align2(val) align_pow2(val,2)
-#define align4(val) align_pow2(val,4)
-#define align8(val) align_pow2(val,8)
-#define align16(val) align_pow2(val,16)
-#define align32(val) align_pow2(val,32)
-#define align64(val) align_pow2(val,64)
-#define equalf(a, b, epsilon) (fabs(b - a) <= epsilon)
-#define absolute(a) ((a < 0) ? (-a) : (a))
-#define maximum(a, b) ((a) > (b) ? (a) : (b))
-#define minimum(a, b) ((a) < (b) ? (a) : (b))
-#define step(threshold, value) ((value) < (threshold) ? 0 : 1)
-#define clamp(x, a, b)  (maximum(a, minimum(x, b)))
-#define lerp(a, b, x) ((b)*(x) + (a)*(1-(x)))
-#define is_pow2(x) ((x & (x - 1)) == 0)
-#define is_digit(x) (x >= '0' && x <= '9')
-#define is_upper(x) (x >= 'A' && x <= 'Z')
-#define is_lower(x) (x >= 'a' && x <= 'z')
-#define array_count(a) (sizeof(a) / sizeof((a)[0]))
-#define signof(x) ((x) > 0 ? 1 : ((x) < 0 ? -1 : 0))
-#define each_enumv(type, upper, it) type it = (type)0; it < upper##_COUNT; it = (type)(it+1)
+#define ALIGN_POW2(val, align) (((val) + ((align) - 1)) & ~(((val) - (val)) + (align) - 1))
+#define ALIGN2(val) ALIGN_POW2(val,2)
+#define ALIGN4(val) ALIGN_POW2(val,4)
+#define ALIGN8(val) ALIGN_POW2(val,8)
+#define ALIGN16(val) ALIGN_POW2(val,16)
+#define ALIGN32(val) ALIGN_POW2(val,32)
+#define ALIGN64(val) ALIGN_POW2(val,64)
+#define EQUALF(a, b, epsilon) (fabs(b - a) <= epsilon)
+#define ABS(a) ((a < 0) ? (-a) : (a))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define STEP(threshold, value) ((value) < (threshold) ? 0 : 1)
+#define CLAMP(x, a, b)  (MAX(a, MIN(x, b)))
+#define LERP(a, b, x) ((b)*(x) + (a)*(1-(x)))
+#define IS_POW2(x) ((x & (x - 1)) == 0)
+#define IS_DIGIT(x) (x >= '0' && x <= '9')
+#define IS_UPPER(x) (x >= 'A' && x <= 'Z')
+#define IS_LOWER(x) (x >= 'a' && x <= 'z')
+#define ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
+#define SIGNOF(x) ((x) > 0 ? 1 : ((x) < 0 ? -1 : 0))
+#define EACH_ENUMV(type, upper, it) type it = (type)0; it < upper##_COUNT; it = (type)(it+1)
 #define MATH_PI 3.14159265358979323846
 
-// FIXME: This are.. defined in windows.h as.. they should be..
-// :| :| :| :| :| :| :| :| :| :| :| :| |: |: |: |:| :| :| :| :| :|
 #define RAD2DEG(X) (180 * X / MATH_PI)
 #define DEG2RAD(X) (X * MATH_PI / 180)
 
@@ -84,7 +81,7 @@ static f32 F32_MIN_POS = 1.175494351e-38F;
 
 static f64 pwr(double b, int e) {
   f64 p = 1;
-  for (int i = 0; i < absolute(e); i++) p = p * b;
+  for (int i = 0; i < ABS(e); i++) p = p * b;
   if (e < 0) return 1 / p;
   return p;
 }

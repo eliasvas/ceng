@@ -14,13 +14,12 @@ static const u8 base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 
 static str8 my_base64_decode(Arena *arena, str8 data) {
   s32 dec_len = 3*(data.count / 4);
-  // FIXME: padding cases here right?
 
   u8 ascii_to_b64[256];
   for (s32 i = 0; i < 256; i += 1) {
       ascii_to_b64[i] = 0x80;
   }
-  for (s32 i = 0; i < (s32)array_count(base64_table); i += 1) {
+  for (s32 i = 0; i < (s32)ARRAY_COUNT(base64_table); i += 1) {
       ascii_to_b64[base64_table[i]] = (u8)i;
   }
 

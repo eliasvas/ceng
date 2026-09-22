@@ -1,5 +1,6 @@
 #include "asset/asset_mgr.h"
 #include "core/core_inc.h"
+
 // FIXME: put this in game_state
 Asset_Mgr g_am = {};
 

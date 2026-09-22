@@ -198,8 +198,6 @@ str8 str8_substr(str8 s, int64_t start_idx, int64_t end_idx) {
 str8 str8_sprintf(Arena *arena, const char* format, ...) {
   va_list args;
   va_start(args, format);
-
-  // +1 byte for null terminator (Do we need this? FIXME)
   s32 size = vsnprintf(NULL, 0, format, args)+1;
 
   // Also because of push_array_nz, the 'null' terminator is not nulled ??
@@ -275,16 +273,13 @@ f64 str8_to_float(str8 s) {
 
 char* cstr_from_str8(Arena *arena, str8 s) {
   char *buffer = arena_push_array_nz(arena, char, s.count+1);
-  for (s32 idx = 0; idx < s.count; idx+=1) {
-    // FIXME: make a memcpy oK?
-    buffer[idx] = s.data[idx];
-  }
+  M_CPY(buffer, s.data, s.count * sizeof(u8));
   buffer[s.count] = '\0';
 
   return buffer;
 }
 
-// FIXME: We need a real str8 path api
+// TODO: We need a real str8 path api
 str8 str8_extract_path(str8 file_path) {
   // FIXME: Why are paths always with '/'?
   // support delimeter with all path separatos

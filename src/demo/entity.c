@@ -42,6 +42,12 @@ void entity_common_draw(World *world, Entity *e) {
 // Hero Entity
 ////////////////////////////////////////////
 
+void collide_hero(World *world, Entity *e, Entity *other) {
+    if (other->kind == ENTITY_KIND_COIN) {
+      world_remove(world, other->id);
+    }
+}
+
 void update_hero(World *world, Entity *e, f32 dt) {
   // Movement dir
   v3 move_dir = v3m(0,0,0);
@@ -80,7 +86,7 @@ void update_hero(World *world, Entity *e, f32 dt) {
       e->box.vel.y = jump_scale;
     }
     f32 le_G = -9.8;
-    e->box.vel.y = lerp(e->box.vel.y, le_G, dt);
+    e->box.vel.y = LERP(e->box.vel.y, le_G, dt);
   }
   // Simple axis separated movement
   e->move_dir = v3_norm(e->box.vel);
@@ -103,6 +109,7 @@ Entity *setup_hero(Entity *e, v3 pos) {
   e->update_fn = update_hero;
   e->draw_fn = draw_hero;
   e->kill_fn = kill_hero;
+  e->collide_fn = collide_hero;
   e->kind = ENTITY_KIND_HERO;
   e->dynamic = true;
   e->box = (Phys_Box) {
@@ -120,6 +127,8 @@ Entity *setup_hero(Entity *e, v3 pos) {
 // Wall Entity
 ////////////////////////////////////////////
 
+void collide_wall(World *world, Entity *e, Entity *other) {}
+
 void update_wall(World *world, Entity *e, f32 dt) {
   // TBA
 }
@@ -136,6 +145,7 @@ Entity *setup_wall(Entity *e, v3 pos) {
   e->update_fn = update_wall;
   e->draw_fn = draw_wall;
   e->kill_fn = kill_wall;
+  e->collide_fn = collide_wall;
   e->kind = ENTITY_KIND_WALL;
   e->dynamic = false;
   e->box = (Phys_Box) {
@@ -152,6 +162,8 @@ Entity *setup_wall(Entity *e, v3 pos) {
 ////////////////////////////////////////////
 // Coin Entity
 ////////////////////////////////////////////
+void collide_coin(World *world, Entity *e, Entity *other) {}
+
 void update_coin(World *world, Entity *e, f32 dt) {
 
 }
@@ -179,6 +191,7 @@ Entity *setup_coin(Entity *e, v3 pos) {
   e->update_fn = update_coin;
   e->draw_fn = draw_coin;
   e->kill_fn = kill_coin;
+  e->collide_fn = collide_coin;
   e->kind = ENTITY_KIND_COIN;
   e->dynamic = true;
   e->box = (Phys_Box) {

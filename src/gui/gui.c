@@ -334,7 +334,7 @@ void gui_layout_downward_dependent_sizes(Gui_Box *node, Gui_Axis axis) {
     else {
       f32 max_size = 0;
       for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
-        max_size = maximum(max_size, child->fixed_size.raw[axis]);
+        max_size = MAX(max_size, child->fixed_size.raw[axis]);
       }
       node->fixed_size.raw[axis] = max_size;
     }
@@ -350,7 +350,7 @@ void gui_layout_enforce_size_constraints(Gui_Box *node, Gui_Axis axis) {
   for (Gui_Box *child = node->first; !gui_box_is_nil(child); child = child->next) {
     if (!(child->flags & GUI_BOX_FLAG_FIXED_X<<axis)) {
       children_size += child->fixed_size.raw[axis];
-      children_max_size = maximum(children_max_size, child->fixed_size.raw[axis]);
+      children_max_size = MAX(children_max_size, child->fixed_size.raw[axis]);
     }
   }
 
@@ -436,7 +436,7 @@ void gui_layout_calc_fixed_pos_and_final_rects(Gui_Box *node, Gui_Axis axis) {
         layout_pos += child->fixed_size.raw[axis];
         bounds += child->fixed_size.raw[axis];
       } else {
-        bounds = maximum(bounds, child->fixed_size.raw[axis]);
+        bounds = MAX(bounds, child->fixed_size.raw[axis]);
       }
     }
   }
@@ -553,7 +553,7 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
 
   f32 scroll_region_dim = (axis == GUI_AXIS_Y) ? scroll_region->final_rect.h : scroll_region->final_rect.w;
   f32 visible_items =  scroll_region_dim / (f32)sdata->item_px;
-  f32 scroll_button_dim = scroll_region_dim * minimum(1.0, visible_items / (f32)sdata->item_count);
+  f32 scroll_button_dim = scroll_region_dim * MIN(1.0, visible_items / (f32)sdata->item_count);
 
   f32 min_dim_px = 0;
   f32 max_dim_px = sdata->item_px * (sdata->item_count - visible_items); 
@@ -584,9 +584,9 @@ Gui_Signal gui_scroll_list_begin(str8 s, Gui_Axis axis, Gui_Scroll_Data *sdata) 
 
     if (gui_id_eq(scroll_button_sig.box->id, ctx.active_id)) {
       sdata->scroll_percent += sdata->scroll_speed * input_get_mouse_delta(ctx.input).raw[axis] * ctx.dt;
-      sdata->scroll_percent = clamp(sdata->scroll_percent, 0, 1);
+      sdata->scroll_percent = CLAMP(sdata->scroll_percent, 0, 1);
     }
-    scroll_region->view_off.raw[axis] = lerp(min_dim_px, max_dim_px, -sdata->scroll_percent);
+    scroll_region->view_off.raw[axis] = LERP(min_dim_px, max_dim_px, -sdata->scroll_percent);
 
     gui_pop_parent(); // scroll_bar
     gui_pop_bg_color();

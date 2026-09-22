@@ -378,8 +378,6 @@ void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Ty
   ogl_buf_deinit(&vbo);
 }
 
-// FIXME: This is INSANELY slow, especially for particles!
-// FIXME: Probably cancel any rotation (M33) to be user facing right?
 void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
   Tri_Vertex cube_verts[6] = {
     (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
@@ -389,7 +387,7 @@ void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
     (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
     (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
   };
-  r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
+  r3d_imm_verts(viewport, cube_verts, ARRAY_COUNT(cube_verts), prim, mvp);
 }
 
 void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
@@ -431,7 +429,7 @@ void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
     (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
     (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
   };
-  r3d_imm_verts(viewport, cube_verts, array_count(cube_verts), prim, mvp);
+  r3d_imm_verts(viewport, cube_verts, ARRAY_COUNT(cube_verts), prim, mvp);
 }
 
 void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {

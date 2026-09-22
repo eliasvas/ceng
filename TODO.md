@@ -12,14 +12,12 @@
     - Serialization: https://jorenjoestar.github.io/post/serialization_for_games/ 
 
 ## Math
-    - Add quaternions ..
-    - NLERP
 
 ## GLTF
-    - .glb
+    - .glb (next?)
 
 ## Physics
-    - Integrate Box3D
+    - Integrate Box3D (dont)
 
 ## Particles
     - Keep adding stuff.. rn its very simple

@@ -109,26 +109,31 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
       data->update_fn = update_hero;
       data->draw_fn = draw_hero;
       data->kill_fn = kill_hero;
+      data->collide_fn = collide_hero;
       break;
     case ENTITY_KIND_WALL:
       data->update_fn = update_wall;
       data->draw_fn = draw_wall;
       data->kill_fn = kill_wall;
+      data->collide_fn = collide_wall;
       break;
     case ENTITY_KIND_COIN:
       data->update_fn = update_coin;
       data->draw_fn = draw_coin;
       data->kill_fn = kill_coin;
+      data->collide_fn = collide_coin;
       break;
     case ENTITY_KIND_ENEMY:
       //data->update_fn = update_enemy;
       //data->draw_fn = draw_enemy;
       //data->kill_fn = kill_enemy;
+      //data->collide_fn = collide_enemy;
       break;
     case ENTITY_KIND_BULLET:
       //data->update_fn = update_bullet;
       //data->draw_fn = draw_bullet;
       //data->kill_fn = kill_bullet;
+      //data->collide_fn = collide_bullet;
     case ENTITY_KIND_NONE:
     default:
       break;
@@ -178,18 +183,6 @@ static b32 serialize_all_inc_version(World_Serializer *wserializer, World *data)
   }
 }
 
-static World_Serializer wdeserializer_from_fullpath(Arena *arena, str8 fullpath) {
-  Temp_Arena temp = get_scratch(&arena,1);
-  char* fullpath_cstr = cstr_from_str8(temp.arena, fullpath);
-
-  World_Serializer s = (World_Serializer) {
-    .is_writing = false,
-    .arena = arena,
-  };
-    s.fptr = fopen(fullpath_cstr, "rb");
-  return s;
-}
-
 static World_Serializer wserializer_from_fullpath(Arena *arena, str8 fullpath) {
   Temp_Arena temp = get_scratch(&arena,1);
   char* fullpath_cstr = cstr_from_str8(temp.arena, fullpath);
@@ -202,6 +195,25 @@ static World_Serializer wserializer_from_fullpath(Arena *arena, str8 fullpath) {
 
   release_scratch(temp);
   return s;
+}
+static void wserializer_finish(World_Serializer *serializer) {
+  fclose(serializer->fptr);
+}
+
+static World_Serializer wdeserializer_from_fullpath(Arena *arena, str8 fullpath) {
+  Temp_Arena temp = get_scratch(&arena,1);
+  char* fullpath_cstr = cstr_from_str8(temp.arena, fullpath);
+
+  World_Serializer s = (World_Serializer) {
+    .is_writing = false,
+    .arena = arena,
+  };
+    s.fptr = fopen(fullpath_cstr, "rb");
+  return s;
+}
+
+static void wdeserializer_finish(World_Serializer *deserializer) {
+  wserializer_finish(deserializer);
 }
 
 #if 0
@@ -219,19 +231,16 @@ static void wserializer_test(Arena *arena) {
 
   World_Serializer s = wserializer_from_fullpath(arena, STR8L(".savegame"));
   serialize_all_inc_version(&s, &world);
-  fclose(s.fptr);
+  wserializer_finish(&s);
 
   world = (World){};
   world_init(&world);
 
   World_Serializer d = wdeserializer_from_fullpath(arena, STR8L(".savegame"));
   serialize_all_inc_version(&d, &world);
+  wdeserializer_finish(&d);
 
   Entity *d_e1 = &world.entities[0].e[lookup.index];
   printf("deserialized_e1: col(%f, %f, %f, %f)\n", d_e1->col.r, d_e1->col.g, d_e1->col.b, d_e1->col.a);
-
-  // FIXME: I think world_init is needed to set the arenas and stuff before actual parsing
-
-
 }
 #endif

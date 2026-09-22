@@ -79,7 +79,6 @@ void game_update(struct Game_State *gs, float dt) {
 
 }
 
-// FIXME: Make a VBO for this goddam it, or.. something
 void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   s32 line_count_per_axis = cell_count + 1; 
   Tri_Vertex *points = arena_push_array(gs->frame_arena, Tri_Vertex, line_count_per_axis*4);
@@ -188,7 +187,7 @@ void game_render(struct Game_State *gs, float dt) {
       [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
     },
     .running_time_sec = gs->time_sec,
-#if 1
+#if 0
     .kind = BVH_RENDER_OFF,
 #else
     .seconds_per_level = 0.5,

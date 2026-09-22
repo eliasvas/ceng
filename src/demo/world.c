@@ -4,12 +4,15 @@
 #include "world.h"
 #include "world_serializer.h"
 
+#define SAVEGAME_FILE STR8L(".savegame")
+
 static u64 entity_hash_id(World *world, Entity_ID id) {
   return (entity_id(id) % world->slot_count);
 }
 
 void world_init(World *world) {
   world->entity_arena = arena_make(MB(256));
+  world->frame_arena = arena_make(MB(16));
 
   world->entities = arena_push_array(world->entity_arena, Entity_Block, 1);
   world->entities->first_free_idx = -1;
@@ -46,14 +49,6 @@ Entity* world_add(World *world) {
   if (!entity_index_reuse) {
     entities->count+=1;
   }
-
-#if 0
-  // 2. Hook up to hash-map (Entity_id -> Entity*)
-  Entity_Node *enode = arena_push_array(world->entity_arena, Entity_Node, 1);
-  enode->e = &entities->e[new_idx];
-  u64 hash_slot = entity_hash_id(world, enode->e->id);
-  dll_insert_NPZ(nullptr, world->slots[hash_slot].hash_first, world->slots[hash_slot].hash_last, world->slots[hash_slot].hash_last, enode, hash_next, hash_prev);
-#endif
 
   return &entities->e[new_idx];
 }
@@ -112,6 +107,7 @@ u32 world_count_entities(World *world, Entity_Kind kind) {
   return count;
 }
 
+
 void common_collide_cb(World *world, Entity_ID a, Entity_ID b) {
     Entity *ea = &world->entities->e[a.index];
     assert(ea);
@@ -137,14 +133,14 @@ void common_collide_cb(World *world, Entity_ID a, Entity_ID b) {
     }
 }
 
-b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world_collide_cb cb);
+b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id);
 b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
   Entity *e = world_find(world, id);
   Phys_Box col_box = e->box;
   col_box.pos = candidate_pos;
 
 #if 1
-  return bvh_collide(world, world->bvh_root, bbox_from_phys_box(&col_box), id, common_collide_cb);
+  return bvh_collide(world, world->bvh_root, bbox_from_phys_box(&col_box), id);
 #else
 
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
@@ -211,21 +207,18 @@ void world_update_render(Game_State *gs, f32 dt) {
     }
   }
 
-
   particle_mgr_render(gs, world->pmgr);
-  //for (s64 idx = 0; idx < world->entities->count; idx+=1) { Entity *e = &world->entities->e[idx]; e->draw_fn(gs, e); }
-  // Cleanup to-be-deleted entities
-  // TBA TBA TBA TBA TBA
+  arena_clear(world->frame_arena);
 }
 
+// TODO: Not sure we need Game_State here, maybe world is ok? I mean the entity arena is what we fill right ?..
 void world_serialize(Game_State *gs) {
   Arena *arena = gs->persistent_arena;
   assert(arena);
 
-  World_Serializer s = wserializer_from_fullpath(arena, STR8L(".savegame"));
+  World_Serializer s = wserializer_from_fullpath(arena, SAVEGAME_FILE);
   serialize_all_inc_version(&s, gs->world);
-  // FIXME: We need an api for serialization_finish or something, why call cstdlib here? we dum
-  fclose(s.fptr);
+  wserializer_finish(&s);
 
   printf("SERIALIZE!!\n");
 }
@@ -234,10 +227,9 @@ void world_deserialize(Game_State *gs) {
   Arena *arena = gs->persistent_arena;
   assert(arena);
 
-  // FIXME: Should we retain the same arena? for the world? at least we need to clear? or no?
-  World_Serializer d = wdeserializer_from_fullpath(arena, STR8L(".savegame"));
+  World_Serializer d = wdeserializer_from_fullpath(arena, SAVEGAME_FILE);
   serialize_all_inc_version(&d, gs->world);
-  fclose(d.fptr);
+  wdeserializer_finish(&d);
 
   printf("DESERIALIZE!!\n");
 }
@@ -299,16 +291,19 @@ BVH_Node *bvh_pick(BVH_Node *node, ray r) {
 }
 
 
-b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world_collide_cb collide_cb) {
+b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id) {
   if (!node || entity_id(node->id) == entity_id(self_id)) return false;
 
   f32 box_overlap = v3_min_comp(bbox_calc_overlap(node->box, box));
   if (box_overlap > 0 && node->is_leaf) {
-    collide_cb(world, self_id, node->id);
+    // Perform the collision
+    Entity *e = &world->entities->e[self_id.index];
+    Entity *other = &world->entities->e[node->id.index];
+    e->collide_fn(world, e, other);
     return true;
   } else if (box_overlap > 0) {
-    b32 lres = bvh_collide(world, node->first, box, self_id, collide_cb);
-    b32 rres = bvh_collide(world, node->first->next, box, self_id, collide_cb);
+    b32 lres = bvh_collide(world, node->first, box, self_id);
+    b32 rres = bvh_collide(world, node->first->next, box, self_id);
     return (lres || rres);
   }
   return false;
@@ -316,17 +311,16 @@ b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world
 
 
 void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis);
-// FIXME: Currently we just leak! we need a frame_arena in here ok?! or some reuse strategy
 // TODO: For going FAST with bvh we need integer coordinates AND radix sort
 void world_build_bvh(World *world) {
   // 0. Allocate root node
-  world->bvh_root = arena_push_array(world->entity_arena, BVH_Node, 1);
+  world->bvh_root = arena_push_array(world->frame_arena, BVH_Node, 1);
   //world->bvh_root->box = bbox_from_center_hdim(v3m(0,0,0), v3m(5,5,5));
   //world->bvh_root->is_leaf = false;
 
   // 1. Allocate and populat the (to be) sorted entity array
   s32 ecount = world->entities->count;
-  Entity *entities = arena_push_array(world->entity_arena, Entity, ecount);
+  Entity *entities = arena_push_array(world->frame_arena, Entity, ecount);
   s32 alloc_idx = 0;
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
@@ -336,26 +330,7 @@ void world_build_bvh(World *world) {
   }
 
   // 2. Calculate the actual BVH structure .. (!!)
-
   world_bvh_calc(world, world->bvh_root, entities, ecount, BVH_AXIS_X);
-
-  // 3. JUNK
-#if 0
-  BVH_Node *c0 = arena_push_array(world->entity_arena, BVH_Node, 1);
-  assert(c0);
-  c0->box = bbox_from_center_hdim(v3m(2.5,0,0), v3m(2.5,5,5));
-  c0->is_leaf = true;
-
-
-  BVH_Node *c1 = arena_push_array(world->entity_arena, BVH_Node, 1);
-  assert(c1);
-  c1->box = bbox_from_center_hdim(v3m(-2.5,0,0), v3m(2.5,5,5));
-  c1->is_leaf = true;
-
-  sll_stack_push(root->next, c0);
-  sll_stack_push(root->next, c1);
-#endif
-
 }
 
 
@@ -371,6 +346,7 @@ int entity_compare_x(void *a, void *b) {
       return +1;
     }
 }
+
 int entity_compare_y(void *a, void *b) {
     Entity *e_a = (Entity *)a;
     Entity *e_b = (Entity *)b;
@@ -383,6 +359,7 @@ int entity_compare_y(void *a, void *b) {
       return +1;
     }
 }
+
 int entity_compare_z(void *a, void *b) {
     Entity *e_a = (Entity *)a;
     Entity *e_b = (Entity *)b;
@@ -396,8 +373,6 @@ int entity_compare_z(void *a, void *b) {
     }
 }
 
-
-//static v3 bbox_get_center(bbox box) {
 void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, BVH_Split_Axis axis) {
   // 0. Calculate the bbox for the entity slice
   bbox super_box = entity_get_collider_bbox(&entities[0]);
@@ -430,9 +405,9 @@ void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, B
 
   // 3. If its not leaf add left/right children + recurse
   if (!node->is_leaf) {
-    BVH_Node *left = arena_push_array(world->entity_arena, BVH_Node, 1);
+    BVH_Node *left = arena_push_array(world->frame_arena, BVH_Node, 1);
     left->parent = node;
-    BVH_Node *right = arena_push_array(world->entity_arena, BVH_Node, 1);
+    BVH_Node *right = arena_push_array(world->frame_arena, BVH_Node, 1);
     right->parent = node;
 
     BVH_Split_Axis new_split_axis = (axis+1) % 3;
@@ -463,15 +438,15 @@ void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Re
     }
 
     if (rc.kind == BVH_RENDER_EVERYTHING) {
-      r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % array_count(rc.colors)]);
+      r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % ARRAY_COUNT(rc.colors)]);
     } else if (rc.kind == BVH_RENDER_LEVEL_BY_LEVEL) {
-      // FIXME: level_count is calculated for every node, VERY wasteful!!!
+      // TODO: level_count is calculated for every node, VERY wasteful, optimize this!!!
       s32 level_count = bvh_count_levels(world->bvh_root, 0);
 
       s32 depth = bvh_get_node_depth(node);
       s32 wanted_depth = (s32)(rc.running_time_sec / rc.seconds_per_level) % (level_count+1); 
       if (depth == wanted_depth || (node->is_leaf && depth < wanted_depth)) {
-        r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % array_count(rc.colors)]);
+        r3d_imm_cube(viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, rc.colors[rc.clr_idx % ARRAY_COUNT(rc.colors)]);
       }
     }
     //world_render_bvh(world, node->next, vp, viewport, rc);

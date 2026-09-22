@@ -29,7 +29,7 @@ Gui_Signal gui_slider01(str8 label, f32 *value, f32 button_px, Gui_Axis axis) {
   //printf("value: %f\n", *value);
   if (gui_id_eq(scroll_button_sig.box->id, ctx.active_id)) {
     *(value) += 10.0 * input_get_mouse_delta(ctx.input).raw[axis] * ctx.dt;
-    *(value) = clamp(*(value), 0, 1);
+    *(value) = CLAMP(*(value), 0, 1);
   }
 
   gui_pop_parent();

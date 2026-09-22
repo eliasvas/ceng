@@ -8,7 +8,7 @@ static u64 djb2_buf(u8 *data, s64 count) {
 
   for (u32 i = 0; i < count; i+=1) {
     c = data[i];
-    if (is_upper(c)) {
+    if (IS_UPPER(c)) {
       c = c + 32;
     }
     hash = ((hash << 5) + hash) + c;

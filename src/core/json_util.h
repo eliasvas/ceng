@@ -125,7 +125,7 @@ static Json_Tokens json_tokenize(Arena *arena, str8 json_str) {
             case '\"':
                 count = json_tok_count_string(c);
                 assert(count);
-                // +1 -2 to remove the quotes '\"' FIXME: this is hacky
+                // +1 -2 to remove the quotes '\"', this is hacky
                 token = (Json_Token) {STR8(c+1, count-2), JSON_TOKEN_KIND_STRING};
                 break;
             case ' ':

@@ -164,7 +164,6 @@ typedef struct {
   u64 transition_count;
 }Input_Key_State;
 
-// FIXME: probably should be allocated on the Heap!
 typedef struct {
     Input_Key_State keeb_state[KEY_SCANCODE_COUNT];
     Input_Key_State mouse_state[INPUT_MOUSE_COUNT];

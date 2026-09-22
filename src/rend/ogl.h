@@ -824,7 +824,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
 
 void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count) {
   ogl_render_bundle_bind(bundle);
-  // FIXME: first == 0? why? we need to enhance the API
+  // TODO: first == 0? why? we need to enhance the API
   glDrawArraysInstanced(ogl_prim_type_to_gl_type(prim), 0, vertex_count, instance_count);
 }
 

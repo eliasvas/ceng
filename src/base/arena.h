@@ -48,7 +48,7 @@ typedef struct {
 #else
 
 void arena_align_forward(Arena *arena) {
-  arena->current = align_pow2(UINT_FROM_PTR(arena->backing_memory) + arena->current, arena->alignment) - UINT_FROM_PTR(arena->backing_memory);
+  arena->current = ALIGN_POW2(UINT_FROM_PTR(arena->backing_memory) + arena->current, arena->alignment) - UINT_FROM_PTR(arena->backing_memory);
 }
 
 void arena_destroy(Arena *arena) {
@@ -176,7 +176,7 @@ thread_local Arena *arena_scratch[2]; // These need to be initialized
 Temp_Arena get_scratch(Arena **conflicts, u64 conflict_count) {
   Arena *arena = nullptr;
   u32 selected_idx = 0;
-  while (!arena && selected_idx < array_count(arena_scratch)) {
+  while (!arena && selected_idx < ARRAY_COUNT(arena_scratch)) {
     b32 found = true;
     for (u64 conflict_idx = 0; conflict_idx < conflict_count; conflict_idx+=1) {
       Arena *c = conflicts[conflict_idx];
@@ -196,7 +196,7 @@ void release_scratch(Temp_Arena ta) {
 }
 
 void scratch_init(u64 size) {
-  for (u64 i = 0; i < array_count(arena_scratch); i+=1) {
+  for (u64 i = 0; i < ARRAY_COUNT(arena_scratch); i+=1) {
     arena_scratch[i] = arena_make(size);
   }
 }

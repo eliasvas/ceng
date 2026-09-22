@@ -101,6 +101,7 @@ typedef struct {
 
 typedef struct World {
   Arena *entity_arena; // @NoSerialize
+  Arena *frame_arena; // @NoSerialize
 
   // These are per frame I think, so no need to actually serialize
   // We need two maps one for id->entity and another for coords->entity
@@ -132,8 +133,7 @@ void world_update_render(Game_State *gs, f32 dt);
 // Entity queries
 Entity *world_pick_entity(World *world, ray r);
 // FIXME: why do we provide a callback here? maybe we should make a collision array for narrow-phase later on
-typedef void (*world_collide_cb) (World *world, Entity_ID a, Entity_ID b);
-b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id, world_collide_cb cb);
+b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id);
 u32 world_count_entities(World *world, Entity_Kind kind);
 
 // World serialization

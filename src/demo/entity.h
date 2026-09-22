@@ -52,6 +52,7 @@ struct Entity {
   void (*update_fn)(struct World *world, Entity *e, f32 dt); // @NoSerialize
   void (*draw_fn)(struct World *world, Entity *e); // @NoSerialize
   void (*kill_fn)(struct World *world, Entity *e); // @NoSerialize
+  void (*collide_fn)(struct World *world, Entity *e, Entity *other);
 };
 
 static u64 entity_id(Entity_ID id) {
@@ -62,26 +63,31 @@ Entity *setup_hero(Entity *e, v3 pos);
 void update_hero(struct World *world, Entity *e, f32 dt);
 void draw_hero(struct World *world, Entity *e);
 void kill_hero(struct World *world, Entity *e);
+void collide_hero(struct World *world, Entity *e, Entity *other);
 
 Entity *setup_wall(Entity *e, v3 pos);
 void update_wall(struct World *world, Entity *e, f32 dt);
 void draw_wall(struct World *world, Entity *e);
 void kill_wall(struct World *world, Entity *e);
+void collide_wall(struct World *world, Entity *e, Entity *other);
 
 Entity *setup_coin(Entity *e, v3 pos);
 void update_coin(struct World *world, Entity *e, f32 dt);
 void draw_coin(struct World *world, Entity *e);
 void kill_coin(struct World *world, Entity *e);
+void collide_coin(struct World *world, Entity *e, Entity *other);
 
 Entity *setup_enemy(Entity *e, v3 pos);
 void update_enemy(struct World *world, Entity *e, f32 dt);
 void draw_enemy(struct World *world, Entity *e);
 void kill_enemy(struct World *world, Entity *e);
+void collide_enemy(struct World *world, Entity *e, Entity *other);
 
 Entity *setup_bullet(Entity *e, v3 pos);
 void update_bullet(struct World *world, Entity *e, f32 dt);
 void draw_bullet(struct World *world, Entity *e);
 void kill_bullet(struct World *world, Entity *e);
+void collide_bullet(struct World *world, Entity *e, Entity *other);
 
 // Helpers
 bbox entity_get_collider_bbox(Entity *entity);
