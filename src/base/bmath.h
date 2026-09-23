@@ -698,8 +698,7 @@ static m4 m4_from_transform(transform xform) {
 
 
 // TODO: We should improve this ok?
-typedef union iv4
-{
+typedef union iv4 {
     struct { s32 x,y,z,w; };
     struct { s32 r,g,b,a; };
     s32 raw[4];

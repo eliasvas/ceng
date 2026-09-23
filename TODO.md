@@ -9,7 +9,6 @@
     - Signals
     - Implement the reuse logic for staled entity indices
     - Entity tree, maybe use a stack? Not sure if needed for now
-    - Serialization: https://jorenjoestar.github.io/post/serialization_for_games/ 
 
 ## Math
 
@@ -34,4 +33,8 @@
     - Do we need RenderBundle to be an asset?
 
 ## demo
-    - There is a game? what??
+    - Skeletal Animated entity (Hero) that can navigate in space
+    - Enviroment has some triggers like buttons that do stuff on the world
+    - Animated camera for events/cutscenes
+    - horde enemies + killing them (like vampire survivors)
+    - First level could be a big open space where you press a button to open a door with enemies, killing them resets level

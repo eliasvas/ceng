@@ -340,7 +340,6 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glBlendEquationSeparate);
     GL_PROC_DEF(proc, glDrawArraysInstanced);
     if (
-        // TODO make this with multiple cursors out of all the defines
         glShaderSourceSRC == NULL ||
         glCreateShaderSRC == NULL ||
         glCompileShaderSRC == NULL ||

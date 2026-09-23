@@ -399,8 +399,6 @@ static b32 str_to_bool(char *s, s64 size) {
 // Buffer abstraction
 //////////////////////////////
 
-// TODO: Type conversions should go eventually to str.h all else deleted, buf is good but str8 better..
-
 typedef struct {
   char *data;
   s64 count;

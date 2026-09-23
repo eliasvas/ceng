@@ -1,10 +1,10 @@
 #ifndef ENTITY_H__
 #define ENTITY_H__
-
-struct Game_State;
 #include "base/base_inc.h"
 
+struct Game_State;
 struct World;
+
 
 typedef struct {
  v3 pos;

@@ -128,6 +128,7 @@ typedef struct World {
 void world_init(World *world);
 Entity* world_add(World *world);
 Entity* world_remove(World *world, Entity_ID id);
+Entity* world_get_entity(World *world, Entity_ID id);
 void world_update_render(Game_State *gs, f32 dt);
 
 // Entity queries

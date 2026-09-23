@@ -33,8 +33,6 @@ void frz_clear();
 v4 frz_apply_viewport_transform(v4 p_ndc, v2 wdim);
 #else
 
-// TODO: Maybe make a 24-vertex VBO, to have correct UVs everywhere..
-// Just the first face done for now, should also do the others..
 FRZ_Vertex frz_cube_verts[] = {
   (FRZ_Vertex) {.pos = v3m(-0.5, -0.5, +0.5), .uv = v2m(0,0), .color = FRZ_RED,},
   (FRZ_Vertex) {.pos = v3m(+0.5, -0.5, +0.5), .uv = v2m(1,0), .color = FRZ_GREEN,},
@@ -45,7 +43,6 @@ FRZ_Vertex frz_cube_verts[] = {
   (FRZ_Vertex) {.pos = v3m(-0.5, -0.5, -0.5), .uv = v2m(1,0), .color = FRZ_GREEN,},
   (FRZ_Vertex) {.pos = v3m(-0.5, +0.5, -0.5), .uv = v2m(1,1), .color = FRZ_WHITE,},
   (FRZ_Vertex) {.pos = v3m(+0.5, +0.5, -0.5), .uv = v2m(0,1), .color = FRZ_BLUE,},
-
 };
 
 s32 frz_cube_indices[] = {

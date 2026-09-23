@@ -1,8 +1,6 @@
 #ifndef STR_H__
 #define STR_H__
 
-// TODO: Should buffers become regular strings? (YES)
-
 #ifndef STR_INCLUDE_BATTERIES
 #include "base/arena.h"
 #include "base/base_inc.h"

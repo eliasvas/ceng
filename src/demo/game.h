@@ -33,7 +33,6 @@ struct Game_State {
   // Game specific stuff
   World *world;
 
-  // Loaded Asset resources (TODO: Asset system)
   Asset_Id static_model_asset_id;
   Asset_Id anim_model_asset_id;
   Asset_Id atlas;

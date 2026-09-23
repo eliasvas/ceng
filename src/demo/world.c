@@ -27,6 +27,15 @@ void world_init(World *world) {
   world->rcommand_count = 0;
 }
 
+Entity* world_get_entity(World *world, Entity_ID id) {
+  assert(id.index < ENTITIES_PER_BLOCK);
+  Entity_Block *entities = world->entities;
+  Entity *e = &entities->e[id.index];
+  b32 alive = entities->alive[id.index];
+  u32 generation = entities->gen[id.index];
+
+  return (!alive || generation != e->id.generation) ? nullptr : e;
+}
 
 Entity* world_add(World *world) {
   Entity_Block *entities = world->entities;
@@ -55,8 +64,10 @@ Entity* world_add(World *world) {
 
 Entity* world_remove(World *world, Entity_ID eid) {
   Entity_Block *entities = world->entities;
-  Entity *e = &entities->e[eid.index];
-  e->kill_fn(world, e);
+  Entity* e = world_get_entity(world, eid);
+  if (e) {
+    e->kill_fn(world, e);
+  }
 
   u32 prev_gen = entities->gen[eid.index];
   M_ZERO_STRUCT(&entities->e[eid.index]);
@@ -84,19 +95,6 @@ s64 world_count_entity_chunks(World *world, s64 *entity_count) {
   return chunk_count;
 }
 
-
-Entity *world_find(World *world, Entity_ID id) {
-  assert(id.index < ENTITIES_PER_BLOCK);
-
-  Entity *e = &world->entities->e[id.index];
-  b32 alive = world->entities->alive[id.index];
-  u32 gen = world->entities->gen[id.index];
-  if (gen == id.generation && alive) {
-    return e;
-  }
-  return nullptr;
-}
-
 u32 world_count_entities(World *world, Entity_Kind kind) {
   u32 count = 0;
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
@@ -105,110 +103,6 @@ u32 world_count_entities(World *world, Entity_Kind kind) {
   }
 
   return count;
-}
-
-
-void common_collide_cb(World *world, Entity_ID a, Entity_ID b) {
-    Entity *ea = &world->entities->e[a.index];
-    assert(ea);
-    Entity *eb = &world->entities->e[b.index];
-    assert(eb);
-
-    switch(ea->kind) {
-      case ENTITY_KIND_NONE:
-        break;
-      case ENTITY_KIND_HERO:
-        if (eb->kind == ENTITY_KIND_COIN) {
-          world_remove(world, b);
-        }
-        break;
-      case ENTITY_KIND_WALL:
-        break;
-      case ENTITY_KIND_COIN:
-        break;
-      case ENTITY_KIND_ENEMY:
-        break;
-      case ENTITY_KIND_BULLET:
-        break;
-    }
-}
-
-b32 bvh_collide(World *world, BVH_Node *node, bbox box, Entity_ID self_id);
-b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
-  Entity *e = world_find(world, id);
-  Phys_Box col_box = e->box;
-  col_box.pos = candidate_pos;
-
-#if 1
-  return bvh_collide(world, world->bvh_root, bbox_from_phys_box(&col_box), id);
-#else
-
-  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
-    Entity *test = &world->entities->e[idx];
-    if (world->entities->alive[idx] && entity_id(test->id) != entity_id(id) ) {
-      b32 test_alive = world->entities->alive[idx];
-      Phys_Box testbox = test->box;
-
-      if (entity_id(test->id) != entity_id(id) && test_alive) {
-        if (bbox_isect(bbox_from_phys_box(&col_box), bbox_from_phys_box(&testbox))) {
-          return test;
-        }
-      }
-    }
-  }
-  return nullptr;
-#endif
-}
-
-BVH_Node *bvh_pick(BVH_Node *node, ray r);
-
-Entity *world_pick_entity(World *world, ray r) {
-
-  BVH_Node *bvh_node = bvh_pick(world->bvh_root, r);
-  if (bvh_node && bvh_node->is_leaf) {
-    Entity_ID id = bvh_node->id;
-    // TODO: perform a generation compare here too!
-    // TODO: We can do an actual collision check here if collider not AABB (!!)
-    Entity *e = &world->entities->e[id.index];
-    return e;
-  } else {
-    return nullptr;
-  }
-}
-
-
-void world_update_render(Game_State *gs, f32 dt) {
-  World *world = gs->world;
-  world->input = &gs->input;
-  world->rcommand_count = 0;
-
-  world_build_bvh(world);
-  particle_mgr_update(world->pmgr, dt);
-
-  // For serialization testing, not really needed tbh..
-  s64 entity_count = 0;
-  s64 chunk_count = world_count_entity_chunks(world, &entity_count);
-  //printf("update_render %ld entities\n", entity_count);
-  assert(chunk_count == 1);
-
-  // Update all the entities
-  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
-    Entity *e = &world->entities->e[idx];
-    if (world->entities->alive[idx]) {
-      e->update_fn(world, e, dt);
-    }
-  }
-
-  // Draw all the entities
-  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
-    Entity *e = &world->entities->e[idx];
-    if (world->entities->alive[idx]) {
-      e->draw_fn(world, e);
-    }
-  }
-
-  particle_mgr_render(gs, world->pmgr);
-  arena_clear(world->frame_arena);
 }
 
 // TODO: Not sure we need Game_State here, maybe world is ok? I mean the entity arena is what we fill right ?..
@@ -453,3 +347,75 @@ void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Re
   }
 }
 
+b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
+  Entity *e = world_get_entity(world, id);
+  Phys_Box col_box = e->box;
+  col_box.pos = candidate_pos;
+
+#if 1
+  return bvh_collide(world, world->bvh_root, bbox_from_phys_box(&col_box), id);
+#else
+
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *test = &world->entities->e[idx];
+    if (world->entities->alive[idx] && entity_id(test->id) != entity_id(id) ) {
+      b32 test_alive = world->entities->alive[idx];
+      Phys_Box testbox = test->box;
+
+      if (entity_id(test->id) != entity_id(id) && test_alive) {
+        if (bbox_isect(bbox_from_phys_box(&col_box), bbox_from_phys_box(&testbox))) {
+          return test;
+        }
+      }
+    }
+  }
+  return nullptr;
+#endif
+
+}
+
+Entity *world_pick_entity(World *world, ray r) {
+  BVH_Node *bvh_node = bvh_pick(world->bvh_root, r);
+  if (bvh_node && bvh_node->is_leaf) {
+    Entity_ID id = bvh_node->id;
+    Entity *e = world_get_entity(world, id);
+    return e;
+  } else {
+    return nullptr;
+  }
+}
+
+
+void world_update_render(Game_State *gs, f32 dt) {
+  World *world = gs->world;
+  world->input = &gs->input;
+  world->rcommand_count = 0;
+
+  world_build_bvh(world);
+  particle_mgr_update(world->pmgr, dt);
+
+  // For serialization testing, not really needed tbh..
+  s64 entity_count = 0;
+  s64 chunk_count = world_count_entity_chunks(world, &entity_count);
+  //printf("update_render %ld entities\n", entity_count);
+  assert(chunk_count == 1);
+
+  // Update all the entities
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
+    if (world->entities->alive[idx]) {
+      e->update_fn(world, e, dt);
+    }
+  }
+
+  // Draw all the entities
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
+    if (world->entities->alive[idx]) {
+      e->draw_fn(world, e);
+    }
+  }
+
+  particle_mgr_render(gs, world->pmgr);
+  arena_clear(world->frame_arena);
+}

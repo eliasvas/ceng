@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# TODO: Maybe we could add the asset handling here
 # TODO: Maybe compile with -pedantic
 #CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
 CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum -fno-exceptions -fstack-protector -g"
@@ -68,7 +67,6 @@ mkdir -p "$OUTPUT_DIR"
 # -----------------------------
 
 CFLAGS="${CFLAGS:-} -std=gnu23"
-#@TODO: remove -lgame we NEED the reload ok?! only for release builds this bullshit
 CLIBS="-lGL -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"

@@ -137,7 +137,7 @@ typedef struct {
 
 // TODO: this
 typedef struct {
-  u32 TBH;
+  u32 TBA;
 } Input_Gamepad_Event;
 
 typedef struct {
