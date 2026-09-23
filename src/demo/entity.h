@@ -52,7 +52,7 @@ struct Entity {
   void (*update_fn)(struct World *world, Entity *e, f32 dt); // @NoSerialize
   void (*draw_fn)(struct World *world, Entity *e); // @NoSerialize
   void (*kill_fn)(struct World *world, Entity *e); // @NoSerialize
-  void (*collide_fn)(struct World *world, Entity *e, Entity *other);
+  void (*collide_fn)(struct World *world, Entity *e, Entity *other); //@NoSerialize
 };
 
 static u64 entity_id(Entity_ID id) {

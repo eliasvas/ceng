@@ -1,8 +1,8 @@
-
 #include "bfont.h"
 
 #include "base/base_inc.h"
 #include "rend/rend_inc.h"
+#include "asset/asset_mgr.h"
 
 
 // By default we just embed ProggyClean - Ugly AF but for now it'll do!
@@ -87,40 +87,3 @@ s64 bfont_count_glyphs_until_width(Font_Info *font_info, str8 text, f32 scale, f
   return glyph_count;
 }
 
-void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 pos, f32 scale, color col, bool draw_bounding_box) {
-  rect tr = bfont_calc_text_rect(font_info, text, pos, scale);
-  Ogl_Tex *font_tex = AM_GET(font_info->tex_id, tex);
-
-  if (draw_bounding_box) {
-    R_Quad quad = (R_Quad) {
-        .clip_rect = clip_rect,
-        .dst_rect = tr,
-        .c = clr(0.9,0.4,0.4,1.0),
-    };
-    r2d_push_quad(r2d_pass_front(), quad);
-  }
-
-  v2 baseline_pos = pos;
-  baseline_pos.y -= font_info->descent_px * scale;
-  for (s32 i = 0; i < text.count; i+=1) {
-    u8 c = text.data[i];
-    Glyph_Info metrics = font_info->glyphs[c - font_info->first_codepoint];
-    f32 atlas_height = font_info->tex_dim.y;
-    R_Quad quad = (R_Quad) {
-        .clip_rect = clip_rect,
-        .dst_rect = 
-            rec(baseline_pos.x + ((i==0)?0:metrics.off.x*scale), 
-              baseline_pos.y - (metrics.off.y*scale + metrics.r.h*scale), 
-              metrics.r.w*scale, metrics.r.h*scale),
-        .src_rect = rec(metrics.r.x,
-            atlas_height - metrics.r.y - metrics.r.h,
-            metrics.r.w,
-            metrics.r.h
-        ),
-        .c = col,
-        .tex = font_tex,
-    };
-    r2d_push_quad(r2d_pass_front(), quad);
-    baseline_pos.x += metrics.xadvance*scale;
-  }
-}

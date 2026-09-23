@@ -436,7 +436,7 @@ int main(void) {
   //gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/CesiumMan/glTF/CesiumMan.gltf"));
   gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Fox/glTF/Fox.gltf"));
 
-  gs.font = bfont_load_default_atlas(gs.persistent_arena, 32, 256, 256);
+  gs.def_font_id = am_load_from_fullpath(STR8L("data/ProggyClean.ttf"));
 
   f64 dt = 1.0/60.0;
   u64 frame_count = 0;

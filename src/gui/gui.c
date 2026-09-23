@@ -240,11 +240,11 @@ Gui_Signal gui_pane(str8 label) {
   return gui_signal_from_box(box);
 }
 
-void gui_init(Arena *tarena, Font_Info *font, Input *input) {
+void gui_init(Arena *tarena, Asset_Id font_id, Input *input) {
   ctx.arena = arena_make(MB(256));
   ctx.temp_arena = tarena;
   ctx.g_scale = 1.0;
-  ctx.font = font;
+  ctx.font_id = font_id;
   ctx.input = input;
   ctx.frame_idx = 0;
   ctx.box_freelist = nullptr;
@@ -261,6 +261,8 @@ void gui_begin(rect viewport, f32 dt) {
   gui_init_stacks();
   ctx.frame_idx+=1;
   ctx.dt = dt;
+
+  ctx.font = AM_GET(ctx.font_id, font);
 
   gui_set_next_child_layout_axis(GUI_AXIS_X);
   gui_push_bg_color(v4m(0.4,0.4,0.4,0.9));
@@ -488,8 +490,9 @@ void gui_render(Gui_Box *root) {
         text_draw_pos = v2m((root->final_rect.p.raw[0] + root->final_rect.dim.raw[0]/2.0 - r.dim.raw[0]/2.0), (root->final_rect.p.raw[1] + root->final_rect.dim.raw[1]/2.0 - r.dim.raw[1]/2.0));
         break;
     }
-    // We shouldn't use bfont for immediate draws.. should go throught r2d
-    bfont_draw_text(ctx.font, ctx.temp_arena, ctx.viewport, clip_rect, root->label, text_draw_pos, ctx.g_scale, root->text_color, false);
+
+    // TODO: investigate scale? are we.. good with it?
+    r2d_push_text(r2d_pass_front(), ctx.font_id, ctx.viewport, clip_rect, root->label, text_draw_pos, ctx.g_scale, root->text_color);
   }
 
   // 3. Proceed to render the remaining hierarchy (back-to-front)

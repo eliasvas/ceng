@@ -1,15 +1,9 @@
 #ifndef _R2D_H__
 #define _R2D_H__
 
-// TODO: Texture handling is atrocious, make it possible (also Ogl side) to assign c-style texture sampler arrays to a slot
-// TODO: Look at the batch fragment shader todos.. BEWARE!!
-
-/*
- * General idea is to have low-level and high-level API, do fs-side clips
- * */
 #include "base/base_inc.h"
-#include "frz/frz.h"
 #include "ogl.h"
+#include "asset/asset_id.h"
 
 #define REND_MAX_INSTANCES 512
 
@@ -104,6 +98,7 @@ typedef struct {
   s32 count;
 } R2D_Pass_List;
 
+// Low-level API
 void r2d_begin(Arena *arena, rect dummy_viewport);
 R2D_Pass *r2d_pass_front();
 R2D_Pass *r2d_pass_back();
@@ -111,10 +106,10 @@ void r2d_flush_all();
 R2D_Pass *r2d_push_pass(R2D_Pass_Kind kind, R_C2D cam2d, rect viewport);
 void r2d_push_quad(R2D_Pass *pass, R_Quad q);
 
-// Maybe delete from here??
-void r3d_load_shaders();
-
-
+// High-level helpers
+// TODO: viewport is also part of R2D_Pass, do we really need it here?
+// TODO: maybe all the sizing info could be in a struct, its getting pretty long!
+void r2d_push_text(R2D_Pass *pass, Asset_Id font_id, rect viewport, rect clip_rect, str8 text, v2 pos, f32 scale, color col);
 
 
 #endif

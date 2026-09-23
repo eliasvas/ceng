@@ -41,7 +41,7 @@ void game_init(struct Game_State *gs) {
   ground->box.hdim = v3m(4,1,4),
   ground->col = v4m(0.4,0.4,0.4,1.0);
 
-  gui_init(gs->frame_arena, &gs->font, &gs->input);
+  gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
 #if 0 
   // Base64 test.. no reason
@@ -68,6 +68,9 @@ void game_init(struct Game_State *gs) {
 
 void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
+
+  // Push a sample text
+  r2d_push_text(r2d_pass_front(), gs->def_font_id, gs->game_viewport, gs->game_viewport, STR8L("Fix gui g_scale!"), v2m(300,0), 2, CLR_RED);
 
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {

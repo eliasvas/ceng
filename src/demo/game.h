@@ -38,6 +38,11 @@ struct Game_State {
   Asset_Id anim_model_asset_id;
   Asset_Id atlas;
   v2 atlas_sprites_per_dim;
+
+  Asset_Id def_font_id;
+
+
+  // REMOVE DIS
   Font_Info font;
 
   // 3D scene stuff should be here or no?

@@ -125,7 +125,7 @@ typedef struct {
   Gui_Box *box;
 }Gui_Signal;
 
-void gui_init(Arena *tarena, Font_Info *font, Input *input);
+void gui_init(Arena *tarena, Asset_Id font_id, Input *input);
 Gui_Box *gui_nil_box();
 Gui_Signal gui_button(str8 label);
 Gui_Signal gui_label(str8 label);
@@ -182,6 +182,7 @@ typedef struct {
   Arena *arena;
   Arena *temp_arena;
 
+  Asset_Id font_id;
   Font_Info *font;
   Input *input;
 

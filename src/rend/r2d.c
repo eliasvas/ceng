@@ -1,6 +1,9 @@
 #include "rend/rend_inc.h"
 #include "asset/asset_mgr.h"
 
+#include "core/core_inc.h"
+#include "asset/asset_types.h"
+
 // Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle batch_bundle = {};
 
@@ -360,3 +363,31 @@ void r2d_push_quad(R2D_Pass *pass, R_Quad q) {
   r_quad_chunk_list_add_quad(__frame_arena, &pass->quads, q);
 }
 
+void r2d_push_text(R2D_Pass *pass, Asset_Id font_id, rect viewport, rect clip_rect, str8 text, v2 pos, f32 scale, color col) {
+  Font_Info *font_info = AM_GET(font_id, font);
+  Ogl_Tex *font_tex = AM_GET(font_info->tex_id, tex);
+
+  v2 baseline_pos = pos;
+  baseline_pos.y -= font_info->descent_px * scale;
+  for (s32 i = 0; i < text.count; i+=1) {
+    u8 c = text.data[i];
+    Glyph_Info metrics = font_info->glyphs[c - font_info->first_codepoint];
+    f32 atlas_height = font_info->tex_dim.y;
+    R_Quad quad = (R_Quad) {
+        .clip_rect = clip_rect,
+        .dst_rect = 
+            rec(baseline_pos.x + ((i==0)?0:metrics.off.x*scale), 
+              baseline_pos.y - (metrics.off.y*scale + metrics.r.h*scale), 
+              metrics.r.w*scale, metrics.r.h*scale),
+        .src_rect = rec(metrics.r.x,
+            atlas_height - metrics.r.y - metrics.r.h,
+            metrics.r.w,
+            metrics.r.h
+        ),
+        .c = col,
+        .tex = font_tex,
+    };
+    r2d_push_quad(pass, quad);
+    baseline_pos.x += metrics.xadvance*scale;
+  }
+}

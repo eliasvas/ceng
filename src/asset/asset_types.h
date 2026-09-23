@@ -1,20 +1,14 @@
 #ifndef _ASSET_TYPES_H__
 #define _ASSET_TYPES_H__
 
+#include "asset_id.h"
 #include "base/base_inc.h"
 #include "rend/rend_inc.h"
+#include "core/bfont.h"
 
 ///////////////////////////////
 // Asset types
 ///////////////////////////////
-
-typedef void* Asset_Handle;
-typedef enum {
-  ASSET_KIND_TEX   = ('p'+'n'+'g'),
-  ASSET_KIND_FONT  = ('t'+'t'+'f'),
-  ASSET_KIND_AUDIO = ('m'+'p'+'3'),
-  ASSET_KIND_MODEL = ('l'+'t'+'f'), // TODO: Maybe make gltf strictly .glb
-} Asset_Kind;
 
 typedef struct {
   v3 pos;
@@ -42,11 +36,6 @@ typedef struct {
   v4 weight_3;
 
 } Uber_Vertex;
-
-typedef struct {
-  u64 id;
-  Asset_Kind kind;
-} Asset_Id;
 
 
 typedef struct {
@@ -164,7 +153,7 @@ struct Asset_Node {
   //union {
     Ogl_Tex tex;
     Model_Info model;
-    // Font font
+    Font_Info font;
     // Render_Bundle?
   //};
 

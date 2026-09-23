@@ -1,7 +1,7 @@
 #ifndef BFONT_H__
 #define BFONT_H__
 #include "base/base_inc.h"
-#include "asset/asset_mgr.h"
+#include "asset/asset_id.h"
 #include "rend/rend_inc.h"
 
 // TODO: LOD stuff and our own lookup data structure (Glyph_Cache?)
@@ -16,7 +16,7 @@ typedef struct {
 } Glyph_Info;
 
 // TODO: Maybe we can use a stack allocator for the permanent arena, so the Font_Info's glyphs array can be allocated there (in the end)
-typedef struct {
+typedef struct Font_Info {
   Glyph_Info glyphs[200];
   u32 first_codepoint;
   u32 last_codepoint;
@@ -29,7 +29,7 @@ typedef struct {
 
   Asset_Id tex_id;
   v2 tex_dim;
-}Font_Info;
+} Font_Info;
 
 Font_Info bfont_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32 atlas_width, u32 atlas_height);
 void bfont_flip_bitmap(u8 *bitmap, s32 width, s32 height);
@@ -38,6 +38,4 @@ f32 bfont_measure_text_height(Font_Info *font_info, str8 text, f32 scale);
 rect bfont_calc_text_rect(Font_Info *font_info, str8 text, v2 baseline_pos, f32 scale);
 s64 bfont_count_glyphs_until_width(Font_Info *font_info, str8 text, f32 scale, f32 target_width);
 
-// TODO: This should be elsewhere ok?
-void bfont_draw_text(Font_Info *font_info, Arena *arena, rect viewport, rect clip_rect, str8 text, v2 baseline_pos, f32 scale, color col, bool draw_box);
 #endif

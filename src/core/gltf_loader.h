@@ -3,6 +3,7 @@
 #include "base/base_inc.h"
 #include "core/json_util.h"
 #include "core/base64.h"
+#include "asset/asset_mgr.h"
 
 // Ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
 // Ref: https://github.khronos.org/glTF-Tutorials/gltfTutorial/

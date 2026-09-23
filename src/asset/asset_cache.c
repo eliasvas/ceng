@@ -74,6 +74,8 @@ Asset_Id asset_cache_load_from_data(Asset_Cache *mgr, str8 asset_fullpath, str8 
       node->model = model; // <------- Important part here! :)
       break;
     case ASSET_KIND_FONT:
+      Font_Info font = bfont_load_default_atlas(mgr->parent->arena, 32, 256, 256);
+      node->font = font;
     case ASSET_KIND_AUDIO:
     default:
       break;
