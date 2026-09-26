@@ -103,41 +103,7 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD_BASIC(SV_Initial, v3, dash_dir);
   ADD_BASIC(SV_Initial, s32, kind);
 
-  // Also load the 'member' functions
-  switch (data->kind) {
-    case ENTITY_KIND_HERO:
-      data->update_fn = update_hero;
-      data->draw_fn = draw_hero;
-      data->kill_fn = kill_hero;
-      data->collide_fn = collide_hero;
-      break;
-    case ENTITY_KIND_WALL:
-      data->update_fn = update_wall;
-      data->draw_fn = draw_wall;
-      data->kill_fn = kill_wall;
-      data->collide_fn = collide_wall;
-      break;
-    case ENTITY_KIND_COIN:
-      data->update_fn = update_coin;
-      data->draw_fn = draw_coin;
-      data->kill_fn = kill_coin;
-      data->collide_fn = collide_coin;
-      break;
-    case ENTITY_KIND_ENEMY:
-      //data->update_fn = update_enemy;
-      //data->draw_fn = draw_enemy;
-      //data->kill_fn = kill_enemy;
-      //data->collide_fn = collide_enemy;
-      break;
-    case ENTITY_KIND_BULLET:
-      //data->update_fn = update_bullet;
-      //data->draw_fn = draw_bullet;
-      //data->kill_fn = kill_bullet;
-      //data->collide_fn = collide_bullet;
-    case ENTITY_KIND_NONE:
-    default:
-      break;
-  }
+  entity_setup_const_data(data, data->kind);
 }
 
 static void serialize_world(World_Serializer *wserializer, World *data) {

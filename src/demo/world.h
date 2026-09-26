@@ -1,7 +1,7 @@
 #ifndef WORLD_H__
 #define WORLD_H__
 
-#include "entity.h"
+#include "entity/entity.h"
 #include "game.h"
 #include "base/base_inc.h"
 #include "core/core_inc.h"
