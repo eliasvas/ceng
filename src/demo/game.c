@@ -23,6 +23,23 @@ void game_init(struct Game_State *gs) {
   Entity *hero = setup_hero(world_add(gs->world), v3m(1,4,1));
   assert(hero);
 
+
+  // Make the heros head
+  Entity *hero_head = setup_none(world_add(gs->world), v3m(0,0,0));
+  hero_head->box = (Phys_Box) {
+    .pos = v3m(0,0.5,0),
+    .hdim = v3m(0.4, 0.3, 0.2),
+
+    // Dont think we need this MOFO
+    .col_off = v3m(1000000,0,0),
+    .col_hdim = v3m(0.1,0.1,0.1),
+  };
+  hero_head->col = CLR_PURPLE_C64;
+  assert(hero_head);
+
+  // Add hero head to hero
+  entity_add_child(hero, hero_head);
+
   // Make the pillars
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
@@ -144,8 +161,8 @@ void game_render(struct Game_State *gs, float dt) {
     m4 inv_vp = m4_inv(vp);
     v2 mp = input_get_mouse_pos(&gs->input);
 
-    v3 near = world_from_screen(v3m(mp.x, mp.y, -1.0), v2m(800,600), inv_vp);
-    v3 far = world_from_screen(v3m(mp.x, mp.y, 1.0), v2m(800,600), inv_vp);
+    v3 near = world_from_screen(v3m(mp.x, mp.y, -1.0), v2m(gs->wdim.x,gs->wdim.y), inv_vp);
+    v3 far = world_from_screen(v3m(mp.x, mp.y, 1.0), v2m(gs->wdim.x,gs->wdim.y), inv_vp);
     v3 dir = v3_norm(v3_sub(far, near));
 
     ray r = (ray) {

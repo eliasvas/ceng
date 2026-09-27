@@ -373,7 +373,9 @@ int main(void) {
       return 1;
   }
 
-  SDL_Window *window = SDL_CreateWindow("window", 800, 600, SDL_WINDOW_OPENGL);
+  //v2 wdim = v2m(800, 600);
+  v2 wdim = v2m(1600, 900);
+  SDL_Window *window = SDL_CreateWindow("window", wdim.x, wdim.y, SDL_WINDOW_OPENGL);
   if (!window) {
       fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
       SDL_Quit();
@@ -418,7 +420,7 @@ int main(void) {
   /////////////////////////////////////////////////////
   gs.persistent_arena = arena_make(GB(1));
   gs.frame_arena = arena_make(MB(256));
-  gs.wdim = v2m(800, 600);
+  gs.wdim = wdim;
 
   ogl_init(); // To create the bullshit empty VAO opengl side, nothing else
 

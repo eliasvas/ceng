@@ -676,6 +676,14 @@ typedef struct {
   v3 s;
 } transform;
 
+static transform transform_base() {
+  return (transform) {
+    .t = v3m(0,0,0),
+    .s = v3m(1,1,1),
+    .r = qu(0,0,0,1),
+  };
+}
+
 static transform transform_from_m4(m4 m) {
   transform xform;
   xform.t = m4_extract_trans(m);

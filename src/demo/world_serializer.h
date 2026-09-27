@@ -81,9 +81,8 @@ static void serialize_Entity_ID(World_Serializer *wserializer, Entity_ID *data) 
 }
 
 static void serialize_Phys_Box(World_Serializer *wserializer, Phys_Box *data) {
-  ADD_BASIC(SV_Initial, v3, pos);
   ADD_BASIC(SV_Initial, v3, vel);
-  ADD_BASIC(SV_Initial, v3, hdim);
+  ADD_BASIC(SV_Initial, v3, acc);
 
   ADD_BASIC(SV_Initial, v3, col_off);
   ADD_BASIC(SV_Initial, v3, col_hdim);
@@ -102,6 +101,9 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD_BASIC(SV_Initial, f32, dash_timer);
   ADD_BASIC(SV_Initial, v3, dash_dir);
   ADD_BASIC(SV_Initial, s32, kind);
+
+  ADD_BASIC(SV_Initial, transform, local);
+  //ADD_BASIC(SV_Initial, m4, world);
 
   entity_setup_const_data(data, data->kind);
 }

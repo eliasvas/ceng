@@ -14,11 +14,7 @@ bbox entity_get_collider_bbox(Entity *entity) {
 }
 
 void entity_common_draw(World *world, Entity *e) {
-  transform xform = {
-    .t = e->box.pos,
-    .r = qu(0,0,0,1),
-    .s = v3_multf(e->box.hdim, 2.0f),
-  };
+  // transform xform = { .t = e->box.pos, .r = qu(0,0,0,1), .s = v3_multf(e->box.hdim, 2.0f), };
   transform collider_xform = {
     .t = v3_add(e->box.col_off, e->box.pos),
     .r = qu(0,0,0,1),
@@ -26,7 +22,8 @@ void entity_common_draw(World *world, Entity *e) {
   };
 
   Entity_Render_Command cmd = (Entity_Render_Command) {
-    .xform = xform,
+    //.xform = xform,
+    .xform = transform_from_m4(e->world),
     .asset_id = (Asset_Id){},
     .col = e->col,
 
@@ -240,9 +237,30 @@ Entity *setup_coin(Entity *e, v3 pos) {
 }
 
 
+
+Entity *setup_none(Entity *e, v3 pos) {
+  e->kind = ENTITY_KIND_NONE;
+  entity_setup_const_data(e, e->kind);
+  e->dynamic = true;
+  return e;
+}
+void collide_none(World *world, Entity *e, Entity *other) {}
+void update_none(World *world, Entity *e, f32 dt) {}
+void kill_none(World *world, Entity *e) {}
+void draw_none(World *world, Entity *e) {
+  entity_common_draw(world, e);
+}
+
+
 // TODO: Should we break this up as well, only place we switch on entity_kind
 void entity_setup_const_data(Entity *e, Entity_Kind kind) {
   switch (e->kind) {
+    case ENTITY_KIND_NONE:
+      e->update_fn = update_none;
+      e->draw_fn = draw_none;
+      e->kill_fn = kill_none;
+      e->collide_fn = collide_none;
+      break;
     case ENTITY_KIND_HERO:
       e->update_fn = update_hero;
       e->draw_fn = draw_hero;
@@ -273,8 +291,30 @@ void entity_setup_const_data(Entity *e, Entity_Kind kind) {
       //e->draw_fn = draw_bullet;
       //e->kill_fn = kill_bullet;
       //e->collide_fn = collide_bullet;
-    case ENTITY_KIND_NONE:
     default:
       break;
   }
 }
+
+#if 0
+  Gui_Box *parent = box->parent;
+  dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
+  if (parent != gui_nil_box()) { parent->child_count+=1; }
+#endif
+
+Entity *entity_add_child(Entity *parent, Entity *child) {
+  child->parent = parent;
+  dll_push_back(parent->first, parent->last, child);
+
+  return child;
+}
+
+
+m4 entity_get_world_transform(Entity *entity) {
+  if (entity == nullptr) return m4d(1.0);
+
+  transform local = entity->local;
+  //return m4_mult(m4_from_transform(local), entity_get_world_transform(entity->parent));
+  return m4_mult(entity_get_world_transform(entity->parent), m4_from_transform(local));
+}
+

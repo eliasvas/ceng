@@ -404,7 +404,13 @@ void world_update_render(Game_State *gs, f32 dt) {
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
     if (world->entities->alive[idx]) {
+      e->local = (transform) {
+        .t = e->box.pos,
+        .s = v3_multf(e->box.hdim, 2.0),
+        .r = qu(0,0,0,1),
+      };
       e->update_fn(world, e, dt);
+      e->world = entity_get_world_transform(e);
     }
   }
 
