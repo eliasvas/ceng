@@ -11,11 +11,8 @@ struct Entity;
 
 
 typedef struct {
- v3 pos;
  v3 vel;
  v3 acc;
-
- v3 hdim;
 
  // Collider offset and dimension
  v3 col_off;
@@ -54,7 +51,8 @@ struct Entity {
 
   // Transforms
   transform local;
-  m4 world;
+  transform world;
+  m4 world_mat;
 
   // Tree links
   Entity *parent;
@@ -80,12 +78,12 @@ static u64 entity_id(Entity_ID id) {
 
 // FIXME: These should take a transform now !!!!!!
 void entity_setup_const_data(Entity *e, Entity_Kind kind);
-Entity *setup_none(Entity *e, v3 pos);
-Entity *setup_hero(Entity *e, v3 pos);
-Entity *setup_wall(Entity *e, v3 pos);
-Entity *setup_coin(Entity *e, v3 pos);
-Entity *setup_enemy(Entity *e, v3 pos);
-Entity *setup_bullet(Entity *e, v3 pos);
+Entity *setup_none(Entity *e, transform xform);
+Entity *setup_hero(Entity *e, transform xform);
+Entity *setup_wall(Entity *e, transform xform);
+Entity *setup_coin(Entity *e, transform xform);
+Entity *setup_enemy(Entity *e, transform xform);
+Entity *setup_bullet(Entity *e, transform xform);
 
 // Helpers
 bbox entity_get_collider_bbox(Entity *entity);

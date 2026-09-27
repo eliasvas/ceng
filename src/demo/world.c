@@ -232,8 +232,8 @@ int entity_compare_x(void *a, void *b) {
     Entity *e_a = (Entity *)a;
     Entity *e_b = (Entity *)b;
 
-    v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
-    v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
+    v3 a_center = v3_add(e_a->world.t, e_a->box.col_off);
+    v3 b_center = v3_add(e_b->world.t, e_b->box.col_off);
     if (a_center.x < b_center.x) {
       return -1;
     } else {
@@ -245,8 +245,8 @@ int entity_compare_y(void *a, void *b) {
     Entity *e_a = (Entity *)a;
     Entity *e_b = (Entity *)b;
 
-    v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
-    v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
+    v3 a_center = v3_add(e_a->world.t, e_a->box.col_off);
+    v3 b_center = v3_add(e_b->world.t, e_b->box.col_off);
     if (a_center.y < b_center.y) {
       return -1;
     } else {
@@ -258,8 +258,8 @@ int entity_compare_z(void *a, void *b) {
     Entity *e_a = (Entity *)a;
     Entity *e_b = (Entity *)b;
 
-    v3 a_center = v3_add(e_a->box.pos, e_a->box.col_off);
-    v3 b_center = v3_add(e_b->box.pos, e_b->box.col_off);
+    v3 a_center = v3_add(e_a->world.t, e_a->box.col_off);
+    v3 b_center = v3_add(e_b->world.t, e_b->box.col_off);
     if (a_center.z < b_center.z) {
       return -1;
     } else {
@@ -347,31 +347,16 @@ void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Re
   }
 }
 
-b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos) {
+b32 world_entity_collides(World *world, Entity_ID id, v3 delta) {
   Entity *e = world_get_entity(world, id);
-  Phys_Box col_box = e->box;
-  col_box.pos = candidate_pos;
 
-#if 1
-  return bvh_collide(world, world->bvh_root, bbox_from_phys_box(&col_box), id);
-#else
+  // FIXME: hacky!
+  Entity test = *e;
+  test.world.t = v3_add(test.world.t, delta);
+  bbox box = entity_get_collider_bbox(&test);
 
-  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
-    Entity *test = &world->entities->e[idx];
-    if (world->entities->alive[idx] && entity_id(test->id) != entity_id(id) ) {
-      b32 test_alive = world->entities->alive[idx];
-      Phys_Box testbox = test->box;
 
-      if (entity_id(test->id) != entity_id(id) && test_alive) {
-        if (bbox_isect(bbox_from_phys_box(&col_box), bbox_from_phys_box(&testbox))) {
-          return test;
-        }
-      }
-    }
-  }
-  return nullptr;
-#endif
-
+  return bvh_collide(world, world->bvh_root, box, id);
 }
 
 Entity *world_pick_entity(World *world, ray r) {
@@ -391,6 +376,15 @@ void world_update_render(Game_State *gs, f32 dt) {
   world->input = &gs->input;
   world->rcommand_count = 0;
 
+  // Fill world transforms (matrix + xform) - Needed currently for bvh
+  for (s64 idx = 0; idx < world->entities->count; idx+=1) {
+    Entity *e = &world->entities->e[idx];
+    if (world->entities->alive[idx]) {
+      e->world_mat = entity_get_world_transform(e);
+      e->world = transform_from_m4(e->world_mat);
+    }
+  }
+
   world_build_bvh(world);
   particle_mgr_update(world->pmgr, dt);
 
@@ -404,13 +398,7 @@ void world_update_render(Game_State *gs, f32 dt) {
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
     if (world->entities->alive[idx]) {
-      e->local = (transform) {
-        .t = e->box.pos,
-        .s = v3_multf(e->box.hdim, 2.0),
-        .r = qu(0,0,0,1),
-      };
       e->update_fn(world, e, dt);
-      e->world = entity_get_world_transform(e);
     }
   }
 

@@ -103,6 +103,7 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD_BASIC(SV_Initial, s32, kind);
 
   ADD_BASIC(SV_Initial, transform, local);
+
   //ADD_BASIC(SV_Initial, m4, world);
 
   entity_setup_const_data(data, data->kind);

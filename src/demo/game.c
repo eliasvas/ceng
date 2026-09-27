@@ -20,43 +20,36 @@ void game_init(struct Game_State *gs) {
   world_init(gs->world);
 
   // Make the hero
-  Entity *hero = setup_hero(world_add(gs->world), v3m(1,4,1));
+  Entity *hero = setup_hero(world_add(gs->world), transform_make(v3m(1,4,1), QUAT_ONE, v3m(0.5,0.8,0.5)));
+  hero->col = CLR_GREEN_CLASSIC;
   assert(hero);
 
-
   // Make the heros head
-  Entity *hero_head = setup_none(world_add(gs->world), v3m(0,0,0));
+  transform head_x = transform_make(v3m(0,0.5,0), QUAT_ONE, v3m(0.4,0.3,0.2));
+  Entity *hero_head = setup_none(world_add(gs->world), head_x);
   hero_head->box = (Phys_Box) {
-    .pos = v3m(0,0.5,0),
-    .hdim = v3m(0.4, 0.3, 0.2),
-
-    // Dont think we need this MOFO
-    .col_off = v3m(1000000,0,0),
+    // Dont thino we need this MOFO
+    .col_off = v3m(10000000,0,0),
     .col_hdim = v3m(0.1,0.1,0.1),
   };
-  hero_head->col = CLR_PURPLE_C64;
+  hero_head->col = CLR_PURPLE_RAIN;
   assert(hero_head);
 
   // Add hero head to hero
   entity_add_child(hero, hero_head);
 
+  // Make the ground
+  Entity *ground = setup_wall(world_add(gs->world), transform_make(v3m(0,-1.01,0), QUAT_ONE, v3m(8,1,8)));
+  ground->col = CLR_BLUE_DAMSELFLY;
+
   // Make the pillars
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
-      setup_wall(world_add(gs->world), v3m(width,height,1));
-#if 0
-      Particle_Emitter *emitter = particle_mgr_new_emitter(gs->pmgr);
-      emitter->pos = v3m(width, height, 1);
-      emitter->sec_per_particle = 0.1;
-#endif
+      transform pillar_xform = transform_make(v3m(width, height, 1), QUAT_ONE, v3_one);
+      Entity *pillar = setup_wall(world_add(gs->world), pillar_xform);
+      pillar->col = CLR_BLUE_HIPPIE;
     }
   }
-
-  // Make the ground
-  Entity *ground = setup_wall(world_add(gs->world), v3m(0,-1.01,0));
-  ground->box.col_hdim = v3m(4,1,4),
-  ground->box.hdim = v3m(4,1,4),
-  ground->col = v4m(0.4,0.4,0.4,1.0);
 
   gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
@@ -89,6 +82,7 @@ void game_update(struct Game_State *gs, float dt) {
   // Push a sample text
   r2d_push_text(r2d_pass_front(), gs->def_font_id, gs->game_viewport, gs->game_viewport, STR8L("Fix gui g_scale!"), v2m(300,0), 2, CLR_RED);
 
+#if 0
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
     Entity *test_coin = setup_coin(
@@ -96,6 +90,7 @@ void game_update(struct Game_State *gs, float dt) {
     );
     assert(test_coin);
   }
+#endif
 
 }
 
@@ -207,7 +202,7 @@ void game_render(struct Game_State *gs, float dt) {
       [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
     },
     .running_time_sec = gs->time_sec,
-#if 0
+#if 1
     .kind = BVH_RENDER_OFF,
 #else
     .seconds_per_level = 0.5,

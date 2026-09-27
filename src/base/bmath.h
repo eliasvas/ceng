@@ -346,6 +346,7 @@ typedef union {
 } quat;
 
 #define qu(x, y, z, w) ((quat){{x, y, z, w}})
+#define QUAT_ONE (qu(0,0,0,1))
 
 static quat quat_norm(quat q) {
   v4 v = v4m(q.x, q.y, q.z, q.w);
@@ -675,6 +676,14 @@ typedef struct {
   quat r;
   v3 s;
 } transform;
+
+static transform transform_make(v3 t, quat r, v3 s) {
+  return (transform){
+    .t = t,
+    .r = r,
+    .s = s,
+  };
+}
 
 static transform transform_base() {
   return (transform) {

@@ -2,28 +2,27 @@
 #include "game.h"
 
 // Forward declaration from World..
-b32 world_entity_collides(World *world, Entity_ID id, v3 candidate_pos);
-
-bbox bbox_from_phys_box(Phys_Box *box) {
-  v3 collider_center = v3_add(box->pos, box->col_off);
-  return bbox_normalize(bbox_from_center_hdim(collider_center, box->col_hdim));
-}
+b32 world_entity_collides(World *world, Entity_ID id, v3 delta);
 
 bbox entity_get_collider_bbox(Entity *entity) {
-  return bbox_from_phys_box(&entity->box);
+  return bbox_from_center_hdim(
+      v3_add(entity->world.t, entity->box.col_off), 
+      entity->box.col_hdim
+  );
 }
 
 void entity_common_draw(World *world, Entity *e) {
   // transform xform = { .t = e->box.pos, .r = qu(0,0,0,1), .s = v3_multf(e->box.hdim, 2.0f), };
   transform collider_xform = {
-    .t = v3_add(e->box.col_off, e->box.pos),
+    .t = v3_add(e->box.col_off, e->world.t),
     .r = qu(0,0,0,1),
     .s = v3_multf(e->box.col_hdim, 2.0f),
+    //.s = v3_multf(v3_mult(e->world.s, v3_multf(e->box.col_hdim, 1.0)), 0.5f)
   };
 
   Entity_Render_Command cmd = (Entity_Render_Command) {
     //.xform = xform,
-    .xform = transform_from_m4(e->world),
+    .xform = e->world,
     .asset_id = (Asset_Id){},
     .col = e->col,
 
@@ -52,10 +51,10 @@ void update_hero(World *world, Entity *e, f32 dt) {
   // Perform simple axis separated movement
   e->move_dir = v3_norm(e->box.vel);
   for (s32 axis = 0; axis < 3; axis += 1) {
-    v3 candidate_pos_axis = e->box.pos;
-    candidate_pos_axis.raw[axis] += e->box.vel.raw[axis] * dt;
-    b32 collides = world_entity_collides(world, e->id, candidate_pos_axis);
-    if (!collides) e->box.pos = candidate_pos_axis;
+    v3 delta = v3_zero;
+    delta.raw[axis] = e->box.vel.raw[axis] * dt;
+    b32 collides = world_entity_collides(world, e->id, delta);
+    if (!collides) e->local.t.raw[axis] += delta.raw[axis];
   }
 }
 
@@ -66,17 +65,15 @@ void draw_hero(World *world, Entity *e) {
 }
 
 
-Entity *setup_hero(Entity *e, v3 pos) {
+Entity *setup_hero(Entity *e, transform xform) {
+  //M_ZERO_STRUCT(e);
+  e->box.col_off = v3_zero;
+  e->box.col_hdim = v3_multf(xform.s, 0.5);
+
+  e->local = xform;
   e->kind = ENTITY_KIND_HERO;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
-  e->box = (Phys_Box) {
-    .pos = pos,
-    .col_off = v3m(0,0,0),
-    .hdim = v3m(0.3, 0.5, 0.3),
-    .col_hdim = v3m(0.5,0.5,0.5),
-  };
-  e->col = v4m(0.9,0.4,0.3,1.0);
   return e;
 }
 
@@ -178,17 +175,15 @@ void draw_wall(World *world, Entity *e) {
   entity_common_draw(world, e);
 }
 
-Entity *setup_wall(Entity *e, v3 pos) {
+Entity *setup_wall(Entity *e, transform xform) {
+  //M_ZERO_STRUCT(e);
+  e->box.col_off = v3_zero;
+  e->box.col_hdim = v3_multf(xform.s, 0.5);
+
+  e->local = xform;
   e->kind = ENTITY_KIND_WALL;
   entity_setup_const_data(e, e->kind);
   e->dynamic = false;
-  e->box = (Phys_Box) {
-    .pos = pos,
-    .col_off = v3m(0,0,0),
-    .col_hdim = v3m(0.5,0.5,0.5),
-    .hdim = v3m(0.5,0.5,0.5),
-  };
-  e->col = v4m(0.2,0.4,0.9,1.0);
   return e;
 }
 
@@ -207,7 +202,7 @@ void kill_coin(struct World *world, Entity *e) {
   printf("COIN killed!\n");
 
   //color obj_color = e->col;
-  v3 obj_pos = e->box.pos;
+  v3 obj_pos = e->world.t;
   // Spawn a short emitter
   Particle_Emitter *death_coin_particles = particle_mgr_new_emitter(world->pmgr);
   death_coin_particles->lifespan = 0.1;
@@ -222,14 +217,16 @@ void draw_coin(World *world, Entity *e) {
   entity_common_draw(world, e);
 }
 
-Entity *setup_coin(Entity *e, v3 pos) {
+Entity *setup_coin(Entity *e, transform xform) {
+  //M_ZERO_STRUCT(e);
+  e->box.col_off = v3_zero;
+  e->box.col_hdim = v3_multf(xform.s, 0.5);
+  e->local = xform;
   e->kind = ENTITY_KIND_COIN;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
   e->box = (Phys_Box) {
-    .pos = pos,
     .col_off = v3m(0,0,0),
-    .hdim = v3m(0.2, 0.1, 0.2),
     .col_hdim = v3m(0.2,0.1,0.2),
   };
   e->col = v4m(0.95,0.9,0.0,1.0);
@@ -238,12 +235,19 @@ Entity *setup_coin(Entity *e, v3 pos) {
 
 
 
-Entity *setup_none(Entity *e, v3 pos) {
+Entity *setup_none(Entity *e, transform xform) {
+  //M_ZERO_STRUCT(e);
+  // TODO: Should this be here though ?
+  e->box.col_off = v3_zero;
+  e->box.col_hdim = v3_multf(xform.s, 0.5);
+
+  e->local = xform;
   e->kind = ENTITY_KIND_NONE;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
   return e;
 }
+
 void collide_none(World *world, Entity *e, Entity *other) {}
 void update_none(World *world, Entity *e, f32 dt) {}
 void kill_none(World *world, Entity *e) {}
