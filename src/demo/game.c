@@ -25,8 +25,8 @@ void game_init(struct Game_State *gs) {
   assert(hero);
 
   // Make the heros head
-  transform head_x = transform_make(v3m(0,0.5,0), QUAT_ONE, v3m(0.4,0.3,0.2));
-  Entity *hero_head = setup_none(world_add(gs->world), head_x);
+  transform head_xform = transform_make(v3m(0,0.5,0), QUAT_ONE, v3m(0.4,0.3,0.2));
+  Entity *hero_head = setup_none(world_add(gs->world), head_xform);
   hero_head->box = (Phys_Box) {
     // Dont thino we need this MOFO
     .col_off = v3m(10000000,0,0),
@@ -82,15 +82,12 @@ void game_update(struct Game_State *gs, float dt) {
   // Push a sample text
   r2d_push_text(r2d_pass_front(), gs->def_font_id, gs->game_viewport, gs->game_viewport, STR8L("Fix gui g_scale!"), v2m(300,0), 2, CLR_RED);
 
-#if 0
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
-    Entity *test_coin = setup_coin(
-        world_add(gs->world), v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0)
-    );
+    transform coin_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 0.2));
+    Entity *test_coin = setup_coin(world_add(gs->world), coin_xform);
     assert(test_coin);
   }
-#endif
 
 }
 

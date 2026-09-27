@@ -225,10 +225,6 @@ Entity *setup_coin(Entity *e, transform xform) {
   e->kind = ENTITY_KIND_COIN;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
-  e->box = (Phys_Box) {
-    .col_off = v3m(0,0,0),
-    .col_hdim = v3m(0.2,0.1,0.2),
-  };
   e->col = v4m(0.95,0.9,0.0,1.0);
   return e;
 }

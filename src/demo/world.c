@@ -111,7 +111,7 @@ void world_serialize(Game_State *gs) {
   assert(arena);
 
   World_Serializer s = wserializer_from_fullpath(arena, SAVEGAME_FILE);
-  serialize_all_inc_version(&s, gs->world);
+  serialize_all(&s, gs->world);
   wserializer_finish(&s);
 
   printf("SERIALIZE!!\n");
@@ -122,7 +122,7 @@ void world_deserialize(Game_State *gs) {
   assert(arena);
 
   World_Serializer d = wdeserializer_from_fullpath(arena, SAVEGAME_FILE);
-  serialize_all_inc_version(&d, gs->world);
+  serialize_all(&d, gs->world);
   wdeserializer_finish(&d);
 
   printf("DESERIALIZE!!\n");

@@ -8,15 +8,15 @@
 // https://gist.github.com/OswaldHurlem/2a19e63760cba014b9884ff58205ea95/904b898c67d98e97da2733bce79da3f4439f5133#file-lbp_serialization-cpp-L210
 
 enum : s32 {
-    SV_Initial = 1,
-    SV_AddedFoo,
-    SV_RemovedFoo,
-    SV_RemovedBar,
+    SV_INITIAL = 1,
+    SV_ADDED_FOO,
+    SV_REMOVED_FOO,
+    SV_REMOVED_BAR,
 
     // Never remove dis
-    SV_LatestPlusOne
+    SV_LATEST_PLUS_ONE
 };
-#define SV_LATEST (SV_LatestPlusOne - 1)
+#define SV_LATEST (SV_LATEST_PLUS_ONE - 1)
 
 typedef struct {
   s32 data_version;
@@ -25,6 +25,7 @@ typedef struct {
   s32 counter;
 
   Arena *arena;
+  World *world_ref;
 } World_Serializer;
 
 #define serialize_basic_type(_type, _data) \
@@ -58,6 +59,13 @@ if (wserializer->data_version >= (_localAdded)) { \
     serialize_##_type(wserializer, &(_localName)); \
 }
 
+
+#define ADD_BASIC_LOCAL(_localAdded, _type, _localName, _defaultValue) \
+_type _localName = (_defaultValue); \
+if (wserializer->data_version >= (_localAdded)) { \
+    serialize_basic_type(_type, &(_localName)); \
+}
+
 #define REM(_fieldAdded, _fieldRemoved, _type, _fieldName, _defaultValue) \
 _type _fieldName = (_defaultValue); \
 if (wserializer->data_version >= (_fieldAdded) && wserializer->data_version < (_fieldRemoved)) { \
@@ -76,68 +84,88 @@ if (wserializer->data_version >= (_checkAdded)) { \
 ////////////////////////////////////////////////
 
 static void serialize_Entity_ID(World_Serializer *wserializer, Entity_ID *data) {
-  ADD_BASIC(SV_Initial, u32, index);
-  ADD_BASIC(SV_Initial, u32, generation);
+  ADD_BASIC(SV_INITIAL, u32, index);
+  ADD_BASIC(SV_INITIAL, u32, generation);
 }
 
 static void serialize_Phys_Box(World_Serializer *wserializer, Phys_Box *data) {
-  ADD_BASIC(SV_Initial, v3, vel);
-  ADD_BASIC(SV_Initial, v3, acc);
+  ADD_BASIC(SV_INITIAL, v3, vel);
+  ADD_BASIC(SV_INITIAL, v3, acc);
 
-  ADD_BASIC(SV_Initial, v3, col_off);
-  ADD_BASIC(SV_Initial, v3, col_hdim);
-  ADD_BASIC(SV_Initial, f32, mass);
+  ADD_BASIC(SV_INITIAL, v3, col_off);
+  ADD_BASIC(SV_INITIAL, v3, col_hdim);
+  ADD_BASIC(SV_INITIAL, f32, mass);
 }
 
-
 static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
-  ADD(SV_Initial, Entity_ID, id);
-  ADD(SV_Initial, Phys_Box, box);
-  ADD_BASIC(SV_Initial, color, col);
+  ADD(SV_INITIAL, Entity_ID, id);
+  ADD(SV_INITIAL, Phys_Box, box);
+  ADD_BASIC(SV_INITIAL, color, col);
 
-  ADD_BASIC(SV_Initial, b32, dynamic);
-  ADD_BASIC(SV_Initial, v3, move_dir); // TODO: This could not be serialized right?
-  ADD_BASIC(SV_Initial, b32, grounded);
-  ADD_BASIC(SV_Initial, f32, dash_timer);
-  ADD_BASIC(SV_Initial, v3, dash_dir);
-  ADD_BASIC(SV_Initial, s32, kind);
+  ADD_BASIC(SV_INITIAL, b32, dynamic);
+  ADD_BASIC(SV_INITIAL, v3, move_dir); // TODO: This could not be serialized right?
+  ADD_BASIC(SV_INITIAL, b32, grounded);
+  ADD_BASIC(SV_INITIAL, f32, dash_timer);
+  ADD_BASIC(SV_INITIAL, v3, dash_dir);
+  ADD_BASIC(SV_INITIAL, s32, kind);
+  ADD_BASIC(SV_INITIAL, transform, local);
 
-  ADD_BASIC(SV_Initial, transform, local);
+  // TODO: This is _Kinda_ hacky.. maybe do a cleanup
+  // Entity pointer serialization
+#define INVALID_SERIAL_IDX U64_MAX
+  if (wserializer->is_writing) {
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, parent_idx, (data->parent) ? UINT_FROM_PTR(data->parent) - UINT_FROM_PTR(wserializer->world_ref->entities->e) : INVALID_SERIAL_IDX);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, first_idx, (data->first) ? UINT_FROM_PTR(data->first) - UINT_FROM_PTR(wserializer->world_ref->entities->e) : INVALID_SERIAL_IDX);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, last_idx, (data->last) ? UINT_FROM_PTR(data->last) - UINT_FROM_PTR(wserializer->world_ref->entities->e) : INVALID_SERIAL_IDX);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, next_idx, (data->next) ? UINT_FROM_PTR(data->next) - UINT_FROM_PTR(wserializer->world_ref->entities->e) : INVALID_SERIAL_IDX);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, prev_idx, (data->prev) ? UINT_FROM_PTR(data->prev) - UINT_FROM_PTR(wserializer->world_ref->entities->e) : INVALID_SERIAL_IDX);
+  } else {
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, parent_idx, 0);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, first_idx, 0);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, last_idx, 0);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, next_idx, 0);
+    ADD_BASIC_LOCAL(SV_INITIAL, u64, prev_idx, 0);
 
-  //ADD_BASIC(SV_Initial, m4, world);
+    data->parent = (parent_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[parent_idx/sizeof(Entity*)];
+    data->first = (first_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[first_idx/sizeof(Entity*)];
+    data->last = (last_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[last_idx/sizeof(Entity*)];
+    data->next = (next_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[next_idx/sizeof(Entity*)];
+    data->prev = (prev_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[prev_idx/sizeof(Entity*)];
+  }
 
   entity_setup_const_data(data, data->kind);
 }
 
 static void serialize_world(World_Serializer *wserializer, World *data) {
-  ADD_BASIC(SV_Initial, s32, next_id);
+  ADD_BASIC(SV_INITIAL, s32, next_id);
 
   //for (s32 block = 0; block < 1; block+=1) {
     // Parse entities array
     for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
-      ADD(SV_Initial, Entity, entities->e[idx]);
+      ADD(SV_INITIAL, Entity, entities->e[idx]);
     }
     // Parse generation array
     for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
-      ADD_BASIC(SV_Initial, u32, entities->gen[idx]);
+      ADD_BASIC(SV_INITIAL, u32, entities->gen[idx]);
     }
     // Parse alive array 
     for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
-      ADD_BASIC(SV_Initial, b32, entities->alive[idx]);
+      ADD_BASIC(SV_INITIAL, b32, entities->alive[idx]);
     }
     // Parse next_idx array
     for (s32 idx = 0; idx < ENTITIES_PER_BLOCK; idx+=1) {
-      ADD_BASIC(SV_Initial, u32, entities->next_idx[idx]);
+      ADD_BASIC(SV_INITIAL, u32, entities->next_idx[idx]);
     }
     // Parse first_free_idx
-    ADD_BASIC(SV_Initial, s64, entities->first_free_idx);
+    ADD_BASIC(SV_INITIAL, s64, entities->first_free_idx);
 
     // Parse count
-    ADD_BASIC(SV_Initial, s64, entities->count);
+    ADD_BASIC(SV_INITIAL, s64, entities->count);
   //}
 }
 
-static b32 serialize_all_inc_version(World_Serializer *wserializer, World *data) {
+static b32 serialize_all(World_Serializer *wserializer, World *data) {
+  wserializer->world_ref = data;
   if (wserializer->is_writing) {
     wserializer->data_version = SV_LATEST;
   }
@@ -160,7 +188,7 @@ static World_Serializer wserializer_from_fullpath(Arena *arena, str8 fullpath) {
     .is_writing = true,
     .arena = arena,
   };
-    s.fptr = fopen(fullpath_cstr, "wb");
+  s.fptr = fopen(fullpath_cstr, "wb");
 
   release_scratch(temp);
   return s;
@@ -177,7 +205,9 @@ static World_Serializer wdeserializer_from_fullpath(Arena *arena, str8 fullpath)
     .is_writing = false,
     .arena = arena,
   };
-    s.fptr = fopen(fullpath_cstr, "rb");
+  s.fptr = fopen(fullpath_cstr, "rb");
+  release_scratch(temp);
+
   return s;
 }
 
@@ -199,14 +229,14 @@ static void wserializer_test(Arena *arena) {
   Entity_ID lookup = e1->id;
 
   World_Serializer s = wserializer_from_fullpath(arena, STR8L(".savegame"));
-  serialize_all_inc_version(&s, &world);
+  serialize_all(&s, &world);
   wserializer_finish(&s);
 
   world = (World){};
   world_init(&world);
 
   World_Serializer d = wdeserializer_from_fullpath(arena, STR8L(".savegame"));
-  serialize_all_inc_version(&d, &world);
+  serialize_all(&d, &world);
   wdeserializer_finish(&d);
 
   Entity *d_e1 = &world.entities[0].e[lookup.index];
