@@ -49,12 +49,14 @@ void update_hero(World *world, Entity *e, f32 dt) {
   e->hero_sm.funcs[e->hero_sm.state].on_update(world, e, dt);
 
   // Perform simple axis separated movement
-  e->move_dir = v3_norm(e->box.vel);
   for (s32 axis = 0; axis < 3; axis += 1) {
     v3 delta = v3_zero;
     delta.raw[axis] = e->box.vel.raw[axis] * dt;
+
+    delta = v3_rot_y(delta, e->angle);
+
     b32 collides = world_entity_collides(world, e->id, delta);
-    if (!collides) e->local.t.raw[axis] += delta.raw[axis];
+    if (!collides) e->local.t = v3_add(e->local.t, delta);
   }
 }
 
@@ -89,10 +91,19 @@ static void hero_walk_exit(struct World *world, struct Entity *entity) { }
 static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt) {
   // TODO: maybe this should be a common helper (move_dir)
   v3 move_dir = v3m(0,0,0);
-  if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { move_dir.x+=1; }
-  if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { move_dir.x-=1; }
+  //if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { move_dir.x+=1; }
+  //if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { move_dir.x-=1; }
   if (input_key_down(world->input, KEY_SCANCODE_UP)) { move_dir.z-=1; }
   if (input_key_down(world->input, KEY_SCANCODE_DOWN)) { move_dir.z+=1; }
+
+  if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { 
+    entity->angle += dt * 3.14;
+  }
+
+  if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { 
+    entity->angle -= dt * 3.14;
+  }
+  entity->local.r = quat_from_axis_angle((axis_angle){v3m(0,1,0), entity->angle});
 
   f32 speed = 5.0;
   entity->box.vel.x = move_dir.x * speed;
@@ -110,6 +121,14 @@ static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt)
 
   if (input_key_pressed(world->input, KEY_SCANCODE_LSHIFT) && v3_len(move_dir) > 0) {
     hero_transition_to(world, entity, HERO_STATE_DASH);
+  }
+
+  // Perform an action (rotation) on child entities
+  for (Entity *child = entity->first; child != nullptr; child=child->next) {
+    axis_angle rot = axis_angle_from_quat(child->local.r);
+    rot.angle += 3.14 * dt;
+    rot.angle = fmodf(rot.angle, 2*3.14);
+    child->local.r = quat_from_axis_angle(rot);
   }
 }
 
@@ -295,12 +314,6 @@ void entity_setup_const_data(Entity *e, Entity_Kind kind) {
       break;
   }
 }
-
-#if 0
-  Gui_Box *parent = box->parent;
-  dll_push_back_NPZ(gui_nil_box(), parent->first, parent->last, box, next, prev);
-  if (parent != gui_nil_box()) { parent->child_count+=1; }
-#endif
 
 Entity *entity_add_child(Entity *parent, Entity *child) {
   child->parent = parent;

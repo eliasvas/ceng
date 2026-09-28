@@ -20,12 +20,19 @@ void game_init(struct Game_State *gs) {
   world_init(gs->world);
 
   // Make the hero
-  Entity *hero = setup_hero(world_add(gs->world), transform_make(v3m(1,4,1), QUAT_ONE, v3m(0.5,0.8,0.5)));
+  Entity *hero = setup_hero(
+      world_add(gs->world), 
+      transform_make(
+        v3m(1,4,1), 
+        quat_from_axis_angle((axis_angle){v3m(0,1,0), 0.1}), 
+        v3m(0.5,0.8,0.5)
+      )
+  );
   hero->col = CLR_GREEN_CLASSIC;
   assert(hero);
 
   // Make the heros head
-  transform head_xform = transform_make(v3m(0,0.5,0), QUAT_ONE, v3m(0.4,0.3,0.2));
+  transform head_xform = transform_make(v3m(0,0.55,0), quat_from_axis_angle((axis_angle){v3m(0,1,0), 0.1}), v3m(0.66,0.1,0.66));
   Entity *hero_head = setup_none(world_add(gs->world), head_xform);
   hero_head->box = (Phys_Box) {
     // Dont thino we need this MOFO
@@ -140,7 +147,7 @@ void game_render(struct Game_State *gs, float dt) {
       m4_mult(
         //m4_from_quat(quat_from_axis_angle(v3m(1,0,0), -M_PI/2)), 
         //m4_scale(v3m(2,2,2))
-        m4_from_quat(quat_from_axis_angle(v3m(1,0,0), 0)), 
+        m4_from_quat(quat_from_axis_angle((axis_angle){v3m(1,0,0), 0})), 
         m4_scale(v3m(0.05,0.05,0.05))
       )
   );

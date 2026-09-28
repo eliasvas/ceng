@@ -41,11 +41,12 @@ struct Entity {
 
   color col;
   b32 dynamic;
-  v3 move_dir;
 
   b32 grounded;
   f32 dash_timer;
   v3 dash_dir;
+
+  f32 angle;
 
   Entity_Kind kind;
 

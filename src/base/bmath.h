@@ -30,6 +30,7 @@
 #define pow_f64(b, e) (pow((b), (e)))
 #define sin_f64(rad)  (sin(rad))
 #define cos_f64(rad)  (cos(rad))
+#define acos_f64(rad) (acos(rad))
 #define tan_f64(rad)  (tan(rad))
 
 #define sqrt_f32(n)   (sqrtf(n))
@@ -41,6 +42,7 @@
 #define pow_f32(b, e) (powf((b), (e)))
 #define sin_f32(rad)  (sinf(rad))
 #define cos_f32(rad)  (cosf(rad))
+#define acos_f32(rad) (acosf(rad))
 #define tan_f32(rad)  (tanf(rad))
 #else
 #error "Unimplemented libmath functions"
@@ -420,13 +422,6 @@ static quat quat_scale(quat a, f32 d) {
   return qu(a.x*d, a.y*d, a.z*d, a.w*d);
 }
 
-static quat quat_from_axis_angle(v3 axis, f32 angle) {
-  v3 axis_norm = v3_norm(axis);
-  f32 sine_of_rot = sin_f32(angle/2.0f);
-  v3 r = v3_multf(axis_norm, sine_of_rot);
-  return qu(r.x, r.y, r.z, cos_f32(angle/2.0f));
-}
-
 static m4 m4_from_quat(quat q) {
   m4 m;
   quat norm_q = quat_norm(q);
@@ -552,6 +547,37 @@ static m4 m4_remove_scale(m4 m, v3 scale) {
   return m;
 }
 
+
+typedef struct {
+  v3 axis;
+  f32 angle;
+} axis_angle;
+
+static quat quat_from_axis_angle(axis_angle rot) {
+  v3 axis_norm = v3_norm(rot.axis);
+  f32 sine_of_rot = sin_f32(rot.angle/2.0f);
+  v3 r = v3_multf(axis_norm, sine_of_rot);
+  return qu(r.x, r.y, r.z, cos_f32(rot.angle/2.0f));
+}
+
+static axis_angle axis_angle_from_quat(quat q) {
+  //q = quat_norm(q);
+
+  axis_angle rot = {};
+  rot.angle = 2 * acos_f32(q.w);
+  f32 s = sqrt_f32(1.0 - q.w*q.w);
+  // if axis too close to zero, just output (1,0,0) axis
+  if (s < 0.00001f) {
+    rot.axis.x = 1.0;
+    rot.axis.y = 0.0;
+    rot.axis.z = 0.0;
+  } else {
+    rot.axis.x = q.x / s;
+    rot.axis.y = q.y / s;
+    rot.axis.z = q.z / s;
+  }
+  return rot;
+}
 
 typedef union {
   struct { f32 x,y,w,h; };

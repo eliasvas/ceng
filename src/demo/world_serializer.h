@@ -103,12 +103,14 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD_BASIC(SV_INITIAL, color, col);
 
   ADD_BASIC(SV_INITIAL, b32, dynamic);
-  ADD_BASIC(SV_INITIAL, v3, move_dir); // TODO: This could not be serialized right?
+  ADD_BASIC(SV_INITIAL, f32, angle);
   ADD_BASIC(SV_INITIAL, b32, grounded);
   ADD_BASIC(SV_INITIAL, f32, dash_timer);
   ADD_BASIC(SV_INITIAL, v3, dash_dir);
   ADD_BASIC(SV_INITIAL, s32, kind);
   ADD_BASIC(SV_INITIAL, transform, local);
+  ADD_BASIC(SV_INITIAL, transform, world);
+  ADD_BASIC(SV_INITIAL, m4, world_mat);
 
   // TODO: This is _Kinda_ hacky.. maybe do a cleanup
   // Entity pointer serialization
@@ -126,11 +128,11 @@ static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
     ADD_BASIC_LOCAL(SV_INITIAL, u64, next_idx, 0);
     ADD_BASIC_LOCAL(SV_INITIAL, u64, prev_idx, 0);
 
-    data->parent = (parent_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[parent_idx/sizeof(Entity*)];
-    data->first = (first_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[first_idx/sizeof(Entity*)];
-    data->last = (last_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[last_idx/sizeof(Entity*)];
-    data->next = (next_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[next_idx/sizeof(Entity*)];
-    data->prev = (prev_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[prev_idx/sizeof(Entity*)];
+    data->parent = (parent_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[parent_idx/sizeof(Entity)];
+    data->first = (first_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[first_idx/sizeof(Entity)];
+    data->last = (last_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[last_idx/sizeof(Entity)];
+    data->next = (next_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[next_idx/sizeof(Entity)];
+    data->prev = (prev_idx == INVALID_SERIAL_IDX) ? nullptr : &wserializer->world_ref->entities->e[prev_idx/sizeof(Entity)];
   }
 
   entity_setup_const_data(data, data->kind);
