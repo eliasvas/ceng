@@ -28,22 +28,33 @@ void game_init(struct Game_State *gs) {
         v3m(0.5,0.8,0.5)
       )
   );
-  hero->col = CLR_GREEN_CLASSIC;
+  hero->col = CLR_RED_RICH;
   assert(hero);
 
-  // Make the heros head
-  transform head_xform = transform_make(v3m(0,0.55,0), quat_from_axis_angle((axis_angle){v3m(0,1,0), 0.1}), v3m(0.66,0.1,0.66));
-  Entity *hero_head = setup_none(world_add(gs->world), head_xform);
-  hero_head->box = (Phys_Box) {
+  // Make the hero WEAPONS
+  transform lgun_xform = transform_make(v3m(0.5,0.35,0.5), quat_from_axis_angle((axis_angle){v3m(0,0,1), 0.1}), v3m(0.2,0.2,0.8));
+  Entity *hero_lgun = setup_none(world_add(gs->world), lgun_xform);
+  hero_lgun->box = (Phys_Box) {
     // Dont thino we need this MOFO
     .col_off = v3m(10000000,0,0),
     .col_hdim = v3m(0.1,0.1,0.1),
   };
-  hero_head->col = CLR_PURPLE_RAIN;
-  assert(hero_head);
-
+  hero_lgun->col = CLR_RED_JAM;
+  assert(hero_lgun);
   // Add hero head to hero
-  entity_add_child(hero, hero_head);
+  entity_add_child(hero, hero_lgun);
+
+  transform rgun_xform = transform_make(v3m(-0.5,0.35,0.5), quat_from_axis_angle((axis_angle){v3m(0,0,1), 0.1}), v3m(0.2,0.2,0.8));
+  Entity *hero_rgun = setup_none(world_add(gs->world), rgun_xform);
+  hero_rgun->box = (Phys_Box) {
+    // Dont thino we need this MOFO
+    .col_off = v3m(1000000,0,0),
+    .col_hdim = v3m(0.1,0.1,0.1),
+  };
+  hero_rgun->col = CLR_RED_JAM;
+  assert(hero_rgun);
+  // Add hero head to hero
+  entity_add_child(hero, hero_rgun);
 
   // Make the ground
   Entity *ground = setup_wall(world_add(gs->world), transform_make(v3m(0,-1.01,0), QUAT_ONE, v3m(8,1,8)));

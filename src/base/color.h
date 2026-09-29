@@ -24,6 +24,7 @@ typedef v4 color;
 #define CLR_GREEN_EVA      (clr_hex(0x3DFF8E))
 #define CLR_RED_PINK       (clr_hex(0xFC2C5C))
 #define CLR_RED_RICH       (clr_hex(0xFA0A42))
+#define CLR_RED_JAM        (clr_hex(0x60100B))
 #define CLR_PURPLE_C64     (clr_hex(0x6F75D3))
 #define CLR_PURPLE_RAIN    (clr_hex(0x7844C7))
 

@@ -31,6 +31,7 @@
 #define sin_f64(rad)  (sin(rad))
 #define cos_f64(rad)  (cos(rad))
 #define acos_f64(rad) (acos(rad))
+#define atan2_f64(arad, brad) (atan2(arad, brad))
 #define tan_f64(rad)  (tan(rad))
 
 #define sqrt_f32(n)   (sqrtf(n))
@@ -43,6 +44,7 @@
 #define sin_f32(rad)  (sinf(rad))
 #define cos_f32(rad)  (cosf(rad))
 #define acos_f32(rad) (acosf(rad))
+#define atan2_f32(arad, brad) (atan2f(arad, brad))
 #define tan_f32(rad)  (tanf(rad))
 #else
 #error "Unimplemented libmath functions"

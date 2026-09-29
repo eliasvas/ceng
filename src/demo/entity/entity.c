@@ -91,19 +91,19 @@ static void hero_walk_exit(struct World *world, struct Entity *entity) { }
 static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt) {
   // TODO: maybe this should be a common helper (move_dir)
   v3 move_dir = v3m(0,0,0);
-  //if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { move_dir.x+=1; }
-  //if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { move_dir.x-=1; }
+  if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { move_dir.x+=1; }
+  if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { move_dir.x-=1; }
   if (input_key_down(world->input, KEY_SCANCODE_UP)) { move_dir.z-=1; }
   if (input_key_down(world->input, KEY_SCANCODE_DOWN)) { move_dir.z+=1; }
 
-  if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { 
-    entity->angle += dt * 3.14;
+  move_dir = v3_norm(move_dir);
+
+  if (v3_len(move_dir) != 0) {
+    f32 target_angle = atan2_f32(move_dir.x, move_dir.z);
+    printf("target_angle: %f\n", RAD2DEG(target_angle));
+    entity->local.r = quat_from_axis_angle((axis_angle){v3m(0,1,0), target_angle});
   }
 
-  if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { 
-    entity->angle -= dt * 3.14;
-  }
-  entity->local.r = quat_from_axis_angle((axis_angle){v3m(0,1,0), entity->angle});
 
   f32 speed = 5.0;
   entity->box.vel.x = move_dir.x * speed;
@@ -125,10 +125,9 @@ static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt)
 
   // Perform an action (rotation) on child entities
   for (Entity *child = entity->first; child != nullptr; child=child->next) {
-    axis_angle rot = axis_angle_from_quat(child->local.r);
-    rot.angle += 3.14 * dt;
-    rot.angle = fmodf(rot.angle, 2*3.14);
-    child->local.r = quat_from_axis_angle(rot);
+    f32 rotation_speed = 0.5;
+    child->angle += rotation_speed * MATH_PI * dt;
+    child->local.r = quat_from_axis_angle((axis_angle){v3m(0,0,1), child->angle});
   }
 }
 

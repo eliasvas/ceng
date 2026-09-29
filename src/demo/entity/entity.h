@@ -46,7 +46,10 @@ struct Entity {
   f32 dash_timer;
   v3 dash_dir;
 
+  // Currently only used for hero, we have the angle of y rotation..
+  // Shouldn't this be part of transform.. IDK
   f32 angle;
+  // front axis should be z=1?
 
   Entity_Kind kind;
 

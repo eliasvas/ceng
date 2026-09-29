@@ -7,9 +7,8 @@
 
 ## Entity
     - Signals
-    - Implement the reuse logic for staled entity indices
-    - Entity tree, maybe use a stack? Not sure if needed for now
-    - I think setup_XXX is wrong, why add a position there? why do.. whY!?
+    - Make camera an entity
+    - Make movement (WASD) use camera for positioning
 
 ## Math
 
