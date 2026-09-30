@@ -72,7 +72,6 @@ str8 str8_extract_filename(str8 file_path);
 str8 str8_concat(Arena *arena, str8 a, str8 b);
 str8 str8_read_file_binary(Arena *arena, str8 filepath);
 
-
 str8_node* str8_list_push_back_node(str8_list *list, str8_node *node);
 str8_node* str8_list_push_front_node(str8_list *list, str8_node *node);
 str8_node* str8_list_push_front(Arena *arena, str8_list *list, str8 s);

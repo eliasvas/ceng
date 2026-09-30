@@ -13,7 +13,7 @@
 ## Math
 
 ## GLTF
-    - .glb (next?)
+    - Sparse accessors
 
 ## Physics
     - Integrate Box3D (dont)

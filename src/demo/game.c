@@ -32,7 +32,7 @@ void game_init(struct Game_State *gs) {
   assert(hero);
 
   // Make the hero WEAPONS
-  transform lgun_xform = transform_make(v3m(0.5,0.35,0.5), quat_from_axis_angle((axis_angle){v3m(0,0,1), 0.1}), v3m(0.2,0.2,0.8));
+  transform lgun_xform = transform_make(v3m(0.5,0.35,0.5), QUAT_ONE, v3m(0.2,0.2,0.8));
   Entity *hero_lgun = setup_none(world_add(gs->world), lgun_xform);
   hero_lgun->box = (Phys_Box) {
     // Dont thino we need this MOFO

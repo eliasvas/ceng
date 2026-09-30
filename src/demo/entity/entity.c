@@ -127,7 +127,7 @@ static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt)
   for (Entity *child = entity->first; child != nullptr; child=child->next) {
     f32 rotation_speed = 0.5;
     child->angle += rotation_speed * MATH_PI * dt;
-    child->local.r = quat_from_axis_angle((axis_angle){v3m(0,0,1), child->angle});
+    child->local.r = quat_from_axis_angle((axis_angle){v3m(0,0,-1), child->angle});
   }
 }
 

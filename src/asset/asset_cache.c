@@ -15,10 +15,12 @@ Asset_Cache* asset_cache_init(Asset_Mgr *parent) {
       (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT}
   );
 
+#if 0
   // Default model
   Gltf_Info info = gltf_load(parent->tarena, (str8){},STR8(test_json_str, cstr_count(test_json_str)));
   Model_Info model = gltf_to_model(parent->arena, info);
   ac->default_value.model = model;
+#endif
 
   ac->slot_count = 32;
   ac->slots = arena_push_array(parent->arena, Tex_Node_Hash_Slot, ac->slot_count); 

@@ -7,7 +7,7 @@ typedef enum {
   ASSET_KIND_TEX   = ('p'+'n'+'g'),
   ASSET_KIND_FONT  = ('t'+'t'+'f'),
   ASSET_KIND_AUDIO = ('m'+'p'+'3'),
-  ASSET_KIND_MODEL = ('l'+'t'+'f'), // TODO: Maybe make gltf strictly .glb
+  ASSET_KIND_MODEL = ('g'+'l'+'b'),
 } Asset_Kind;
 
 

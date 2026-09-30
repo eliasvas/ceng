@@ -339,15 +339,61 @@ static Gltf_Material_Tex_Info json_parse_tex_info(Json_Element *root, str8 path)
   return info;
 }
 
+typedef enum {
+  GLTF_CHUNK_TYPE_JSON,
+  GLTF_CHUNK_TYPE_BIN,
+} Gltf_Chunk_Type;
+
+typedef struct {
+  Gltf_Chunk_Type type;
+  str8 data;
+} Gltf_Chunk;
+
+static Gltf_Chunk_Type gltf_to_chunk_type(u32 type) {
+  return (type == 0x4E4F534A) ? GLTF_CHUNK_TYPE_JSON : GLTF_CHUNK_TYPE_BIN;
+} 
+
 static unsigned char *base64_decode(const unsigned char *src, size_t len, size_t *out_len);
 static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   Gltf_Info info = {};
 
+  ////////////////////////////////
+  // GLB
+  ////////////////////////////////
+
+  // FIXME: We are parsing .glb by default, maybe condition this out in the future
+  u32 *glb_data = (u32*)json_data.data;
+#define GLB_MIME 0x46546C67
+  assert(glb_data[0] == GLB_MIME); 
+  assert(glb_data[1] == 2); 
+  u64 glb_len = glb_data[2];
+  assert(glb_len > 0);
+
+  Gltf_Chunk chunks[2] = {};
+
+  u64 json_chunk_offset = 3;
+  chunks[0] = (Gltf_Chunk) {
+    .type = gltf_to_chunk_type(glb_data[json_chunk_offset + 1]),
+    .data = STR8(&glb_data[json_chunk_offset + 2], glb_data[json_chunk_offset + 0]), 
+  };
+
+  u64 chunk_byte_count = chunks[0].data.count;
+  assert(chunk_byte_count % 4 == 0);
+  u64 bin_chunk_offset = json_chunk_offset + 2 + chunk_byte_count/4;
+  if (bin_chunk_offset != glb_len) {
+    chunks[1] = (Gltf_Chunk) {
+      .type = gltf_to_chunk_type(glb_data[bin_chunk_offset + 1]),
+      .data = STR8(&glb_data[bin_chunk_offset + 2], glb_data[bin_chunk_offset + 0]), 
+    };
+  }
+  json_data = chunks[0].data;
+  printf("%.*s\n", STR8_VARG(json_data));
+
+  ////////////////////////////////
+  // GLTF
+  ////////////////////////////////
+
   Json_Element *root = json_parse(arena, json_data);
-  //Json_Element* scene = json_lookup(root, STR8L("scene"));
-  //assert(str8_eq(scene->label, STR8L("scene")) && str8_to_int(scene->value) == 0);
-
-
   // 0. Parse nodes 
   Json_Element* nodes_json = json_lookup(root, STR8L("nodes"));
   info.node_count = (nodes_json) ? json_count_children(nodes_json) : 0;
@@ -448,22 +494,28 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   info.buffers = arena_push_array(arena, str8, json_count_children(buffers_json));
   s32 buf_idx = 0;
   for (Json_Element *b= buffers_json->first; b != nullptr; b = b->next, buf_idx+=1) {
-    Json_Element* uri = json_lookup(b, STR8L("uri")); assert(uri);
+    Json_Element* uri = json_lookup(b, STR8L("uri"));
     Json_Element* byte_len = json_lookup(b, STR8L("byteLength")); assert(byte_len);
 
-    s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
-    info.buffers[buf_idx] = str8_substr(uri->value, data_idx, uri->value.count); 
-
-    if (str8_ends_with(uri->value, STR8L(".bin"))) {
-      Temp_Arena temp = get_scratch(&arena,1);
-      str8 bin_fullpath = str8_concat(temp.arena, str8_concat(temp.arena, dir, STR8L("/")), uri->value);
-      //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
-      str8 bin_data = str8_read_file_binary(arena, bin_fullpath);
-      assert(bin_data.count);
-      release_scratch(temp);
-      info.buffers[buf_idx] = bin_data;
+    if (uri == nullptr) {
+      printf("UNDER ZE WATER\n");
+      info.buffers[buf_idx] = chunks[1].data;
     } else {
-      info.buffers[buf_idx] = my_base64_decode(arena, info.buffers[buf_idx]);
+
+      s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
+      info.buffers[buf_idx] = str8_substr(uri->value, data_idx, uri->value.count); 
+
+      if (str8_ends_with(uri->value, STR8L(".bin"))) {
+        Temp_Arena temp = get_scratch(&arena,1);
+        str8 bin_fullpath = str8_concat(temp.arena, str8_concat(temp.arena, dir, STR8L("/")), uri->value);
+        //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(bin_fullpath));
+        str8 bin_data = str8_read_file_binary(arena, bin_fullpath);
+        assert(bin_data.count);
+        release_scratch(temp);
+        info.buffers[buf_idx] = bin_data;
+      } else {
+        info.buffers[buf_idx] = my_base64_decode(arena, info.buffers[buf_idx]);
+      }
     }
   }
 
@@ -489,6 +541,7 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   for (Json_Element *a= accessors_json->first; a != nullptr; a = a->next, acc_idx+=1) {
     Gltf_Accessor *accessor = &info.accessors[acc_idx];
 
+    // TODO: get buffer from view, not accessor
     accessor->bufv_idx = json_parse_int(a, STR8L("bufferView"), 0);
     accessor->byte_offset = json_parse_int(a, STR8L("byteOffset"), 0);
     accessor->comp_type = json_parse_int(a, STR8L("componentType"), 5126);
@@ -509,21 +562,35 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       Json_Element* uri = json_lookup(i, STR8L("uri"));
 
       str8 img_data;
-      if (str8_starts_with(uri->value, STR8L("data"))) {
-        s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
-        str8 img_b64_data = str8_substr(uri->value, data_idx, uri->value.count); 
-        str8 decoded = my_base64_decode(arena, img_b64_data);
-        img_data = STR8((char*)decoded.data, decoded.count);
+      if (uri == nullptr) {
+        s64 bufv_idx = json_parse_int(i, STR8L("bufferView"), 0);
+
+        s64 bufv_byte_count = info.buffer_views[bufv_idx].byte_length;
+        s64 bufv_offset = info.buffer_views[bufv_idx].byte_offset;
+        s32 buf_idx = info.buffer_views[bufv_idx].buf_idx;
+        u8 *buf_data = info.buffers[buf_idx].data;
+        img_data = STR8((u8*)(buf_data + bufv_offset), bufv_byte_count);
+
       } else {
-        // Read the image data
-        //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
-        Temp_Arena temp = get_scratch(&arena,1);
-        str8 img_fullpath = str8_concat(temp.arena, str8_concat(temp.arena, dir, STR8L("/")), uri->value);
-        img_data = str8_read_file_binary(arena, img_fullpath);
-        release_scratch(temp);
+        if (str8_starts_with(uri->value, STR8L("data"))) {
+          s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
+          str8 img_b64_data = str8_substr(uri->value, data_idx, uri->value.count); 
+          str8 decoded = my_base64_decode(arena, img_b64_data);
+          img_data = STR8((char*)decoded.data, decoded.count);
+        } else {
+          // Read the image data
+          //printf("reading %.*s from %.*s", STR8_VARG(uri->value), STR8_VARG(img_fullpath));
+          Temp_Arena temp = get_scratch(&arena,1);
+          str8 img_fullpath = str8_concat(temp.arena, str8_concat(temp.arena, dir, STR8L("/")), uri->value);
+          img_data = str8_read_file_binary(arena, img_fullpath);
+          release_scratch(temp);
+        }
       }
 
-      Asset_Id id = am_load_from_data(uri->value, img_data);
+      s64 bufv_idx = json_parse_int(i, STR8L("bufferView"), 0);
+      str8 uri_when_empty = str8_sprintf(arena, "%d", bufv_idx);
+      Asset_Id id = am_load_from_data((uri) ? uri->value : uri_when_empty, img_data);
+
       info.images[image_idx] = (Gltf_Image){id};
     }
   }
@@ -686,8 +753,6 @@ static u8* gltf_data_from_accessor(Gltf_Info *info, s32 acc_idx, s32 *stride) {
 
 static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
   Model_Info model = {};
-
-
 
   // Produce Transform_Nodes along with parent/child info
   model.node_count = info.node_count;
