@@ -1,3 +1,6 @@
 [submodule "data/gltf-sample-models"]
 	path = data/gltf-sample-models
 	url = https://github.com/khronosgroup/gltf-sample-models
+[submodule "data/StarterKitPlatformer"]
+	path = data/StarterKitPlatformer
+	url = https://github.com/KenneyNL/Starter-Kit-3D-Platformer.git

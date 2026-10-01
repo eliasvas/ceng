@@ -153,7 +153,7 @@ void game_render(struct Game_State *gs, float dt) {
   Model_Info *static_model = AM_GET(gs->static_model_asset_id, model);
   r3d_imm_model(gs->game_viewport, static_model, vp, static_model_matrix, cam_pos, gs->time_sec);
 
-#if 1
+#if 0
   m4 anim_model_matrix = m4_mult(
       m4_translate(v3m(1,0,0)),
       m4_mult(
@@ -164,7 +164,7 @@ void game_render(struct Game_State *gs, float dt) {
       )
   );
 #else
-  m4 anim_model_matrix = m4_scale(v3m(4,4,4));
+  m4 anim_model_matrix = m4_scale(v3m(3,3,3));
 #endif
 
   Model_Info *anim_model = AM_GET(gs->anim_model_asset_id, model);
