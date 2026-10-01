@@ -436,9 +436,8 @@ int main(void) {
 
   gs.static_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Lantern/glTF-Binary/Lantern.glb"));
 
-  //gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/CesiumMan/glTF/CesiumMan.gltf"));
   gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Fox/glTF-Binary/Fox.glb"));
-  //gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Fox/glTF/Fox.gltf"));
+  //gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/platformer/models/character.glb"));
 
   gs.def_font_id = am_load_from_fullpath(STR8L("data/ProggyClean.ttf"));
 

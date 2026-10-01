@@ -360,34 +360,35 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
   ////////////////////////////////
   // GLB
   ////////////////////////////////
-
-  // FIXME: We are parsing .glb by default, maybe condition this out in the future
-  u32 *glb_data = (u32*)json_data.data;
-#define GLB_MIME 0x46546C67
-  assert(glb_data[0] == GLB_MIME); 
-  assert(glb_data[1] == 2); 
-  u64 glb_len = glb_data[2];
-  assert(glb_len > 0);
-
   Gltf_Chunk chunks[2] = {};
 
-  u64 json_chunk_offset = 3;
-  chunks[0] = (Gltf_Chunk) {
-    .type = gltf_to_chunk_type(glb_data[json_chunk_offset + 1]),
-    .data = STR8(&glb_data[json_chunk_offset + 2], glb_data[json_chunk_offset + 0]), 
-  };
+#define GLB_MIME 0x46546C67
+  u32 *glb_data = (u32*)json_data.data;
+  if (glb_data[0] == GLB_MIME) {
+    assert(glb_data[0] == GLB_MIME); 
+    assert(glb_data[1] == 2); 
+    u64 glb_len = glb_data[2];
+    assert(glb_len > 0);
 
-  u64 chunk_byte_count = chunks[0].data.count;
-  assert(chunk_byte_count % 4 == 0);
-  u64 bin_chunk_offset = json_chunk_offset + 2 + chunk_byte_count/4;
-  if (bin_chunk_offset != glb_len) {
-    chunks[1] = (Gltf_Chunk) {
-      .type = gltf_to_chunk_type(glb_data[bin_chunk_offset + 1]),
-      .data = STR8(&glb_data[bin_chunk_offset + 2], glb_data[bin_chunk_offset + 0]), 
+
+    u64 json_chunk_offset = 3;
+    chunks[0] = (Gltf_Chunk) {
+      .type = gltf_to_chunk_type(glb_data[json_chunk_offset + 1]),
+      .data = STR8(&glb_data[json_chunk_offset + 2], glb_data[json_chunk_offset + 0]), 
     };
+
+    u64 chunk_byte_count = chunks[0].data.count;
+    assert(chunk_byte_count % 4 == 0);
+    u64 bin_chunk_offset = json_chunk_offset + 2 + chunk_byte_count/4;
+    if (bin_chunk_offset != glb_len) {
+      chunks[1] = (Gltf_Chunk) {
+        .type = gltf_to_chunk_type(glb_data[bin_chunk_offset + 1]),
+        .data = STR8(&glb_data[bin_chunk_offset + 2], glb_data[bin_chunk_offset + 0]), 
+      };
+    }
+    json_data = chunks[0].data;
+    //printf("%.*s\n", STR8_VARG(json_data));
   }
-  json_data = chunks[0].data;
-  printf("%.*s\n", STR8_VARG(json_data));
 
   ////////////////////////////////
   // GLTF
@@ -498,10 +499,8 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
     Json_Element* byte_len = json_lookup(b, STR8L("byteLength")); assert(byte_len);
 
     if (uri == nullptr) {
-      printf("UNDER ZE WATER\n");
       info.buffers[buf_idx] = chunks[1].data;
     } else {
-
       s64 data_idx = str8_find_needle(uri->value, STR8L(","))+1;
       info.buffers[buf_idx] = str8_substr(uri->value, data_idx, uri->value.count); 
 
@@ -564,7 +563,6 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
       str8 img_data;
       if (uri == nullptr) {
         s64 bufv_idx = json_parse_int(i, STR8L("bufferView"), 0);
-
         s64 bufv_byte_count = info.buffer_views[bufv_idx].byte_length;
         s64 bufv_offset = info.buffer_views[bufv_idx].byte_offset;
         s32 buf_idx = info.buffer_views[bufv_idx].buf_idx;
@@ -750,6 +748,7 @@ static u8* gltf_data_from_accessor(Gltf_Info *info, s32 acc_idx, s32 *stride) {
 
   return (u8*)(buf_data + bufv_offset + acc_offset);
 }
+
 
 static Model_Info gltf_to_model(Arena *arena, Gltf_Info info) {
   Model_Info model = {};

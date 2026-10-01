@@ -136,18 +136,11 @@ typedef struct Model_Info {
   Animation *animations;
   s32 animation_count;
 
-#if 0
-  Node_Anim *animations;
-  s64 animation_count;
-#endif
-
   Transform_Node *nodes;
   s32 node_count;
-
-  Asset_Id tex_id;
 } Model_Info;
-struct Ogl_Tex;
 
+struct Ogl_Tex;
 typedef struct Asset_Node Asset_Node;
 struct Asset_Node {
   //union {

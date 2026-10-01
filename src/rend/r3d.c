@@ -105,7 +105,7 @@ void main() {
     weight_0.z * joint_mat[joint_0.z] +
     weight_0.w * joint_mat[joint_0.w];
 
-	gl_Position = view_proj * model_matrix * skinMat *vec4(pos, 1.0);
+	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
 
   f_tc[0] = tc_0;
   f_tc[1] = tc_1;
@@ -170,7 +170,7 @@ uniform sampler2D occlusion_tex;
 
 void main() {
 
-#if 0
+#if 1
   ivec2 texture_size;
   vec2 tc;
   out_color = f_color * texture(base_color_tex, f_tc[base_tc_idx]);
@@ -480,7 +480,77 @@ m4 calc_transform(Model_Info *info, s32 node_idx) {
 // FIXME: Doing all the operations in one step really hurts performance.. generally..
 #define JOINT_MAT_COUNT 32
 m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec) {
-  if (info->animation_count == 0 || anim_idx > info->animation_count) {
+  if (anim_idx < info->animation_count) {
+    Animation *animation = &info->animations[anim_idx];
+    for (s32 node_anim_idx = 0; node_anim_idx < animation->node_anim_count; node_anim_idx+=1) {
+      Node_Anim *anim = &animation->node_anims[node_anim_idx];
+      // 0. Calculate animation percent ( e.g we are 0.3 through )
+      f32 anim_time = fmodf(time_sec, anim->max_duration);
+      s32 prev_kf_idx = 0;
+      s32 next_kf_idx = anim->kf_count-1;
+      for (s32 kf_idx = 0; kf_idx < anim->kf_count; kf_idx+=1) {
+        f32 timestamp = anim->kf_timestamps[kf_idx];
+        if (timestamp < anim_time) prev_kf_idx = kf_idx;
+        if (timestamp > anim_time) {
+          next_kf_idx = kf_idx;
+          break;
+        }
+      }
+
+      f32 prev_timestamp = anim->kf_timestamps[prev_kf_idx];
+      f32 next_timestamp = anim->kf_timestamps[next_kf_idx];
+      f32 percent = 0;
+      if (next_timestamp - prev_timestamp != 0.0) percent = (anim_time - prev_timestamp) / (next_timestamp - prev_timestamp);
+
+      // 1. Update local transforms for all joints (maybe pull transforms to separate memory block?)
+
+      // FIXME: Interpolate based on Interp_Type, dont do always linear!
+      Transform_Node *tn = &info->nodes[anim->node_idx];
+      //printf("timestamps: %f - %f - %f\n", prev_timestamp, anim_time, next_timestamp);
+      v3 prev, next, interp;
+      quat prev4, next4, interp4;
+      switch(anim->kind) {
+        case NODE_ANIM_KIND_TRANSLATION:
+          prev = ((v3*)(anim->values))[prev_kf_idx];
+          next = ((v3*)(anim->values))[next_kf_idx];
+          interp = v3_lerp(prev, next, percent);
+          tn->xform.t = interp;
+          break;
+        case NODE_ANIM_KIND_ROTATION:
+          prev4 = ((quat*)(anim->values))[prev_kf_idx];
+          next4 = ((quat*)(anim->values))[next_kf_idx];
+          interp4 = quat_nlerp(prev4, next4, percent);
+          tn->xform.r = interp4;
+          break;
+        case NODE_ANIM_KIND_SCALE:
+          prev = ((v3*)(anim->values))[prev_kf_idx];
+          next = ((v3*)(anim->values))[next_kf_idx];
+          interp = v3_lerp(prev, next, percent);
+          tn->xform.s = interp;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  // 2. Calculate the actual joint matrices
+  Mesh_Info *mesh = &info->meshes[mesh_idx];
+  if (mesh->joint_hierarchy.joint_count > 0) {
+    m4 mesh_global = calc_transform(info, mesh->node_idx);
+    m4 inv_mesh_global = m4_inv(mesh_global);
+
+    m4 *joint_matrices = arena_push_array(arena, m4, JOINT_MAT_COUNT); 
+    for (s32 joint_idx = 0; joint_idx < mesh->joint_hierarchy.joint_count; joint_idx+=1) {
+      s32 node_idx = mesh->joint_hierarchy.joints[joint_idx].node_id;
+
+      m4 joint_global = calc_transform(info, node_idx);
+      m4 ibm = mesh->joint_hierarchy.joints[joint_idx].ibn;
+      joint_matrices[joint_idx] = m4_mult(inv_mesh_global, m4_mult(joint_global, ibm));
+    }
+
+    return joint_matrices;
+  } else {
     m4 *joint_matrices = arena_push_array(arena, m4, JOINT_MAT_COUNT); 
     for (s32 joint_idx = 0; joint_idx < JOINT_MAT_COUNT; joint_idx+=1) {
       joint_matrices[joint_idx] = m4d(1.0f);
@@ -488,74 +558,6 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
     return joint_matrices;
   }
 
-  Animation *animation = &info->animations[anim_idx];
-  for (s32 node_anim_idx = 0; node_anim_idx < animation->node_anim_count; node_anim_idx+=1) {
-    Node_Anim *anim = &animation->node_anims[node_anim_idx];
-    // 0. Calculate animation percent ( e.g we are 0.3 through )
-    f32 anim_time = fmodf(time_sec, anim->max_duration);
-    s32 prev_kf_idx = 0;
-    s32 next_kf_idx = anim->kf_count-1;
-    for (s32 kf_idx = 0; kf_idx < anim->kf_count; kf_idx+=1) {
-      f32 timestamp = anim->kf_timestamps[kf_idx];
-      if (timestamp < anim_time) prev_kf_idx = kf_idx;
-      if (timestamp > anim_time) {
-        next_kf_idx = kf_idx;
-        break;
-      }
-    }
-
-    f32 prev_timestamp = anim->kf_timestamps[prev_kf_idx];
-    f32 next_timestamp = anim->kf_timestamps[next_kf_idx];
-    f32 percent = 0;
-    if (next_timestamp - prev_timestamp != 0.0) percent = (anim_time - prev_timestamp) / (next_timestamp - prev_timestamp);
-
-    // 1. Update local transforms for all joints (maybe pull transforms to separate memory block?)
-
-    // FIXME: Interpolate based on Interp_Type, dont do always linear!
-    Transform_Node *tn = &info->nodes[anim->node_idx];
-    //printf("timestamps: %f - %f - %f\n", prev_timestamp, anim_time, next_timestamp);
-    v3 prev, next, interp;
-    quat prev4, next4, interp4;
-    switch(anim->kind) {
-      case NODE_ANIM_KIND_TRANSLATION:
-        prev = ((v3*)(anim->values))[prev_kf_idx];
-        next = ((v3*)(anim->values))[next_kf_idx];
-        interp = v3_lerp(prev, next, percent);
-        tn->xform.t = interp;
-        break;
-      case NODE_ANIM_KIND_ROTATION:
-        prev4 = ((quat*)(anim->values))[prev_kf_idx];
-        next4 = ((quat*)(anim->values))[next_kf_idx];
-        interp4 = quat_nlerp(prev4, next4, percent);
-        tn->xform.r = interp4;
-        break;
-      case NODE_ANIM_KIND_SCALE:
-        prev = ((v3*)(anim->values))[prev_kf_idx];
-        next = ((v3*)(anim->values))[next_kf_idx];
-        interp = v3_lerp(prev, next, percent);
-        tn->xform.s = interp;
-        break;
-      default:
-        break;
-    }
-  }
-
-  // 2. Calculate the actual joint matrices
-
-  Mesh_Info *mesh = &info->meshes[mesh_idx];
-  m4 mesh_global = calc_transform(info, mesh->node_idx);
-  m4 inv_mesh_global = m4_inv(mesh_global);
-
-  m4 *joint_matrices = arena_push_array(arena, m4, JOINT_MAT_COUNT); 
-  for (s32 joint_idx = 0; joint_idx < mesh->joint_hierarchy.joint_count; joint_idx+=1) {
-    s32 node_idx = mesh->joint_hierarchy.joints[joint_idx].node_id;
-
-    m4 joint_global = calc_transform(info, node_idx);
-    m4 ibm = mesh->joint_hierarchy.joints[joint_idx].ibn;
-    joint_matrices[joint_idx] = m4_mult(inv_mesh_global, m4_mult(joint_global, ibm));
-  }
-
-  return joint_matrices;
 }
 
 f32 _blend_factor = 0.0;
