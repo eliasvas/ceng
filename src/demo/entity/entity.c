@@ -23,8 +23,11 @@ void entity_common_draw(World *world, Entity *e) {
   Entity_Render_Command cmd = (Entity_Render_Command) {
     //.xform = xform,
     .xform = e->world,
-    .asset_id = (Asset_Id){},
-    .col = e->col,
+    .tint = e->tint,
+
+    .asset_id = e->asset_id,
+    .has_asset = e->has_asset,
+    .anim_idx = e->anim_idx,
 
     .collider_xform = collider_xform, 
     .collider_col = (e->dynamic) ? clr(1,1,1,1) : clr(0,0,0,1),
@@ -69,13 +72,18 @@ void draw_hero(World *world, Entity *e) {
 
 Entity *setup_hero(Entity *e, transform xform) {
   //M_ZERO_STRUCT(e);
-  e->box.col_off = v3_zero;
-  e->box.col_hdim = v3_multf(xform.s, 0.5);
+  e->box.col_off = v3m(0,0.5,0);
+  e->box.col_hdim = (v3) {
+    .x = 0.3,
+    .y = 0.5,
+    .z = 0.3,
+  };
 
   e->local = xform;
   e->kind = ENTITY_KIND_HERO;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
+  e->tint = CLR_WHITE;
   return e;
 }
 
@@ -86,7 +94,67 @@ static void hero_transition_to(World *world, Entity *e, Hero_State target) {
   e->hero_sm.funcs[e->hero_sm.state].on_enter(world, e);
 }
 
-static void hero_walk_enter(struct World *world, struct Entity *entity) { }
+static void hero_idle_enter(struct World *world, struct Entity *entity) {
+  entity->anim_idx = 1;
+}
+static void hero_idle_exit(struct World *world, struct Entity *entity) { }
+static void hero_idle_update(struct World *world, struct Entity *entity, f32 dt) {
+  v3 move_dir = v3m(0,0,0);
+  if (input_key_down(world->input, KEY_SCANCODE_RIGHT)) { move_dir.x+=1; }
+  if (input_key_down(world->input, KEY_SCANCODE_LEFT)) { move_dir.x-=1; }
+  if (input_key_down(world->input, KEY_SCANCODE_UP)) { move_dir.z-=1; }
+  if (input_key_down(world->input, KEY_SCANCODE_DOWN)) { move_dir.z+=1; }
+
+  f32 speed = 5.0;
+  entity->box.vel.x = move_dir.x * speed;
+  entity->box.vel.z = move_dir.z * speed;
+
+  if (v3_len(move_dir) != 0) {
+    hero_transition_to(world, entity, HERO_STATE_WALK);
+  }
+
+  // Jump logic
+  {
+    f32 jump_scale = 5;
+    if (input_key_pressed(world->input, KEY_SCANCODE_SPACE)) { 
+      entity->box.vel.y = jump_scale;
+
+      // Spawn a short emitter
+      {
+        v3 obj_pos = entity->first->world.t;
+        Particle_Emitter *jump_particles = particle_mgr_new_emitter(world->pmgr);
+        jump_particles->lifespan = 0.1;
+        jump_particles->pos = obj_pos;
+        jump_particles->sec_per_particle = 0.001;
+        jump_particles->particle_life_min = 0.1;
+        jump_particles->particle_life_max = 0.3;
+        jump_particles->vel.y *= (-0.3); 
+        jump_particles->hdim = v3m(0.1,0.1,0.1);
+        jump_particles->col = CLR_WHITE;
+      }
+
+      {
+        v3 obj_pos = entity->first->next->world.t;
+        Particle_Emitter *jump_particles = particle_mgr_new_emitter(world->pmgr);
+        jump_particles->lifespan = 0.1;
+        jump_particles->pos = obj_pos;
+        jump_particles->sec_per_particle = 0.001;
+        jump_particles->particle_life_min = 0.1;
+        jump_particles->particle_life_max = 0.3;
+        jump_particles->vel.y *= (-0.3); 
+        jump_particles->hdim = v3m(0.1,0.1,0.1);
+        jump_particles->col = CLR_WHITE;
+      }
+
+    }
+    f32 le_G = -9.8;
+    entity->box.vel.y = LERP(entity->box.vel.y, le_G, dt);
+  }
+}
+
+static void hero_walk_enter(struct World *world, struct Entity *entity) {
+  entity->anim_idx = 2;
+}
 static void hero_walk_exit(struct World *world, struct Entity *entity) { }
 static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt) {
   // TODO: maybe this should be a common helper (move_dir)
@@ -98,10 +166,13 @@ static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt)
 
   move_dir = v3_norm(move_dir);
 
-  if (v3_len(move_dir) != 0) {
+  if (!EQUALF(v3_len(move_dir),0, 0.00001)) {
     f32 target_angle = atan2_f32(move_dir.x, move_dir.z);
-    printf("target_angle: %f\n", RAD2DEG(target_angle));
+    //printf("target_angle: %f\n", RAD2DEG(target_angle));
     entity->local.r = quat_from_axis_angle((axis_angle){v3m(0,1,0), target_angle});
+  } else {
+    hero_transition_to(world, entity, HERO_STATE_IDLE);
+    return;
   }
 
 
@@ -114,9 +185,38 @@ static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt)
     f32 jump_scale = 5;
     if (input_key_pressed(world->input, KEY_SCANCODE_SPACE)) { 
       entity->box.vel.y = jump_scale;
+
+      // Spawn a short emitter
+      {
+        v3 obj_pos = entity->first->world.t;
+        Particle_Emitter *jump_particles = particle_mgr_new_emitter(world->pmgr);
+        jump_particles->lifespan = 0.1;
+        jump_particles->pos = obj_pos;
+        jump_particles->sec_per_particle = 0.001;
+        jump_particles->particle_life_min = 0.1;
+        jump_particles->particle_life_max = 0.3;
+        jump_particles->vel.y *= (-0.3); 
+        jump_particles->hdim = v3m(0.1,0.1,0.1);
+        jump_particles->col = CLR_WHITE;
+      }
+
+      {
+        v3 obj_pos = entity->first->next->world.t;
+        Particle_Emitter *jump_particles = particle_mgr_new_emitter(world->pmgr);
+        jump_particles->lifespan = 0.1;
+        jump_particles->pos = obj_pos;
+        jump_particles->sec_per_particle = 0.001;
+        jump_particles->particle_life_min = 0.1;
+        jump_particles->particle_life_max = 0.3;
+        jump_particles->vel.y *= (-0.3); 
+        jump_particles->hdim = v3m(0.1,0.1,0.1);
+        jump_particles->col = CLR_WHITE;
+      }
+
     }
     f32 le_G = -9.8;
     entity->box.vel.y = LERP(entity->box.vel.y, le_G, dt);
+
   }
 
   if (input_key_pressed(world->input, KEY_SCANCODE_LSHIFT) && v3_len(move_dir) > 0) {
@@ -125,13 +225,16 @@ static void hero_walk_update(struct World *world, struct Entity *entity, f32 dt)
 
   // Perform an action (rotation) on child entities
   for (Entity *child = entity->first; child != nullptr; child=child->next) {
+#if 0 
     f32 rotation_speed = 0.5;
     child->angle += rotation_speed * MATH_PI * dt;
     child->local.r = quat_from_axis_angle((axis_angle){v3m(0,0,-1), child->angle});
+#endif
   }
 }
 
 static void hero_dash_enter(struct World *world, struct Entity *entity) {
+  entity->anim_idx = 3;
   entity->dash_timer = 0.1;
 
   v3 move_dir = v3m(0,0,0);
@@ -159,6 +262,12 @@ static void hero_dash_update(struct World *world, struct Entity *entity, f32 dt)
 static Hero_State_Machine hero_sm_make(struct Entity *e) {
   Hero_State_Machine m = {};
 
+  m.state = HERO_STATE_IDLE;
+  m.funcs[HERO_STATE_IDLE] = (State_Func){
+    .on_enter = hero_idle_enter,
+    .on_exit = hero_idle_exit,
+    .on_update = hero_idle_update,
+  };
   m.state = HERO_STATE_WALK;
   m.funcs[HERO_STATE_WALK] = (State_Func){
     .on_enter = hero_walk_enter,
@@ -214,6 +323,9 @@ void collide_coin(World *world, Entity *e, Entity *other) {
 }
 
 void update_coin(World *world, Entity *e, f32 dt) {
+  f32 coin_speed = 10.0;
+  e->angle += coin_speed * dt;
+  e->local.r = quat_from_axis_angle((axis_angle){v3m(0,1,0), e->angle});
 }
 
 void kill_coin(struct World *world, Entity *e) {
@@ -238,16 +350,15 @@ void draw_coin(World *world, Entity *e) {
 Entity *setup_coin(Entity *e, transform xform) {
   //M_ZERO_STRUCT(e);
   e->box.col_off = v3_zero;
-  e->box.col_hdim = v3_multf(xform.s, 0.5);
+  e->box.col_hdim = v3_multf(xform.s, 0.2);
+  e->box.col_off = v3m(0,0.25,0);
   e->local = xform;
   e->kind = ENTITY_KIND_COIN;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
-  e->col = v4m(0.95,0.9,0.0,1.0);
+  e->tint = v4m(0.95,0.9,0.0,1.0);
   return e;
 }
-
-
 
 Entity *setup_none(Entity *e, transform xform) {
   //M_ZERO_STRUCT(e);

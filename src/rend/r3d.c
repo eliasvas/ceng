@@ -432,7 +432,7 @@ void r3d_imm_cube(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
   r3d_imm_verts(viewport, cube_verts, ARRAY_COUNT(cube_verts), prim, mvp);
 }
 
-void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
+void r3d_set_material(Mesh_Primitive_Info *info, m4 model, color tint) {
   Material_Info *material = &info->material;
   Ogl_Tex *texture = AM_GET(material->base_tex.tex_asset_id, tex);
   uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("base_color_tex"), .tex = *(texture),};
@@ -450,7 +450,7 @@ void r3d_set_material(Mesh_Primitive_Info *info, m4 model) {
   uber_bundle.textures[4] = (Ogl_Tex_Slot){.name = ("occlusion_tex"), .tex = *(texture),};
 
   Material_UBO material_ubo = (Material_UBO) {
-    .base_color_factor = material->base_color_factor,
+    .base_color_factor = v4_mult(material->base_color_factor, tint),
     .metallic_factor = material->metallic_factor,
     .roughness_factor = material->roughness_factor,
     .emissive_factor = v4_from_v3(material->emissive_factor, 1.0),
@@ -562,7 +562,7 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 
 f32 _blend_factor = 0.0;
 
-void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec) {
+void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec, s32 anim_idx, color tint) {
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     m4 mesh_global = calc_transform(info, mesh->node_idx);
@@ -570,7 +570,8 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
 
     // Skeletal animation part..
     Temp_Arena temp = get_scratch(0,0);
-#if 1 
+
+#if 0 
     //f32 _blend_factor = 0.5;
     m4 *joint_matrices_a = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 0, time_sec);
     m4 *joint_matrices_b = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 1, time_sec);
@@ -587,7 +588,9 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
       joint_matrices[joint_idx] = m4_from_transform(blended);
     }
 #else
-    m4 *joint_matrices = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 0, time_sec);
+    // FIXME why we need to calculate 0 before 1 for matrices to be ok
+    calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 0, time_sec);
+    m4 *joint_matrices = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, anim_idx, time_sec);
 #endif
 
     ogl_buf_update(&uber_bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(m4)*JOINT_MAT_COUNT);
@@ -609,7 +612,7 @@ void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 c
       };
       ogl_buf_update(&uber_bundle.ubos[0].buffer, 0, &pf_ubo, 1, sizeof(pf_ubo));
 
-      r3d_set_material(prim, model_matrix);
+      r3d_set_material(prim, model_matrix, tint);
 
       if (prim->ibo.count) {
         ogl_render_bundle_draw_indexed(&uber_bundle, prim->type, prim->ibo.count);

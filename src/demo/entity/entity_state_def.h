@@ -6,6 +6,7 @@ struct World;
 struct Entity;
 
 typedef enum {
+  HERO_STATE_IDLE,
   HERO_STATE_WALK,
   HERO_STATE_DASH,
   HERO_STATE_COUNT,

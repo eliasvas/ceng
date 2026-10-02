@@ -23,51 +23,59 @@ void game_init(struct Game_State *gs) {
   Entity *hero = setup_hero(
       world_add(gs->world), 
       transform_make(
-        v3m(1,4,1), 
+        v3m(0,2,1), 
         quat_from_axis_angle((axis_angle){v3m(0,1,0), 0.1}), 
-        v3m(0.5,0.8,0.5)
+        v3m(1,1,1)
       )
   );
-  hero->col = CLR_RED_RICH;
+  //hero->tint = CLR_RED_RICH;
+  hero->has_asset = true;
+  hero->asset_id = gs->hero_model_asset_id;
+  hero->anim_idx = 1;
+
   assert(hero);
 
+#if 1
   // Make the hero WEAPONS
-  transform lgun_xform = transform_make(v3m(0.5,0.35,0.5), QUAT_ONE, v3m(0.2,0.2,0.8));
+  transform lgun_xform = transform_make(v3m(0.2, 0.25,-0.3), QUAT_ONE, v3m(0.1,0.1,0.1));
   Entity *hero_lgun = setup_none(world_add(gs->world), lgun_xform);
   hero_lgun->box = (Phys_Box) {
     // Dont thino we need this MOFO
     .col_off = v3m(10000000,0,0),
     .col_hdim = v3m(0.1,0.1,0.1),
   };
-  hero_lgun->col = CLR_RED_JAM;
+  hero_lgun->tint = CLR_WHITE;
   assert(hero_lgun);
   // Add hero head to hero
   entity_add_child(hero, hero_lgun);
 
-  transform rgun_xform = transform_make(v3m(-0.5,0.35,0.5), quat_from_axis_angle((axis_angle){v3m(0,0,1), 0.1}), v3m(0.2,0.2,0.8));
+  transform rgun_xform = transform_make(v3m(-0.2, 0.25,-0.3), QUAT_ONE, v3m(0.1,0.1,0.1));
   Entity *hero_rgun = setup_none(world_add(gs->world), rgun_xform);
   hero_rgun->box = (Phys_Box) {
     // Dont thino we need this MOFO
     .col_off = v3m(1000000,0,0),
     .col_hdim = v3m(0.1,0.1,0.1),
   };
-  hero_rgun->col = CLR_RED_JAM;
+  hero_rgun->tint = CLR_WHITE;
   assert(hero_rgun);
   // Add hero head to hero
   entity_add_child(hero, hero_rgun);
+#endif
 
+#if 1 
   // Make the ground
-  Entity *ground = setup_wall(world_add(gs->world), transform_make(v3m(0,-1.01,0), QUAT_ONE, v3m(8,1,8)));
-  ground->col = CLR_BLUE_DAMSELFLY;
+  Entity *ground = setup_wall(world_add(gs->world), transform_make(v3m(0,-1.01,0), QUAT_ONE, v3m(8,2,8)));
+  ground->tint = CLR_BLUE_DAMSELFLY;
 
   // Make the pillars
   for (s32 width = -3; width <= 3; width+=6) {
     for (s32 height = 0; height < 3; height +=1) {
-      transform pillar_xform = transform_make(v3m(width, height, 1), QUAT_ONE, v3_one);
+      transform pillar_xform = transform_make(v3m(width, height+0.5, 1), QUAT_ONE, v3_one);
       Entity *pillar = setup_wall(world_add(gs->world), pillar_xform);
-      pillar->col = CLR_BLUE_HIPPIE;
+      pillar->tint = CLR_BLUE_HIPPIE;
     }
   }
+#endif
 
   gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
@@ -102,8 +110,11 @@ void game_update(struct Game_State *gs, float dt) {
 
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
-    transform coin_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 0.2));
+    transform coin_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
     Entity *test_coin = setup_coin(world_add(gs->world), coin_xform);
+
+    test_coin->has_asset = true;
+    test_coin->asset_id = gs->coin_model_asset_id;
     assert(test_coin);
   }
 
@@ -149,26 +160,30 @@ void game_render(struct Game_State *gs, float dt) {
   // Draw the test model
   m4 vp = m4_mult(gs->proj, gs->view);
 
-  m4 static_model_matrix = m4_mult(m4_translate(v3m(0,0,0)), m4_scale(v3m(0.2,0.2,0.2)));
-  Model_Info *static_model = AM_GET(gs->static_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, static_model, vp, static_model_matrix, cam_pos, gs->time_sec);
 
 #if 0
-  m4 anim_model_matrix = m4_mult(
+  // Draw the lantern (for testing)
+  m4 lantern_model = m4_mult(m4_translate(v3m(0,0,0)), m4_scale(v3m(0.2,0.2,0.2)));
+  Model_Info *lantern = AM_GET(gs->lantern_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, lantern, vp, lantern_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
+
+  // Draw the fox (for testing)
+  m4 fox_model= m4_mult(
       m4_translate(v3m(1,0,0)),
       m4_mult(
-        //m4_from_quat(quat_from_axis_angle(v3m(1,0,0), -M_PI/2)), 
-        //m4_scale(v3m(2,2,2))
         m4_from_quat(quat_from_axis_angle((axis_angle){v3m(1,0,0), 0})), 
         m4_scale(v3m(0.05,0.05,0.05))
       )
   );
-#else
-  m4 anim_model_matrix = m4_scale(v3m(3,3,3));
-#endif
+  Model_Info *fox = AM_GET(gs->fox_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, fox, vp, fox_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
 
-  Model_Info *anim_model = AM_GET(gs->anim_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, anim_model, vp, anim_model_matrix, cam_pos, gs->time_sec);
+
+
+  m4 hero_model_matrix = m4_scale(v3m(3,3,3));
+  Model_Info *hero_model = AM_GET(gs->hero_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, hero_model, vp, hero_model_matrix, cam_pos, gs->time_sec, 1, CLR_WHITE);
+#endif
 
   // Do world picking..
   b32 lmb_pressed = input_mkey_pressed(&gs->input, INPUT_MOUSE_LMB);
@@ -188,7 +203,7 @@ void game_render(struct Game_State *gs, float dt) {
 
     Entity *e = world_pick_entity(gs->world, r);
     if (e) {
-      e->col = v4m(brand_frange(0,1),brand_range(0,1),brand_range(0,1),1);
+      e->tint = v4m(brand_frange(0,1),brand_range(0,1),brand_range(0,1),1);
     }
   }
 
@@ -201,7 +216,15 @@ void game_render(struct Game_State *gs, float dt) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
     m4 mvp = m4_mult(vp, world);
-    r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, cmd->col);
+    if (cmd->has_asset) {
+      Model_Info *model = AM_GET(cmd->asset_id, model);
+      //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
+      m4 local_matrix = m4d(1.0); 
+      world = m4_mult(world, local_matrix);
+      r3d_imm_model(gs->game_viewport, model, vp, world, cam_pos, gs->time_sec, cmd->anim_idx, cmd->tint);
+    } else {
+      r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, cmd->tint);
+    }
     // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
     m4 world_collider = m4_from_transform(cmd->collider_xform);
     m4 cmvp = m4_mult(vp, world_collider);

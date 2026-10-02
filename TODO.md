@@ -9,11 +9,14 @@
     - Signals
     - Make camera an entity
     - Make movement (WASD) use camera for positioning
+    - EntityRenderCommand should have entity pointer and skip some stuff no?
+    - Our models can be loaded offseted from (0,0) how do we reconcile in entity system?
 
 ## Math
 
 ## GLTF
     - Sparse accessors
+    - Can't animated multiple characters becaus elocal transforms inside ModelInfo
 
 ## Physics
     - Integrate Box3D (dont)
@@ -21,6 +24,7 @@
 ## Particles
     - Keep adding stuff.. rn its very simple
     - https://alextardif.com/Particles.html
+    - Currently particles are z-facing.. make them billboards or something
 
 ## Graphics
     - Shadows!!!!

@@ -2,13 +2,13 @@
 #define ENTITY_H__
 #include "base/base_inc.h"
 #include "entity/entity_state_def.h"
+#include "asset/asset_id.h"
 
 // pretty much bitsquid with fat structs / entity megastruct!
 
 struct Game_State;
 struct World;
 struct Entity;
-
 
 typedef struct {
  v3 vel;
@@ -39,7 +39,12 @@ struct Entity {
   Entity_ID id;
   Phys_Box box;
 
-  color col;
+  // TODO: maybe make asset_id_from_kind?
+  Asset_Id asset_id;
+  b32 has_asset;
+  s32 anim_idx;
+
+  color tint;
   b32 dynamic;
 
   b32 grounded;

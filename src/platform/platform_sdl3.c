@@ -434,13 +434,10 @@ int main(void) {
   gs.atlas = am_load_from_data(STR8L("atlas.png"), STR8((char*)atlas_data, sizeof(atlas_data)));
   gs.atlas_sprites_per_dim = v2m(16,10);
 
-  gs.static_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Lantern/glTF-Binary/Lantern.glb"));
-
-#if 0
-  gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Fox/glTF-Binary/Fox.glb"));
-#else
-  gs.anim_model_asset_id = am_load_from_fullpath(STR8L("data/StarterKitPlatformer/models/character.glb"));
-#endif
+  gs.lantern_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Lantern/glTF-Binary/Lantern.glb"));
+  gs.fox_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Fox/glTF-Binary/Fox.glb"));
+  gs.hero_model_asset_id = am_load_from_fullpath(STR8L("data/StarterKitPlatformer/models/character.glb"));
+  gs.coin_model_asset_id = am_load_from_fullpath(STR8L("data/StarterKitPlatformer/models/coin.glb"));
 
   gs.def_font_id = am_load_from_fullpath(STR8L("data/ProggyClean.ttf"));
 

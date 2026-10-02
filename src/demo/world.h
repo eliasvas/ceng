@@ -47,8 +47,12 @@ struct Entity_Hash_Slot {
 
 typedef struct {
   transform xform;
+
   Asset_Id asset_id;
-  color col;
+  b32 has_asset;
+  s32 anim_idx;
+
+  color tint;
 
   transform collider_xform;
   color collider_col;

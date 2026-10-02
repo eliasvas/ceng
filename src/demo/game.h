@@ -33,8 +33,15 @@ struct Game_State {
   // Game specific stuff
   World *world;
 
-  Asset_Id static_model_asset_id;
-  Asset_Id anim_model_asset_id;
+  Asset_Id block_model_asset_id;
+  Asset_Id hero_model_asset_id;
+  Asset_Id coin_model_asset_id;
+
+
+  // For GLTF testing only
+  Asset_Id fox_model_asset_id;
+  Asset_Id lantern_model_asset_id;
+
   Asset_Id atlas;
   v2 atlas_sprites_per_dim;
 

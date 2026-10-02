@@ -100,7 +100,11 @@ static void serialize_Phys_Box(World_Serializer *wserializer, Phys_Box *data) {
 static void serialize_Entity(World_Serializer *wserializer, Entity *data) {
   ADD(SV_INITIAL, Entity_ID, id);
   ADD(SV_INITIAL, Phys_Box, box);
-  ADD_BASIC(SV_INITIAL, color, col);
+  ADD_BASIC(SV_INITIAL, color, tint);
+
+  ADD_BASIC(SV_INITIAL, Asset_Id, asset_id);
+  ADD_BASIC(SV_INITIAL, b32, has_asset);
+  ADD_BASIC(SV_INITIAL, b32, anim_idx);
 
   ADD_BASIC(SV_INITIAL, b32, dynamic);
   ADD_BASIC(SV_INITIAL, f32, angle);
