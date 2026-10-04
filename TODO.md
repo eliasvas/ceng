@@ -6,7 +6,7 @@
     - Keyboard Navigation..
 
 ## Entity
-    - Signals
+    - Signals (Should be used for score increase as coins are killed ok)
     - Make camera an entity
     - Make movement (WASD) use camera for positioning
     - EntityRenderCommand should have entity pointer and skip some stuff no?
@@ -19,7 +19,6 @@
     - Can't animated multiple characters becaus elocal transforms inside ModelInfo
 
 ## Physics
-    - Integrate Box3D (dont)
 
 ## Particles
     - Keep adding stuff.. rn its very simple
@@ -32,13 +31,8 @@
 
 ## Assets
     - With current handling textures can't be customized (e.g different magFilter)
-    - Discerning asset type based on asset tag suffix is VERY bad and sad
-    - Maybe asset should be discriminated union, so we don't have code duplication..
+    - Discerning asset type based on asset tag suffix is VERY bad and sad - Maybe asset should be discriminated union, so we don't have code duplication..
     - Do we need RenderBundle to be an asset?
+    - Asset streaming (I think assets should be obtainable from assetid for this)
 
 ## demo
-    - Skeletal Animated entity (Hero) that can navigate in space
-    - Enviroment has some triggers like buttons that do stuff on the world
-    - Animated camera for events/cutscenes
-    - horde enemies + killing them (like vampire survivors)
-    - First level could be a big open space where you press a button to open a door with enemies, killing them resets level

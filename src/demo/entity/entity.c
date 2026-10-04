@@ -331,6 +331,7 @@ void update_coin(World *world, Entity *e, f32 dt) {
 void kill_coin(struct World *world, Entity *e) {
   printf("COIN killed!\n");
 
+#if 0
   //color obj_color = e->col;
   v3 obj_pos = e->world.t;
   // Spawn a short emitter
@@ -341,6 +342,7 @@ void kill_coin(struct World *world, Entity *e) {
   death_coin_particles->sec_per_particle = 0.003;
   death_coin_particles->particle_life_min = 0.1;
   death_coin_particles->particle_life_max = 0.8;
+#endif
 }
 
 void draw_coin(World *world, Entity *e) {

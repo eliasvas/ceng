@@ -32,6 +32,7 @@ void game_init(struct Game_State *gs) {
   hero->has_asset = true;
   hero->asset_id = gs->hero_model_asset_id;
   hero->anim_idx = 1;
+  gs->hero_id = hero->id;
 
   assert(hero);
 
@@ -104,12 +105,26 @@ void game_init(struct Game_State *gs) {
 
 void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
+  m4 vp = m4_mult(gs->proj, gs->view);
 
-  // Push a sample text
-  r2d_push_text(r2d_pass_front(), gs->def_font_id, gs->game_viewport, gs->game_viewport, STR8L("Fix gui g_scale!"), v2m(300,0), 2, CLR_RED);
+
+  // Push score over da hero
+
+  Entity *hero = world_get_entity(gs->world, gs->hero_id);
+  v3 hero_pos = hero->world.t;
+  f32 font_scale = 1.5;
+  str8 score_str = str8_sprintf(gs->frame_arena, "score: %ld", gs->score);
+  Font_Info *fi = AM_GET(gs->def_font_id, font);
+  f32 tw = bfont_measure_text_width(fi, score_str, font_scale);
+  f32 th = bfont_measure_text_height(fi, score_str, font_scale);
+  v2 hero_screen_pos = v2_sub(screen_from_world(v3_add(hero_pos,
+          v3m(0,3.0*hero->box.col_hdim.y, 0)), gs->wdim, vp), v2m(tw/2.0, th/2.0)); 
+  r2d_push_text(r2d_pass_front(), gs->def_font_id, gs->game_viewport, 
+      gs->game_viewport, score_str, hero_screen_pos, font_scale, CLR_WHITE);
 
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
+    gs->score += 1;
     transform coin_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
     Entity *test_coin = setup_coin(world_add(gs->world), coin_xform);
 

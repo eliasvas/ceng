@@ -751,12 +751,25 @@ typedef union iv4 {
 
 #define iv4m(x, y, z, w)   ((iv4){{x, y, z, w}})
 
-#if 0
-// TBA
-static v3 screen_from_world(v3 coords, v2 win_dim, m4 vp) {
-  return v3m(0,0,0);
+static v2 screen_from_world(v3 wcoords, v2 win_dim, m4 vp) {
+
+  // First have the world coords in p
+  v4 p = v4m(
+      wcoords.x,
+      wcoords.y,
+      wcoords.z,
+      1.0
+  );
+  // We project with vp (now we are NDC)
+  p = m4_multv(vp, p);
+  // Perspective divide
+  p = v4_multf(p, 1.0/p.w);
+
+  return v2m(
+      (p.x + 1.0) * 0.5 * win_dim.x, 
+      (p.y + 1.0) * 0.5 * win_dim.y 
+  );
 }
-#endif
 
 static v3 world_from_screen(v3 coords, v2 win_dim, m4 inv_vp) {
   // We first get the NDC coords

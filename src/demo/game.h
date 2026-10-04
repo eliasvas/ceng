@@ -47,6 +47,9 @@ struct Game_State {
 
   Asset_Id def_font_id;
 
+  s64 score;
+  Entity_ID hero_id;
+
 
   // REMOVE DIS
   Font_Info font;
