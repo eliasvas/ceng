@@ -20,29 +20,29 @@ layout(location=2) in vec2 tc;
 layout(location=3) in vec4 color;
 
 layout (std140) uniform PerFrameData { 
-  mat4 light_space_matrix;
+  mat4 lsm;
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
 };
 layout (std140) uniform ModelMatrix { mat4 model; };
 
-// TODO: INOUT structs
-out vec4 f_color;
-out vec3 f_norm;
-out vec2 f_tc;
-
-out vec3 f_frag_pos;
-out vec4 f_frag_pos_ls;
+out VS_OUT {
+  vec4 color;
+  vec3 norm;
+  vec2 tc;
+  vec3 frag_pos;
+  vec4 frag_pos_ls;
+} vs_out;
 
 void main() { 
 	gl_Position = view_proj * model * vec4(pos, 1.0);
-  f_color = color;
-  f_norm = norm;
-  f_tc = tc;
+  vs_out.color = color;
+  vs_out.norm = norm;
+  vs_out.tc = tc;
 
-  f_frag_pos = vec3(model * vec4(pos, 1.0));
-  f_frag_pos_ls = light_space_matrix * vec4(f_frag_pos, 1.0);
+  vs_out.frag_pos = vec3(model * vec4(pos, 1.0));
+  vs_out.frag_pos_ls = lsm * vec4(vs_out.frag_pos, 1.0);
 }
 )";
 
@@ -50,12 +50,13 @@ const char *tri_fs = R"(#version 460 core
 layout(location = 0) out vec4 out_color;
 uniform sampler2D shadow_map;
 
-in vec2 f_tc;
-in vec4 f_color;
-in vec3 f_norm;
-
-in vec3 f_frag_pos;
-in vec4 f_frag_pos_ls;
+in VS_OUT {
+  vec4 color;
+  vec3 norm;
+  vec2 tc;
+  vec3 frag_pos;
+  vec4 frag_pos_ls;
+} fs_in;
 
 float shadow_calc(vec4 frag_pos_ls) {
   // project to get actual NDC
@@ -72,21 +73,19 @@ float shadow_calc(vec4 frag_pos_ls) {
 }
 
 void main() {
-  out_color = f_color;
+  out_color = fs_in.color;
 
-  float shadow = shadow_calc(f_frag_pos_ls);
-  out_color.xyz *= (1.0 - shadow);
+  float shadow = shadow_calc(fs_in.frag_pos_ls);
+  out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
 }
 )";
 
 const char* shadow_fs= R"(#version 460 core
 layout(location = 0) out vec4 out_color;
 
-// TODO: Make these uniforms on the default block? or extract from the projection matrix
-// TODO: Should only orthographic matrices be used here? to get the near/far
+// NOTE: These are not used since we only do ortho shadows!
 float near = 0.1;
 float far  = 100.0;
-
 float linearize_depth(float depth) {
     float ndc_z = depth * 2.0 - 1.0;
     return (2.0 * near * far) / (far + near - ndc_z * (far - near));
@@ -99,7 +98,7 @@ void main() {
   float depth = gl_FragCoord.z;
 #endif
   out_color = vec4(vec3(depth), 1.0);
-  //out_color = f_color;
+  //out_color = fs_in.color;
 }
 )";
 
@@ -125,7 +124,7 @@ layout(location=11) in ivec4 joint_0;
 layout(location=12) in vec4 weight_0;
 
 layout (std140) uniform PerFrameData { 
-  mat4 light_space_matrix;
+  mat4 lsm;
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
@@ -151,20 +150,20 @@ layout(std140) uniform JointMatrices {
   mat4 joint_mat[32];
 };
 
-out vec4 f_color;
-out vec4 f_wp;
-out vec3 f_view_dir;
-out vec3 f_norm;
-out vec3 f_tang;
-out vec3 f_binorm;
-out vec2 f_tc[4];
-
-
-out vec3 f_frag_pos;
-out vec4 f_frag_pos_ls;
+out VS_OUT {
+  vec4 color;
+  vec4 wp;
+  vec3 view_dir;
+  vec3 norm;
+  vec3 tang;
+  vec3 binorm;
+  vec2 tc[4];
+  vec3 frag_pos;
+  vec4 frag_pos_ls;
+} vs_out;
 
 void main() { 
-  f_color = col_0*base_color_factor;
+  vs_out.color = col_0*base_color_factor;
 
   mat4 skinMat =
     weight_0.x * joint_mat[joint_0.x] +
@@ -174,27 +173,27 @@ void main() {
 
 	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
 
-  f_tc[0] = tc_0;
-  f_tc[1] = tc_1;
-  f_tc[2] = tc_2;
-  f_tc[3] = tc_3;
+  vs_out.tc[0] = tc_0;
+  vs_out.tc[1] = tc_1;
+  vs_out.tc[2] = tc_2;
+  vs_out.tc[3] = tc_3;
 
   // Normal mapping bullshido
   mat3 M = mat3(model_matrix);
   mat3 normal_matrix = transpose(inverse(M));
-  f_norm = normalize(normal_matrix * norm);
+  vs_out.norm = normalize(normal_matrix * norm);
   vec3 T = normalize(M * tang.xyz);
   vec3 N = normalize(normal_matrix * norm);
   T = normalize(T - N * dot(N, T));
   vec3 B = normalize(cross(N, T)) * tang.w;
-  f_tang = T;
-  f_binorm = B;
+  vs_out.tang = T;
+  vs_out.binorm = B;
 
-  f_wp = model_matrix * vec4(pos, 1.0f);
-  f_view_dir = normalize(cam_pos.xyz - f_wp.xyz);
+  vs_out.wp = model_matrix * vec4(pos, 1.0f);
+  vs_out.view_dir = normalize(cam_pos.xyz - vs_out.wp.xyz);
 
-  f_frag_pos = vec3(model_matrix * vec4(pos, 1.0));
-  f_frag_pos_ls = light_space_matrix * vec4(f_frag_pos, 1.0);
+  vs_out.frag_pos = vec3(model_matrix * vec4(pos, 1.0));
+  vs_out.frag_pos_ls = lsm * vec4(vs_out.frag_pos, 1.0);
 }
 )";
 
@@ -204,7 +203,7 @@ precision highp float;
 layout(location = 0) out vec4 out_color;
 
 layout (std140) uniform PerFrameData { 
-  mat4 light_space_matrix;
+  mat4 lsm;
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
@@ -225,17 +224,17 @@ layout(std140) uniform Material {
   mat4 model_matrix;
 };
 
-
-in vec2 f_tc[4];
-in vec4 f_color;
-in vec4 f_wp;
-in vec3 f_view_dir;
-in vec3 f_norm;
-in vec3 f_tang;
-in vec3 f_binorm;
-
-in vec3 f_frag_pos;
-in vec4 f_frag_pos_ls;
+in VS_OUT {
+  vec4 color;
+  vec4 wp;
+  vec3 view_dir;
+  vec3 norm;
+  vec3 tang;
+  vec3 binorm;
+  vec2 tc[4];
+  vec3 frag_pos;
+  vec4 frag_pos_ls;
+} fs_in;
 
 uniform sampler2D base_color_tex;
 uniform sampler2D normal_tex;
@@ -264,14 +263,14 @@ void main() {
 #if 1
   ivec2 texture_size;
   vec2 tc;
-  out_color = f_color * texture(base_color_tex, f_tc[base_tc_idx]);
-  out_color += emissive_factor * texture(emissive_tex, f_tc[emissive_tc_idx]);
-  out_color += 0.1 * texture(occlusion_tex, f_tc[occlusion_tc_idx]);
-  out_color += 0.01 * texture(normal_tex, f_tc[normal_tc_idx]);
-  out_color += 0.01 * texture(metallic_roughness_tex, f_tc[metallic_roughness_tc_idx]);
+  out_color = fs_in.color * texture(base_color_tex, fs_in.tc[base_tc_idx]);
+  out_color += emissive_factor * texture(emissive_tex, fs_in.tc[emissive_tc_idx]);
+  out_color += 0.1 * texture(occlusion_tex, fs_in.tc[occlusion_tc_idx]);
+  out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
+  out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
 
-  float shadow = shadow_calc(f_frag_pos_ls);
-  out_color.xyz *= (1.0 - shadow);
+  float shadow = shadow_calc(fs_in.frag_pos_ls);
+  out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
 
 #else
 
@@ -280,7 +279,7 @@ void main() {
   vec3 bump_norm;
   float roughness, metallic;
   vec3 F0;
-  vec3 half_dir;
+  vec3 halfs_in.dir;
   float NdotH, NdotV, NdotL, HdotV;
   float roughness_sqr, rough_sqr2, NdotHSqr, denominator, normal_distribution;
   float smithL, smithV, geom_shadow;
@@ -291,13 +290,13 @@ void main() {
   lD = -light_dir;
 
   // Sample the textures needed
-  albedo = texture(base_color_tex, f_tc[base_tc_idx]).rgb;
-  metallic_rough = texture(metallic_roughness_tex, f_tc[metallic_roughness_tc_idx]).rgb;
-  bump_map = texture(normal_tex, f_tc[normal_tc_idx]).rgb;
+  albedo = texture(base_color_tex, fs_in.tc[base_tc_idx]).rgb;
+  metallic_rough = texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]).rgb;
+  bump_map = texture(normal_tex, fs_in.tc[normal_tc_idx]).rgb;
 
   // Perform normal mapping
   bump_map = (bump_map * 2.0f) - 1.0f;
-  bump_norm = (bump_map.x * f_tang) + (bump_map.y * f_binorm) + (bump_map.z * f_norm);
+  bump_norm = (bump_map.x * fs_in.tang) + (bump_map.y * fs_in.binorm) + (bump_map.z * fs_in.norm);
   bump_norm = normalize(bump_norm);
 
   // Retrieve metallic/roughness
@@ -309,11 +308,11 @@ void main() {
   F0 = mix(F0, albedo, metallic);
 
   // Setup all needed vectors for lighting
-  half_dir = normalize(f_view_dir + lD);
-  NdotH = max(0.0f, dot(bump_norm, half_dir));
-  NdotV = max(0.0f, dot(bump_norm, f_view_dir));
+  halfs_in.dir = normalize(fs_in.view_dir + lD);
+  NdotH = max(0.0f, dot(bump_norm, halfs_in.dir));
+  NdotV = max(0.0f, dot(bump_norm, fs_in.view_dir));
   NdotL = max(0.0f, dot(bump_norm, lD));
-  HdotV = max(0.0f, dot(half_dir, f_view_dir));
+  HdotV = max(0.0f, dot(halfs_in.dir, fs_in.view_dir));
 
   // GGX for normal distribution
   roughness_sqr = roughness * roughness;
@@ -338,7 +337,7 @@ void main() {
   color = vec4(color.rgb, 1.0f);
 
   // Emissive color
-  vec3 emissive = texture(emissive_tex, f_tc[emissive_tc_idx]).rgb * emissive_factor.rgb;
+  vec3 emissive = texture(emissive_tex, fs_in.tc[emissive_tc_idx]).rgb * emissive_factor.rgb;
 
   out_color = color + vec4(emissive, 1.0);
 #endif
@@ -346,7 +345,7 @@ void main() {
 )";
 
 typedef struct {
-  m4 light_space_matrix;
+  m4 lsm;
   m4 view_proj;
   v3 cam_pos;
   f32 _padding;
@@ -500,6 +499,10 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
 ////////////////////////////////////
 
 R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+
+  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
+  m4 shadow_view = m4_look_at(v3_add(cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
+
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
   rctx->view = view;
@@ -509,8 +512,9 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v
     .arena = arena,
     // FIXME: Is this correct?
     .viewport = (flags & R3D_FLAG_IS_DEPTH_PASS) ? rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM) : viewport,
-    .view = view,
-    .proj = proj,
+    .proj = (flags & R3D_FLAG_IS_DEPTH_PASS) ? shadow_proj : proj,
+    .view = (flags & R3D_FLAG_IS_DEPTH_PASS) ? shadow_view : view,
+    .lsm = m4_mult(shadow_proj, shadow_view),
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = (flags & R3D_FLAG_IS_DEPTH_PASS) ? (&shadow_rt) : (nullptr),
@@ -527,14 +531,11 @@ void r3dc_end(R3D_Ctx *rctx) {
 }
 
 void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
-
-  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
-  m4 shadow_view = m4_look_at(v3_add(rctx->cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
-  m4 lsp = m4_mult(shadow_proj, shadow_view);
+  m4 lsm = rctx->lsm;
 
   m4 vp = m4_mult(rctx->proj, rctx->view);
   PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
-    .light_space_matrix = lsp,
+    .lsm = lsm,
     .view_proj = vp,
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,

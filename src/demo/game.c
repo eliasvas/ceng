@@ -232,19 +232,11 @@ void game_render(struct Game_State *gs, float dt) {
 
   v3 light_dir = v3_norm(v3m(0.2,1,-1));
 
+
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-#if 1
-  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
-  //m4 shadow_proj = gs->proj;
-  m4 shadow_view = m4_look_at(v3_add(gs->cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
-#else
-  m4 shadow_proj = gs->proj;
-  m4 shadow_view = gs->view;
-#endif
-
-  R3D_Ctx* shadow_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, shadow_view, shadow_proj, 
+  R3D_Ctx* shadow_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, m4d(1.0), m4d(1.0), 
       gs->cam_pos, light_dir, R3D_FLAG_IS_DEPTH_PASS | R3D_FLAG_CLEAR_ALL);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];

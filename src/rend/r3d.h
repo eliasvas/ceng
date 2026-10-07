@@ -18,6 +18,7 @@ typedef struct {
   rect viewport;
   m4 view;
   m4 proj;
+  m4 lsm;
   v3 cam_pos;
   v3 light_dir;
 
