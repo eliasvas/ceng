@@ -29,20 +29,12 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v
 void r3dc_end(R3D_Ctx *rctx);
 
 void r3dc_imm_verts(R3D_Ctx *rctx, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
+void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 
 struct Model_Info;
 m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint);
-
-
-void r3d_imm_cube(rect viewport, Ogl_Prim_Type type, m4 *mvp, color c, b32 shadow);
-void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp, b32 shadow);
-void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type, m4 *mvp, color c);
-
-struct Model_Info;
-m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
-void r3d_imm_model(rect viewport, struct Model_Info *info, m4 vp, m4 model, v3 cam_pos, f32 time_sec, s32 anim_idx, color tint);
 
 void r3d_try_load_shaders();
 

@@ -89,13 +89,13 @@ void particle_mgr_update(Particle_Mgr *pmgr, f32 dt) {
 
 // FIXME: slowest code in the universe
 void particle_mgr_render(Game_State *gs, Particle_Mgr *pmgr) {
+  R3D_Ctx* particle_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
   for (s64 particle_idx = 0; particle_idx < pmgr->particle_next_idx; particle_idx+=1) {
     Particle *p = &pmgr->particles[particle_idx];
     if (particle_active(p)) {
       m4 model = m4_mult(m4_translate(p->pos),m4_scale(v3_multf(p->hdim, 2.0f)));
-      m4 mvp = m4_mult(m4_mult(gs->proj, gs->view), model);
-      r3d_imm_xy_face(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, p->col);
+      r3dc_imm_xy_face(particle_pass, OGL_PRIM_TYPE_TRIANGLE, p->col, model);
     }
   }
-
+  r3dc_end(particle_pass);
 }

@@ -19,14 +19,19 @@ layout(location=1) in vec3 norm;
 layout(location=2) in vec2 tc;
 layout(location=3) in vec4 color;
 
-layout (std140) uniform BatchUbo { mat4 view_proj; };
+layout (std140) uniform PerFrameData { 
+  mat4 view_proj;
+  vec3 cam_pos;
+  vec3 light_dir;
+};
+layout (std140) uniform ModelMatrix { mat4 model; };
 
 out vec4 f_color;
 out vec3 f_norm;
 out vec2 f_tc;
 
 void main() { 
-	gl_Position = view_proj * vec4(pos, 1.0);
+	gl_Position = view_proj * model * vec4(pos, 1.0);
   f_color = color;
   f_norm = norm;
   f_tc = tc;
@@ -59,7 +64,8 @@ float linearize_depth(float depth) {
 }
 
 void main() {
-  float depth = linearize_depth(gl_FragCoord.z)/far;
+  //float depth = linearize_depth(gl_FragCoord.z)/far;
+  float depth = gl_FragCoord.z/far;
   out_color = vec4(vec3(depth), 1.0);
   //out_color = f_color;
 }
@@ -324,7 +330,9 @@ void r3d_try_load_shaders() {
           },
         },
       },
-      .ubos = { [0] = { .name = "BatchUbo", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
+      .ubos = { 
+        [0] = { .name = "PerFrameData", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(PerFrameData_UBO)), .start_offset = 0, .size = sizeof(PerFrameData_UBO) },
+        [1] = { .name = "ModelMatrix", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
       .dyn_state = (Ogl_Dyn_State){
 //        .viewport = viewport,
@@ -406,22 +414,7 @@ void r3d_try_load_shaders() {
 }
 
 
-void r3d_imm_verts(rect viewport, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 *mvp, b32 shadow) {
-  Ogl_Render_Bundle bundle = (shadow) ? tri_shadow_bundle : tri_bundle; 
-
-  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
-  bundle.vbos[0].buffer = vbo;
-  ogl_buf_update(&bundle.ubos[0].buffer, 0, mvp, 1, sizeof(m4));
-  // Set dynamically before drawcall currently
-  bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
-  bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
-  ogl_render_bundle_draw(&bundle, prim, vert_count, 1);
-
-  // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
-  ogl_buf_deinit(&vbo);
-}
-
-void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
+void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   Tri_Vertex cube_verts[6] = {
     (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
     (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
@@ -430,7 +423,7 @@ void r3d_imm_xy_face(rect viewport, Ogl_Prim_Type prim, m4 *mvp, color c) {
     (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
     (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
   };
-  r3d_imm_verts(viewport, cube_verts, ARRAY_COUNT(cube_verts), prim, mvp, false);
+  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
 
 
@@ -465,17 +458,30 @@ void r3dc_end(R3D_Ctx *rctx) {
   // TBA
 }
 
+void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
+  m4 vp = m4_mult(rctx->proj, rctx->view);
+  PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
+    .view_proj = vp,
+    .cam_pos = rctx->cam_pos,
+    .light_dir = rctx->light_dir,
+  };
+  ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
+}
+
 
 void r3dc_imm_verts(R3D_Ctx *rctx, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
   Ogl_Render_Bundle bundle = (rctx->rt) ? tri_shadow_bundle : tri_bundle; 
-  m4 mvp = m4_mult(rctx->proj, m4_mult(rctx->view, model));
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
   bundle.vbos[0].buffer = vbo;
-  ogl_buf_update(&bundle.ubos[0].buffer, 0, &mvp, 1, sizeof(m4));
+
+  r3dc_set_per_frame_ubo(rctx, &bundle.ubos[0].buffer);
+  ogl_buf_update(&bundle.ubos[1].buffer, 0, &model, 1, sizeof(m4));
+
   // Set dynamically before drawcall currently
   bundle.dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
   bundle.dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
+
   ogl_render_bundle_draw(&bundle, prim, vert_count, 1);
 
   // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
@@ -524,7 +530,6 @@ void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   };
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
-
 
 void r3d_set_material(Mesh_Primitive_Info *info, m4 model, color tint) {
   Material_Info *material = &info->material;
@@ -657,7 +662,6 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 f32 _blend_factor = 0.0;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint) {
   Ogl_Render_Bundle bundle = (rctx->rt) ? uber_shadow_bundle : uber_bundle; 
-  m4 vp = m4_mult(rctx->proj, rctx->view);
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
@@ -701,13 +705,7 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
       bundle.dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
       bundle.dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
 
-      PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
-        .view_proj = vp,
-        .cam_pos = rctx->cam_pos,
-        .light_dir = v3_norm(v3m(0.2,1,-1)),
-      };
-      ogl_buf_update(&bundle.ubos[0].buffer, 0, &pf_ubo, 1, sizeof(pf_ubo));
-
+      r3dc_set_per_frame_ubo(rctx, &bundle.ubos[0].buffer);
       r3d_set_material(prim, model_matrix, tint);
 
       if (prim->ibo.count) {
@@ -718,3 +716,6 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
     }
   }
 }
+
+
+

@@ -141,11 +141,8 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   color c1 = v4m(0.7,0.7,0.7,1);
 
   m4 model = m4_translate(v3m(0, 0, 0));
-  m4 vp = m4_mult(gs->proj, gs->view);
-  m4 mvp = m4_mult(vp, model);
 
   s32 point_idx = 0;
-
   for (s32 line_x = 0; line_x < line_count_per_axis; line_x +=1) {
     v3 start = v3m(-cell_count/2.0,0, line_x - cell_count/2.0);
     v3 end   = v3m(+cell_count/2.0,0, line_x - cell_count/2.0);
@@ -163,7 +160,11 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   }
 
   assert(point_idx == line_count_per_axis*4);
-  r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp, false);
+
+  // TODO: could move this to draw pass, or have draw_origin accept an rctx?
+  R3D_Ctx* grid_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
+  r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
+  r3dc_end(grid_pass);
 }
 
 void game_render(struct Game_State *gs, float dt) {
@@ -229,11 +230,22 @@ void game_render(struct Game_State *gs, float dt) {
   world_update_render(gs, dt);
   // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
 
+  v3 light_dir = v3_norm(v3m(0.2,1,-1));
+
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-  R3D_Ctx* shadow_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
-      gs->cam_pos, v3m(0,1,0), R3D_FLAG_IS_DEPTH_PASS | R3D_FLAG_CLEAR_ALL);
+#if 1
+  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 1, 10);
+  //m4 shadow_proj = gs->proj;
+  m4 shadow_view = m4_look_at(v3_add(gs->cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
+#else
+  m4 shadow_proj = gs->proj;
+  m4 shadow_view = gs->view;
+#endif
+
+  R3D_Ctx* shadow_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, shadow_view, shadow_proj, 
+      gs->cam_pos, light_dir, R3D_FLAG_IS_DEPTH_PASS | R3D_FLAG_CLEAR_ALL);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -254,7 +266,7 @@ void game_render(struct Game_State *gs, float dt) {
   // LIGHTPASS
   ///////////////////////
   R3D_Ctx* light_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
-      gs->cam_pos, v3m(0,1,0), 0);
+      gs->cam_pos, light_dir, 0);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -279,7 +291,7 @@ void game_render(struct Game_State *gs, float dt) {
   // BVH PASS 
   ///////////////////////
   R3D_Ctx* bvh_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
-      gs->cam_pos, v3m(0,1,0), 0);
+      gs->cam_pos, light_dir, 0);
   // BVH vis
   BVH_Render_Config bvh_rc = {
     .colors = {
@@ -293,6 +305,7 @@ void game_render(struct Game_State *gs, float dt) {
       [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
     },
     .running_time_sec = gs->time_sec,
+    // FIXME: currently the jetpack things confuse the BVH!!! 
 #if 1
     .kind = BVH_RENDER_OFF,
 #else
