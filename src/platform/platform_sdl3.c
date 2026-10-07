@@ -452,7 +452,8 @@ int main(void) {
   while (true) {
     frame_count+=1;
     u64 frame_start = platform_read_cpu_timer();
-    ogl_clear();
+    ogl_clear(nullptr);
+
     arena_clear(gs.frame_arena);
 
     /////////////////////////////////////////////////////

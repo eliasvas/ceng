@@ -308,7 +308,7 @@ typedef struct {
 #ifndef OGL_IMPLEMENTATION
 
   void ogl_init();
-  void ogl_clear();
+  void ogl_clear(Ogl_Render_Target *rt);
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
   bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
@@ -341,11 +341,17 @@ void ogl_init() {
   glBindVertexArray(vao);
 }
 
-void ogl_clear() {
+void ogl_clear(Ogl_Render_Target *rt) {
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
+  }
   glDisable(GL_SCISSOR_TEST);
   glClearColor(0,0,0,0);
   glClear(GL_COLOR_BUFFER_BIT);
   glClear(GL_DEPTH_BUFFER_BIT);
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
 }
  
 static int64_t ogl_buf_count_bytes(Ogl_Buf *buf) {

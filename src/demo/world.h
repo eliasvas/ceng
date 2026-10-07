@@ -147,6 +147,6 @@ void world_deserialize(Game_State *gs);
 
 // World BVH stuff
 void world_build_bvh(World *world);
-void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Render_Config rc);
+void world_render_bvh(R3D_Ctx *rctx, World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Render_Config rc);
 
 #endif

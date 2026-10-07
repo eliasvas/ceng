@@ -4,6 +4,8 @@
 #include "core/core_inc.h"
 #include "asset/asset_types.h"
 
+// FIXME: A simple way to draw an image scaled at a viewport (to visualize linear depth / CSM)
+
 // Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle batch_bundle = {};
 

@@ -163,13 +163,15 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   }
 
   assert(point_idx == line_count_per_axis*4);
-  r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp);
+  r3d_imm_verts(gs->game_viewport, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, (m4*)&mvp, false);
 }
 
 void game_render(struct Game_State *gs, float dt) {
   v3 cam_pos = v3m(0,8,10);
+  gs->cam_pos = cam_pos;
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+
   // 0. Draw grid
   game_draw_origin_grid(gs, 10);
   // Draw the test model
@@ -226,27 +228,58 @@ void game_render(struct Game_State *gs, float dt) {
   // Rest of the frame
   world_update_render(gs, dt);
   // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
-#if 1 
+
+  ///////////////////////
+  // SHADOW PASS
+  ///////////////////////
+  R3D_Ctx* shadow_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
+      gs->cam_pos, v3m(0,1,0), R3D_FLAG_IS_DEPTH_PASS | R3D_FLAG_CLEAR_ALL);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
-    m4 mvp = m4_mult(vp, world);
+    //m4 mvp = m4_mult(vp, world);
     if (cmd->has_asset) {
       Model_Info *model = AM_GET(cmd->asset_id, model);
       //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
       m4 local_matrix = m4d(1.0); 
       world = m4_mult(world, local_matrix);
-      r3d_imm_model(gs->game_viewport, model, vp, world, cam_pos, gs->time_sec, cmd->anim_idx, cmd->tint);
+      r3dc_imm_model(shadow_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
     } else {
-      r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_TRIANGLE, (m4*)&mvp, cmd->tint);
+      r3dc_imm_cube(shadow_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
     }
+  }
+  r3dc_end(shadow_pass);
+
+  ///////////////////////
+  // LIGHTPASS
+  ///////////////////////
+  R3D_Ctx* light_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
+      gs->cam_pos, v3m(0,1,0), 0);
+  for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
+    Entity_Render_Command *cmd = &gs->world->rcommands[i];
+    m4 world = m4_from_transform(cmd->xform);
+    //m4 mvp = m4_mult(vp, world);
+    if (cmd->has_asset) {
+      Model_Info *model = AM_GET(cmd->asset_id, model);
+      //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
+      m4 local_matrix = m4d(1.0); 
+      world = m4_mult(world, local_matrix);
+      r3dc_imm_model(light_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
+    } else {
+      r3dc_imm_cube(light_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+    }
+
     // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
     m4 world_collider = m4_from_transform(cmd->collider_xform);
-    m4 cmvp = m4_mult(vp, world_collider);
-    r3d_imm_cube(gs->game_viewport, OGL_PRIM_TYPE_LINE_LOOP, (m4*)&cmvp, cmd->collider_col);
+    r3dc_imm_cube(light_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
   }
-#endif
+  r3dc_end(light_pass);
 
+  ///////////////////////
+  // BVH PASS 
+  ///////////////////////
+  R3D_Ctx* bvh_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
+      gs->cam_pos, v3m(0,1,0), 0);
   // BVH vis
   BVH_Render_Config bvh_rc = {
     .colors = {
@@ -269,7 +302,8 @@ void game_render(struct Game_State *gs, float dt) {
   };
   BVH_Node *root = gs->world->bvh_root;
   assert(root);
-  world_render_bvh(gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
+  world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
+  r3dc_end(bvh_pass);
 
 
   // Gui Test

@@ -57,6 +57,7 @@ struct Game_State {
   // 3D scene stuff should be here or no?
   m4 view;
   m4 proj;
+  v3 cam_pos;
 
 };
 
