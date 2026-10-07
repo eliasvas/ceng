@@ -21,7 +21,6 @@ typedef struct {
   v3 cam_pos;
   v3 light_dir;
 
-
   Ogl_Render_Target *rt;
 } R3D_Ctx;
 

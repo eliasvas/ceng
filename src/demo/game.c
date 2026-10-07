@@ -236,7 +236,7 @@ void game_render(struct Game_State *gs, float dt) {
   // SHADOW PASS
   ///////////////////////
 #if 1
-  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 1, 10);
+  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
   //m4 shadow_proj = gs->proj;
   m4 shadow_view = m4_look_at(v3_add(gs->cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
 #else

@@ -3,9 +3,9 @@
 
 // Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle tri_bundle = {};
-Ogl_Render_Bundle tri_shadow_bundle = {};
+static Ogl_Render_Bundle tri_shadow_bundle = {};
 static Ogl_Render_Bundle uber_bundle = {};
-Ogl_Render_Bundle uber_shadow_bundle = {};
+static Ogl_Render_Bundle uber_shadow_bundle = {};
 
 static Ogl_Render_Target shadow_rt;
 
@@ -20,33 +20,62 @@ layout(location=2) in vec2 tc;
 layout(location=3) in vec4 color;
 
 layout (std140) uniform PerFrameData { 
+  mat4 light_space_matrix;
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
 };
 layout (std140) uniform ModelMatrix { mat4 model; };
 
+// TODO: INOUT structs
 out vec4 f_color;
 out vec3 f_norm;
 out vec2 f_tc;
+
+out vec3 f_frag_pos;
+out vec4 f_frag_pos_ls;
 
 void main() { 
 	gl_Position = view_proj * model * vec4(pos, 1.0);
   f_color = color;
   f_norm = norm;
   f_tc = tc;
+
+  f_frag_pos = vec3(model * vec4(pos, 1.0));
+  f_frag_pos_ls = light_space_matrix * vec4(f_frag_pos, 1.0);
 }
 )";
 
-const char* tri_fs= R"(#version 460 core
+const char *tri_fs = R"(#version 460 core
 layout(location = 0) out vec4 out_color;
+uniform sampler2D shadow_map;
 
 in vec2 f_tc;
 in vec4 f_color;
 in vec3 f_norm;
 
+in vec3 f_frag_pos;
+in vec4 f_frag_pos_ls;
+
+float shadow_calc(vec4 frag_pos_ls) {
+  // project to get actual NDC
+  vec3 proj_coords = frag_pos_ls.xyz / frag_pos_ls.w;
+  // go to [0,1] range (to sample the tex)
+  proj_coords = proj_coords*0.5+0.5;
+  // sample the tex
+  float closest_depth = texture(shadow_map, proj_coords.xy).r;
+  float current_depth = proj_coords.z;
+  float bias = 0.005;
+  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
+
+  return shadow;
+}
+
 void main() {
   out_color = f_color;
+
+  float shadow = shadow_calc(f_frag_pos_ls);
+  out_color.xyz *= (1.0 - shadow);
 }
 )";
 
@@ -64,8 +93,11 @@ float linearize_depth(float depth) {
 }
 
 void main() {
-  //float depth = linearize_depth(gl_FragCoord.z)/far;
-  float depth = gl_FragCoord.z/far;
+#if 0
+  float depth = linearize_depth(gl_FragCoord.z)/far;
+#else
+  float depth = gl_FragCoord.z;
+#endif
   out_color = vec4(vec3(depth), 1.0);
   //out_color = f_color;
 }
@@ -93,6 +125,7 @@ layout(location=11) in ivec4 joint_0;
 layout(location=12) in vec4 weight_0;
 
 layout (std140) uniform PerFrameData { 
+  mat4 light_space_matrix;
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
@@ -126,6 +159,10 @@ out vec3 f_tang;
 out vec3 f_binorm;
 out vec2 f_tc[4];
 
+
+out vec3 f_frag_pos;
+out vec4 f_frag_pos_ls;
+
 void main() { 
   f_color = col_0*base_color_factor;
 
@@ -155,6 +192,9 @@ void main() {
 
   f_wp = model_matrix * vec4(pos, 1.0f);
   f_view_dir = normalize(cam_pos.xyz - f_wp.xyz);
+
+  f_frag_pos = vec3(model_matrix * vec4(pos, 1.0));
+  f_frag_pos_ls = light_space_matrix * vec4(f_frag_pos, 1.0);
 }
 )";
 
@@ -164,6 +204,7 @@ precision highp float;
 layout(location = 0) out vec4 out_color;
 
 layout (std140) uniform PerFrameData { 
+  mat4 light_space_matrix;
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
@@ -184,6 +225,7 @@ layout(std140) uniform Material {
   mat4 model_matrix;
 };
 
+
 in vec2 f_tc[4];
 in vec4 f_color;
 in vec4 f_wp;
@@ -192,11 +234,30 @@ in vec3 f_norm;
 in vec3 f_tang;
 in vec3 f_binorm;
 
+in vec3 f_frag_pos;
+in vec4 f_frag_pos_ls;
+
 uniform sampler2D base_color_tex;
 uniform sampler2D normal_tex;
 uniform sampler2D metallic_roughness_tex;
 uniform sampler2D emissive_tex;
 uniform sampler2D occlusion_tex;
+
+uniform sampler2D shadow_map;
+
+float shadow_calc(vec4 frag_pos_ls) {
+  // project to get actual NDC
+  vec3 proj_coords = frag_pos_ls.xyz / frag_pos_ls.w;
+  // go to [0,1] range (to sample the tex)
+  proj_coords = proj_coords*0.5+0.5;
+  // sample the tex
+  float closest_depth = texture(shadow_map, proj_coords.xy).r;
+  float current_depth = proj_coords.z;
+  float bias = 0.005;
+  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
+
+  return shadow;
+}
 
 void main() {
 
@@ -208,6 +269,10 @@ void main() {
   out_color += 0.1 * texture(occlusion_tex, f_tc[occlusion_tc_idx]);
   out_color += 0.01 * texture(normal_tex, f_tc[normal_tc_idx]);
   out_color += 0.01 * texture(metallic_roughness_tex, f_tc[metallic_roughness_tc_idx]);
+
+  float shadow = shadow_calc(f_frag_pos_ls);
+  out_color.xyz *= (1.0 - shadow);
+
 #else
 
   vec3 lD;
@@ -281,6 +346,7 @@ void main() {
 )";
 
 typedef struct {
+  m4 light_space_matrix;
   m4 view_proj;
   v3 cam_pos;
   f32 _padding;
@@ -313,11 +379,11 @@ void r3d_try_load_shaders() {
 
     // FIXME: Make the shadowmap actually that dimension ok? ..
 #define SHADOWMAP_DIM 2048
-    ogl_render_target_init(&shadow_rt, 1600, 900, 1, OGL_TEX_FORMAT_RGBA8U, true);
-
+    ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, 1, OGL_TEX_FORMAT_RGBA8U, true);
 
     tri_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(tri_vs, tri_fs),
+      .textures[0] = (Ogl_Tex_Slot){ .name = "shadow_map", .tex = shadow_rt.depth_attachment },
       .vbos = {
         [0] = {
           // the vertex buffer for this should probably be made after r_end has been called
@@ -359,6 +425,7 @@ void r3d_try_load_shaders() {
       .textures[2] = (Ogl_Tex_Slot){ .name = "metallic_roughness_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[3] = (Ogl_Tex_Slot){ .name = "emissive_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[4] = (Ogl_Tex_Slot){ .name = "occlusion_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
+      .textures[5] = (Ogl_Tex_Slot){ .name = "shadow_map", .tex = shadow_rt.depth_attachment },
       .vbos = {
         [0] = {
           .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Uber_Vertex)),
@@ -440,7 +507,8 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v
   rctx->cam_pos = cam_pos;
   *rctx = (R3D_Ctx) {
     .arena = arena,
-    .viewport = viewport,
+    // FIXME: Is this correct?
+    .viewport = (flags & R3D_FLAG_IS_DEPTH_PASS) ? rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM) : viewport,
     .view = view,
     .proj = proj,
     .cam_pos = cam_pos,
@@ -459,8 +527,14 @@ void r3dc_end(R3D_Ctx *rctx) {
 }
 
 void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
+
+  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
+  m4 shadow_view = m4_look_at(v3_add(rctx->cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
+  m4 lsp = m4_mult(shadow_proj, shadow_view);
+
   m4 vp = m4_mult(rctx->proj, rctx->view);
   PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
+    .light_space_matrix = lsp,
     .view_proj = vp,
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,
