@@ -376,7 +376,6 @@ void r3d_try_load_shaders() {
   if (tri_bundle.sp.impl_state == 0) {
 
 
-    // FIXME: Make the shadowmap actually that dimension ok? ..
 #define SHADOWMAP_DIM 2048
     ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, 1, OGL_TEX_FORMAT_RGBA8U, true);
 
@@ -498,8 +497,33 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
 // Context API! (More compact!)
 ////////////////////////////////////
 
-R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+R3D_Ctx* r3dc_begin_depth(Arena *arena, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
+  m4 shadow_view = m4_look_at(v3_add(cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
 
+  R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
+  rctx->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
+  rctx->view = shadow_view;
+  rctx->proj = shadow_proj;
+  rctx->cam_pos = cam_pos;
+  *rctx = (R3D_Ctx) {
+    .arena = arena,
+    .viewport = rctx->viewport,
+    .proj = rctx->proj,
+    .view = rctx->view,
+    .lsm = m4_mult(shadow_proj, shadow_view),
+    .cam_pos = cam_pos,
+    .light_dir = light_dir,
+    .rt = &shadow_rt,
+  };
+  if (flags & R3D_FLAG_CLEAR_ALL) {
+    ogl_clear(rctx->rt);
+  }
+
+  return rctx;
+}
+
+R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
   m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
   m4 shadow_view = m4_look_at(v3_add(cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
 
@@ -511,13 +535,13 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v
   *rctx = (R3D_Ctx) {
     .arena = arena,
     // FIXME: Is this correct?
-    .viewport = (flags & R3D_FLAG_IS_DEPTH_PASS) ? rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM) : viewport,
-    .proj = (flags & R3D_FLAG_IS_DEPTH_PASS) ? shadow_proj : proj,
-    .view = (flags & R3D_FLAG_IS_DEPTH_PASS) ? shadow_view : view,
+    .viewport = viewport,
+    .proj = rctx->proj,
+    .view = rctx->view,
     .lsm = m4_mult(shadow_proj, shadow_view),
     .cam_pos = cam_pos,
     .light_dir = light_dir,
-    .rt = (flags & R3D_FLAG_IS_DEPTH_PASS) ? (&shadow_rt) : (nullptr),
+    .rt = nullptr,
   };
   if (flags & R3D_FLAG_CLEAR_ALL) {
     ogl_clear(rctx->rt);

@@ -162,7 +162,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
 
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
-  R3D_Ctx* grid_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
+  R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
   r3dc_end(grid_pass);
 }
@@ -236,8 +236,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-  R3D_Ctx* shadow_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, m4d(1.0), m4d(1.0), 
-      gs->cam_pos, light_dir, R3D_FLAG_IS_DEPTH_PASS | R3D_FLAG_CLEAR_ALL);
+  R3D_Ctx* shadow_pass = r3dc_begin_depth(gs->frame_arena, gs->cam_pos, light_dir, R3D_FLAG_CLEAR_ALL);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -257,7 +256,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // LIGHTPASS
   ///////////////////////
-  R3D_Ctx* light_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
+  R3D_Ctx* light_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
       gs->cam_pos, light_dir, 0);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
@@ -282,7 +281,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // BVH PASS 
   ///////////////////////
-  R3D_Ctx* bvh_pass = r3dc_begin(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
+  R3D_Ctx* bvh_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
       gs->cam_pos, light_dir, 0);
   // BVH vis
   BVH_Render_Config bvh_rc = {
