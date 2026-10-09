@@ -161,9 +161,15 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
   assert(point_idx == line_count_per_axis*4);
 
+
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
   R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
+  r3dc_imm_frustum(grid_pass, v3m(0,4,7), gs->view, gs->proj, OGL_PRIM_TYPE_LINE);
+  //r3dc_imm_frustum(grid_pass, v3m(0,4,5), gs->view, gs->proj, OGL_PRIM_TYPE_TRIANGLE);
+
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
+
+
   r3dc_end(grid_pass);
 }
 

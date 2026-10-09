@@ -35,4 +35,8 @@
     - Do we need RenderBundle to be an asset?
     - Asset streaming (I think assets should be obtainable from assetid for this)
 
+## General
+    - When loading fucking 3d models compute the bounded box and make the world matrix transform so that center of aabb is (0,0)
+    - We could.. specify this though, some models shouldn't be messed with the offset is important many times (center = true?)
+
 ## demo

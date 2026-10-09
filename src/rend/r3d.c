@@ -271,7 +271,6 @@ void main() {
 
   float shadow = shadow_calc(fs_in.frag_pos_ls);
   out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
-
 #else
 
   vec3 lD;
@@ -477,20 +476,6 @@ void r3d_try_load_shaders() {
     uber_shadow_bundle.rt = shadow_rt;
   }
 }
-
-
-void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
-  Tri_Vertex cube_verts[6] = {
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
-  };
-  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
-}
-
 
 
 ////////////////////////////////////
@@ -816,5 +801,44 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
   }
 }
 
+void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type prim) {
+  proj = m4_persp(100, rctx->viewport.w/rctx->viewport.h, 0.1, 10);
+  color c = clr_256(250, 40,30, 100);
+
+  Tri_Vertex frustum[8] = {
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,-1,-1,+1), m4_inv(proj))), .color = c},
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,+1,-1,+1), m4_inv(proj))), .color = c},
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,+1,-1,+1), m4_inv(proj))), .color = c},
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,-1,-1,+1), m4_inv(proj))), .color = c},
+
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,-1,+1,+1), m4_inv(proj))), .color = c},
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,+1,+1,+1), m4_inv(proj))), .color = c},
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,+1,+1,+1), m4_inv(proj))), .color = c},
+    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,-1,+1,+1), m4_inv(proj))), .color = c},
+  };
+
+  Tri_Vertex verts[] = {
+    frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
+    frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
+    frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
+    frustum[3], frustum[7], frustum[4], frustum[0], frustum[3],
+    frustum[0], frustum[4], frustum[5], frustum[1], frustum[0],
+    frustum[4], frustum[7], frustum[6], frustum[5], frustum[4],
+  };
+
+  r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(eye));
+}
+
+void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
+  Tri_Vertex cube_verts[6] = {
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
+    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
+  };
+  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
+}
 
 

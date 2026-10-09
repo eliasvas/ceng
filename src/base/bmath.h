@@ -747,43 +747,52 @@ typedef union iv4 {
     struct { s32 x,y,z,w; };
     struct { s32 r,g,b,a; };
     s32 raw[4];
-}iv4;
+} iv4;
 
 #define iv4m(x, y, z, w)   ((iv4){{x, y, z, w}})
 
-static v2 screen_from_world(v3 wcoords, v2 win_dim, m4 vp) {
-
-  // First have the world coords in p
+// Produces NDC coordinates
+static v4 project(v3 wcoords, m4 vp) {
   v4 p = v4m(
-      wcoords.x,
-      wcoords.y,
-      wcoords.z,
-      1.0
+    wcoords.x,
+    wcoords.y,
+    wcoords.z,
+    1.0
   );
-  // We project with vp (now we are NDC)
+  // We project with vp
   p = m4_multv(vp, p);
-  // Perspective divide
+  // + Perspective divide
   p = v4_multf(p, 1.0/p.w);
+  return p;
+}
 
+static v2 screen_from_world(v3 wcoords, v2 win_dim, m4 vp) {
+  // Project to NDC
+  v4 p = project(wcoords, vp);
+  // Do the viewport transform
   return v2m(
-      (p.x + 1.0) * 0.5 * win_dim.x, 
-      (p.y + 1.0) * 0.5 * win_dim.y 
+    (p.x + 1.0) * 0.5 * win_dim.x, 
+    (p.y + 1.0) * 0.5 * win_dim.y 
   );
 }
 
-static v3 world_from_screen(v3 coords, v2 win_dim, m4 inv_vp) {
-  // We first get the NDC coords
-  v4 p = v4m(
-      2.0 * (coords.x/win_dim.x) - 1.0,
-      2.0 * (coords.y/win_dim.y) - 1.0,
-      coords.z,
-      1.0
-  );
-  // We unproject the NDC coords to go NDC -> view -> world
-  p = m4_multv(inv_vp, p);
+// Produces world coordinates
+static v4 unproject(v4 ndc_coords, m4 inv_vp) {
+  // We unproject with inv_vp
+  v4 p = m4_multv(inv_vp, ndc_coords);
+  // Also perspective divide
+  return v4m(p.x/p.w, p.y/p.w, p.z/p.w, p.w);
+}
 
-  // Finally we restore to pre-projected coords
-  return v3m(p.x/p.w, p.y/p.w, p.z/p.w);
+static v3 world_from_screen(v3 coords, v2 win_dim, m4 inv_vp) {
+  // Produce NDC from screen-space
+  v4 ndc = v4m(
+    2.0 * (coords.x/win_dim.x) - 1.0,
+    2.0 * (coords.y/win_dim.y) - 1.0,
+    coords.z, // FIXME: is this even correct, WHY is this a vec3 wtf
+    1.0
+  );
+  return v3_from_v4(unproject(ndc, inv_vp));
 }
 
 

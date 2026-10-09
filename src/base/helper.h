@@ -304,6 +304,11 @@ static f64 pwr(double b, int e) {
 // FIXME: NO STD LIBRARY PLEASE
 #define M_COPY(dest, src, n) memcpy(dest, src,n)
 
+
+//////////////////////////////
+// AddressSanitizer macros
+//////////////////////////////
+
 #if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
 #include <sanitizer/asan_interface.h>
 #define ASAN_POISON_MEMORY_REGION(addr, size) \
@@ -440,6 +445,10 @@ static buf buf_lcut(buf b, buf delim) {
 }
 
 #define MAKE_STR(s) ((buf){s, cstr_count(s)})
+
+//////////////////////////////
+// File API
+//////////////////////////////
 
 #include "stdio.h"
 #include "stdlib.h"
