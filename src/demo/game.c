@@ -103,9 +103,14 @@ void game_init(struct Game_State *gs) {
   //wserializer_test(gs->persistent_arena);
 }
 
+extern void r2d_try_load_shaders();
+
 void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   m4 vp = m4_mult(gs->proj, gs->view);
+
+  r2d_try_load_shaders();
+  r3d_try_load_shaders(gs->game_viewport);
 
 
   // Push score over da hero
@@ -163,7 +168,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
 
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
-  R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
+  R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
   r3dc_imm_frustum(grid_pass, v3m(0,4,7), gs->view, gs->proj, OGL_PRIM_TYPE_LINE);
   //r3dc_imm_frustum(grid_pass, v3m(0,4,5), gs->view, gs->proj, OGL_PRIM_TYPE_TRIANGLE);
 
@@ -268,7 +273,6 @@ void game_render(struct Game_State *gs, float dt) {
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
-    //m4 mvp = m4_mult(vp, world);
     if (cmd->has_asset) {
       Model_Info *model = AM_GET(cmd->asset_id, model);
       //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
@@ -288,8 +292,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // BVH PASS 
   ///////////////////////
-  R3D_Ctx* bvh_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
-      gs->cam_pos, light_dir, 0);
+  R3D_Ctx* bvh_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
   // BVH vis
   BVH_Render_Config bvh_rc = {
     .colors = {
@@ -315,6 +318,11 @@ void game_render(struct Game_State *gs, float dt) {
   assert(root);
   world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
   r3dc_end(bvh_pass);
+
+  ///////////////////////
+  // FXAA PASS 
+  ///////////////////////
+  r3d_do_fxaa(gs->game_viewport);
 
 
   // Gui Test

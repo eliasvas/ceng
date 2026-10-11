@@ -28,7 +28,6 @@
 ## Graphics
     - Shader permutations https://therealmjp.github.io/posts/shader-permutations-part1/
     - we could support immediate trivertices and convert to default ubervertex on demand, for simpler API
-    - Make a full-screen FXAA shader, I hate the current MSAA thing
 
 ## Assets
     - With current handling textures can't be customized (e.g different magFilter)

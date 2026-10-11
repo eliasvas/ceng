@@ -2,13 +2,16 @@
 #include "asset/asset_mgr.h"
 
 // Maybe asset management should happen somewhere..
+static Ogl_Render_Bundle fxaa_bundle = {};
 static Ogl_Render_Bundle uber_bundle = {};
-static Ogl_Render_Bundle uber_shadow_bundle = {};
+static Ogl_Render_Target offscreen_rt;
 
+static Ogl_Render_Bundle uber_shadow_bundle = {};
 static Ogl_Render_Target shadow_rt;
 
+
 ////////////////////////////////////////////////
-// Triangle Shaders
+// 3D Shader
 ////////////////////////////////////////////////
 
 const char* shadow_fs= R"(#version 460 core
@@ -38,7 +41,6 @@ void main() {
 )";
 
 const char* uber_vs = R"(#version 460 core
-precision highp float;
 layout(location=0)  in vec3 pos;
 layout(location=1)  in vec3 norm;
 layout(location=2)  in vec4 tang;
@@ -278,6 +280,91 @@ void main() {
 }
 )";
 
+////////////////////////////////////////////////
+// FXAA Shader
+////////////////////////////////////////////////
+
+const char* fxaa_vs= R"(#version 460 core
+vec2 vertices[4] = vec2[](
+  vec2(-1,+1),
+  vec2(-1,-1),
+  vec2(+1,-1),
+  vec2(+1,+1)
+);
+
+vec2 tex_coords[4] = vec2[](
+  vec2(0.0,1.0),
+  vec2(0.0,0.0),
+  vec2(1.0,0.0),
+  vec2(1.0,1.0)
+);
+
+out VS_OUT {
+  vec2 tc;
+} vs_out;
+
+void main() { 
+  vs_out.tc = tex_coords[gl_VertexID];
+
+  vec2 pos = vertices[gl_VertexID];
+	gl_Position = vec4(pos, 0.0, 1.0);
+}
+)";
+
+const char* fxaa_fs= R"(#version 460 core
+layout(location = 0) out vec4 out_color;
+
+in VS_OUT {
+  vec2 tc;
+} fs_in;
+
+uniform sampler2D u_tex;
+
+// Ref: https://www.4rknova.com/blog/2015/02/15/fxaa
+vec3 sample_tex(vec2 p) { return texture(u_tex, p).xyz; }
+vec3 fxaa(vec2 p, ivec2 size) {
+	float FXAA_SPAN_MAX	= 8.0;
+	float FXAA_REDUCE_MUL = 1.0 / 8.0;
+	float FXAA_REDUCE_MIN = 1.0 / 128.0;
+
+	// 1st stage - Find edge
+	vec3 rgbNW = sample_tex(p + (vec2(-1.,-1.) / size));
+	vec3 rgbNE = sample_tex(p + (vec2( 1.,-1.) / size));
+	vec3 rgbSW = sample_tex(p + (vec2(-1., 1.) / size));
+	vec3 rgbSE = sample_tex(p + (vec2( 1., 1.) / size));
+	vec3 rgbM = sample_tex(p);
+	vec3 luma = vec3(0.299, 0.587, 0.114);
+	float lumaNW = dot(rgbNW, luma);
+	float lumaNE = dot(rgbNE, luma);
+	float lumaSW = dot(rgbSW, luma);
+	float lumaSE = dot(rgbSE, luma);
+	float lumaM = dot(rgbM, luma);
+	vec2 dir;
+	dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+	dir.y = ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+	float lumaSum = lumaNW + lumaNE + lumaSW + lumaSE;
+	float dirReduce = max(lumaSum * (0.25 * FXAA_REDUCE_MUL) , FXAA_REDUCE_MIN);
+	float rcpDirMin = 1. / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+	dir = min(vec2(FXAA_SPAN_MAX), max(vec2(-FXAA_SPAN_MAX), dir * rcpDirMin)) / size;
+
+	// 2nd stage - Blur
+	vec3 rgbA = .5 * (sample_tex(p + dir * (1./3. - .5)) + sample_tex(p + dir * (2./3. - .5)));
+	vec3 rgbB = rgbA * .5 + .25 * ( sample_tex(p + dir * (0./3. - .5)) + sample_tex(p + dir * (3./3. - .5)));
+	float lumaB = dot(rgbB, luma);
+	float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+	float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+	return ((lumaB < lumaMin) || (lumaB > lumaMax)) ? rgbA : rgbB;
+}
+
+void main() {
+  ivec2 size = textureSize(u_tex, 0);
+  out_color = vec4(fxaa(fs_in.tc, size), 1);
+}
+)";
+
+
+
+
 typedef struct {
   m4 lsms[4];
   m4 view_proj;
@@ -304,12 +391,25 @@ typedef struct {
   m4 model_matrix;
 } Material_UBO;
 
-void r3d_try_load_shaders() {
+void r3d_try_load_shaders(rect viewport) {
+  if (fxaa_bundle.sp.impl_state == 0) {
+    ogl_render_target_init(&offscreen_rt, viewport.w, viewport.h, 1, OGL_TEX_FORMAT_RGBA8U, 1);
+
+    fxaa_bundle = (Ogl_Render_Bundle){
+      .sp = ogl_shader_make(fxaa_vs, fxaa_fs),
+      .dyn_state = (Ogl_Dyn_State){
+        //.viewport = viewport,
+        //.scissor  = scissor,
+        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
+        //.flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
+      },
+    };
+  }
+
   if (uber_bundle.sp.impl_state == 0) {
 
 #define SHADOWMAP_DIM 2048
     ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, 4, OGL_TEX_FORMAT_RGBA8U, true);
-
 
     uber_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(uber_vs, uber_fs),
@@ -357,16 +457,15 @@ void r3d_try_load_shaders() {
         [1] = { .name = "Material", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Material_UBO)), .start_offset = 0, .size = sizeof(Material_UBO) },
         [2] = { .name = "JointMatrices", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(m4)*32), .start_offset = 0, .size = sizeof(m4)*32 },
       },
-      //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
+      .rt = offscreen_rt,
       .dyn_state = (Ogl_Dyn_State){
         //.viewport = viewport,
         //.scissor  = scissor,
-        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR | OGL_DYN_STATE_FLAG_MSAA,
-        //.flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
+        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
       },
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_ENABLED,
-        .dfunc  = OGL_DFUNC_LEQUAL,
+        .dfunc  = OGL_DFUNC_LESS,
       },
     };
 
@@ -427,6 +526,7 @@ R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
 
 R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
 
+#if 0
   v4 cascade_bounds = r3d_get_cascade_bounds();
   m4 persp_mats[] = {
     m4_persp(45, viewport.w/viewport.h, 0.1, cascade_bounds.raw[0]),
@@ -440,6 +540,7 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     lsm_from_vp(view, persp_mats[2], light_dir),
     lsm_from_vp(view, persp_mats[3], light_dir),
   };
+#endif
   m4 lsm = lsm_from_vp(view, proj, light_dir);
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
@@ -457,7 +558,7 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     .lsms = {lsm},
     .cam_pos = cam_pos,
     .light_dir = light_dir,
-    .rt = nullptr,
+    .rt = &offscreen_rt,
   };
   if (flags & R3D_FLAG_CLEAR_ALL) {
     ogl_clear(rctx->rt);
@@ -509,7 +610,7 @@ void r3d_set_def_material(m4 model) {
 
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
-  Ogl_Render_Bundle *bundle = (rctx->rt) ? &uber_shadow_bundle : &uber_bundle; 
+  Ogl_Render_Bundle *bundle = (rctx->rt == &shadow_rt) ? &uber_shadow_bundle : &uber_bundle; 
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
   bundle->vbos[0].buffer = vbo;
@@ -702,7 +803,7 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 
 f32 _blend_factor = 0.0;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint) {
-  Ogl_Render_Bundle *bundle = (rctx->rt) ? &uber_shadow_bundle : &uber_bundle; 
+  Ogl_Render_Bundle *bundle = (rctx->rt == &shadow_rt) ? &uber_shadow_bundle : &uber_bundle; 
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
@@ -806,3 +907,11 @@ void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type pri
 
   r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
 }
+
+void r3d_do_fxaa(rect viewport) {
+  fxaa_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
+  fxaa_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
+  fxaa_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = offscreen_rt.attachments[0] };
+  ogl_render_bundle_draw(&fxaa_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+}
+

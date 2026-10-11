@@ -232,8 +232,6 @@ void r2d_begin(Arena *arena, rect dummy_viewport) {
   };
   R2D_Pass *top_pass = r2d_push_pass(R2D_PASS_KIND_2D, dummy_cam, dummy_viewport);
   assert(top_pass);
-  r2d_try_load_shaders();
-  r3d_try_load_shaders();
 }
 
 void r2d_flush_verts(R2D_Pass *pass, Batch_Vertex *vertices, s32 vcount,  Ogl_Tex **tex_cache) {

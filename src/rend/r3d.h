@@ -69,6 +69,7 @@ struct Model_Info;
 m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint);
 
-void r3d_try_load_shaders();
+void r3d_try_load_shaders(rect viewport);
+void r3d_do_fxaa(rect viewport);
 
 #endif

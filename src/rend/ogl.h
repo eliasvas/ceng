@@ -250,7 +250,6 @@ typedef struct {
 typedef enum { 
   OGL_DYN_STATE_FLAG_SCISSOR    = (0x1 << 0),
   OGL_DYN_STATE_FLAG_BLEND      = (0x1 << 2),
-  OGL_DYN_STATE_FLAG_MSAA       = (0x1 << 3),
 } Ogl_Dyn_State_Flags;
 
 typedef union {
@@ -826,12 +825,6 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   } else {
     glDisable(GL_BLEND);
   }
-  if (bundle->dyn_state.flags & OGL_DYN_STATE_FLAG_MSAA) {
-    glEnable(GL_MULTISAMPLE);
-  } else {
-    glDisable(GL_MULTISAMPLE);
-  }
-
 }
 
 void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count) {
