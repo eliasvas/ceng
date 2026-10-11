@@ -409,6 +409,8 @@ int main(void) {
   printf("OpenGL renderer: %s\n", glGetString(GL_RENDERER));
   printf("OpenGL version:  %s\n", glGetString(GL_VERSION));
   printf("GLSL version:    %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+  b32 multisample_supported = SDL_GL_ExtensionSupported("GL_ARB_multisample");
+  SDL_Log("GL_ARB_multisample supported: %d", multisample_supported);
 #if 0 
   GLint maxAttribs = 0;
   glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttribs);

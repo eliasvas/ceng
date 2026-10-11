@@ -174,10 +174,10 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 }
 
 void game_render(struct Game_State *gs, float dt) {
-  v3 cam_pos = v3m(0,8,10);
+  v3 cam_pos = v3m(0,4,8);
   gs->cam_pos = cam_pos;
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
-  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
+  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 20);
 
   // 0. Draw grid
   R3D_Ctx* shadow_pass2 = r3dc_begin_depth(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3m(0,0,0), R3D_FLAG_CLEAR_ALL);

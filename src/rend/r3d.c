@@ -199,10 +199,10 @@ void main() {
   ivec2 texture_size;
   vec2 tc;
   out_color = fs_in.color * texture(base_color_tex, fs_in.tc[base_tc_idx]);
-  //out_color += emissive_factor * texture(emissive_tex, fs_in.tc[emissive_tc_idx]);
-  //out_color += 0.1 * texture(occlusion_tex, fs_in.tc[occlusion_tc_idx]);
-  //out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
-  //out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
+  out_color += 0.1 * emissive_factor * texture(emissive_tex, fs_in.tc[emissive_tc_idx]);
+  out_color += 0.1 * texture(occlusion_tex, fs_in.tc[occlusion_tc_idx]);
+  out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
+  out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
 
   float shadow = shadow_calc(fs_in.frag_pos_ls[0]);
   out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
@@ -361,7 +361,8 @@ void r3d_try_load_shaders() {
       .dyn_state = (Ogl_Dyn_State){
         //.viewport = viewport,
         //.scissor  = scissor,
-        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
+        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR | OGL_DYN_STATE_FLAG_MSAA,
+        //.flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
       },
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_ENABLED,
@@ -377,7 +378,7 @@ void r3d_try_load_shaders() {
 
 // Fixed bounds for now
 static v4 r3d_get_cascade_bounds() {
-  return v4m(10,20,40,100);
+  return v4m(7,10,15,20);
 }
 
 ////////////////////////////////////
