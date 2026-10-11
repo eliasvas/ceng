@@ -886,6 +886,10 @@ static b32 bbox_isect(bbox a, bbox b) {
   return (overlap.x > 0) && (overlap.y > 0) && (overlap.z > 0);
 }
 
+/////////////////////////////////////////////
+// Ray
+/////////////////////////////////////////////
+
 typedef struct {
   v3 orig;
   v3 dir;
@@ -916,6 +920,85 @@ static v2 ray_isect_bbox_t(ray r, bbox box) {
   return v2m(t_near, t_far);
 }
 
+/////////////////////////////////////////////
+// Frustum
+/////////////////////////////////////////////
+
+typedef struct {
+#define FRUSTUM_CORNERS 8
+  v3 points[FRUSTUM_CORNERS];
+} frustum;
+
+static frustum frustum_make_ndc() {
+  frustum f = {};
+  f.points[0] = v3m(-1,-1,-1);
+  f.points[1] = v3m(-1,+1,-1);
+  f.points[2] = v3m(-1,+1,+1);
+  f.points[3] = v3m(-1,-1,+1);
+  f.points[4] = v3m(+1,-1,-1);
+  f.points[5] = v3m(+1,+1,-1);
+  f.points[6] = v3m(+1,+1,+1);
+  f.points[7] = v3m(+1,-1,+1);
+  return f;
+}
+
+static frustum frustum_transform_points(frustum ndc, m4 m) {
+  frustum f = {};
+
+  for (s32 p = 0; p < FRUSTUM_CORNERS; p+=1) {
+    v3 ndc_p = ndc.points[p];
+    f.points[p] = v3_from_v4(unproject(v4m(ndc_p.x, ndc_p.y, ndc_p.z, 1), m));
+  }
+  return f;
+}
+
+static v3 frustum_calc_center(frustum *f) {
+  v3 center = v3m(0,0,0);
+  for (s32 p = 0; p < FRUSTUM_CORNERS; p+=1) {
+    v3 point = f->points[p];
+    center = v3_add(center, point);
+  }
+
+  center = v3_divf(center, FRUSTUM_CORNERS);
+
+  return center;
+}
+
+static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
+  //proj = m4_persp(100, 19.0/6.0, 0.1, 20);
+
+#if 1
+  m4 vp = m4_mult(proj, view);
+#else
+  // This will place the frustum in (0,0), good for testing
+  m4 vp = proj;
+#endif
+
+  // 0. Calculate the view matrix for the LSM by finding the world frustum center
+  frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
+  v3 f_center = frustum_calc_center(&f);
+  m4 lsm_view = m4_look_at(v3_add(f_center, ld), f_center, v3m(0,1,0));
+
+  // 1. Calculate the ortho matrix by finding the view-space bounds of the frustum  
+  bbox bounds = {
+    .min = v3m(F32_MAX,F32_MAX,F32_MAX),
+    .max = v3m(F32_MIN,F32_MIN,F32_MIN),
+  };
+  frustum fv = frustum_transform_points(f, lsm_view);
+  for (s32 p = 0; p < FRUSTUM_CORNERS; p+=1) {
+    for (s32 comp_idx = 0; comp_idx < 3; comp_idx+=1) {
+      bounds.min.raw[comp_idx] = MIN(bounds.min.raw[comp_idx], fv.points[p].raw[comp_idx]);
+      bounds.max.raw[comp_idx] = MAX(bounds.max.raw[comp_idx], fv.points[p].raw[comp_idx]);
+    }
+  }
+  f32 z_mult = 1.0;
+  bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * z_mult) : (bounds.min.z / z_mult);
+  bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / z_mult) : (bounds.max.z * z_mult);
+  m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, bounds.min.z, bounds.max.z);
+  m4 lsm = m4_mult(lsm_proj, lsm_view);
+
+  return lsm;
+}
 
 
 #endif

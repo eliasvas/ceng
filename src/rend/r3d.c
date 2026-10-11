@@ -482,21 +482,22 @@ void r3d_try_load_shaders() {
 // Context API! (More compact!)
 ////////////////////////////////////
 
-R3D_Ctx* r3dc_begin_depth(Arena *arena, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
-  m4 shadow_view = m4_look_at(v3_add(cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
+R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+  m4 lsm = lsm_from_vp(view, proj, light_dir);
+
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
-  rctx->view = shadow_view;
-  rctx->proj = shadow_proj;
+  // FIXME: HACK HACK HACK HACK HACK
+  rctx->view = m4d(1.0);
+  rctx->proj = lsm;
   rctx->cam_pos = cam_pos;
   *rctx = (R3D_Ctx) {
     .arena = arena,
     .viewport = rctx->viewport,
     .proj = rctx->proj,
     .view = rctx->view,
-    .lsm = m4_mult(shadow_proj, shadow_view),
+    .lsm = lsm,
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = &shadow_rt,
@@ -509,8 +510,7 @@ R3D_Ctx* r3dc_begin_depth(Arena *arena, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags 
 }
 
 R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-  m4 shadow_proj = m4_ortho(-20, 20, -20, 20, 0.1, 100);
-  m4 shadow_view = m4_look_at(v3_add(cam_pos, v3m(0,2,0)), v3m(0,0,0), v3m(0,1,0));
+  m4 lsm = lsm_from_vp(view, proj, light_dir);
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
@@ -523,7 +523,7 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     .viewport = viewport,
     .proj = rctx->proj,
     .view = rctx->view,
-    .lsm = m4_mult(shadow_proj, shadow_view),
+    .lsm = lsm,
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = nullptr,
@@ -801,34 +801,6 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
   }
 }
 
-void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type prim) {
-  proj = m4_persp(100, rctx->viewport.w/rctx->viewport.h, 0.1, 10);
-  color c = clr_256(250, 40,30, 100);
-
-  Tri_Vertex frustum[8] = {
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,-1,-1,+1), m4_inv(proj))), .color = c},
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,+1,-1,+1), m4_inv(proj))), .color = c},
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,+1,-1,+1), m4_inv(proj))), .color = c},
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,-1,-1,+1), m4_inv(proj))), .color = c},
-
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,-1,+1,+1), m4_inv(proj))), .color = c},
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(-1,+1,+1,+1), m4_inv(proj))), .color = c},
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,+1,+1,+1), m4_inv(proj))), .color = c},
-    (Tri_Vertex) {.pos = v3_from_v4(unproject(v4m(+1,-1,+1,+1), m4_inv(proj))), .color = c},
-  };
-
-  Tri_Vertex verts[] = {
-    frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
-    frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
-    frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
-    frustum[3], frustum[7], frustum[4], frustum[0], frustum[3],
-    frustum[0], frustum[4], frustum[5], frustum[1], frustum[0],
-    frustum[4], frustum[7], frustum[6], frustum[5], frustum[4],
-  };
-
-  r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(eye));
-}
-
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   Tri_Vertex cube_verts[6] = {
     (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
@@ -841,4 +813,39 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
 
+void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type prim) {
+  proj = m4_persp(100, rctx->viewport.w/rctx->viewport.h, 0.1, 10);
 
+#if 0
+  m4 vp = m4_mult(proj, view);
+#else
+  m4 vp = proj;
+#endif
+
+  color c = clr_256(250, 40,30, 100);
+
+  frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
+
+  Tri_Vertex frustum[8] = {
+    (Tri_Vertex) {.pos = f.points[0], .color = c},
+    (Tri_Vertex) {.pos = f.points[1], .color = c},
+    (Tri_Vertex) {.pos = f.points[2], .color = c},
+    (Tri_Vertex) {.pos = f.points[3], .color = c},
+
+    (Tri_Vertex) {.pos = f.points[4], .color = c},
+    (Tri_Vertex) {.pos = f.points[5], .color = c},
+    (Tri_Vertex) {.pos = f.points[6], .color = c},
+    (Tri_Vertex) {.pos = f.points[7], .color = c},
+  };
+
+  Tri_Vertex verts[] = {
+    frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
+    frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
+    frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
+    frustum[3], frustum[7], frustum[4], frustum[0], frustum[3],
+    frustum[0], frustum[4], frustum[5], frustum[1], frustum[0],
+    frustum[4], frustum[7], frustum[6], frustum[5], frustum[4],
+  };
+
+  r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
+}

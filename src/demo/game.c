@@ -236,13 +236,13 @@ void game_render(struct Game_State *gs, float dt) {
   world_update_render(gs, dt);
   // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
 
-  v3 light_dir = v3_norm(v3m(0.2,1,-1));
-
+  //v3 light_dir = v3_norm(v3m(0.2,1,-1));
+  v3 light_dir = v3_norm(v3m(0,1,1));
 
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-  R3D_Ctx* shadow_pass = r3dc_begin_depth(gs->frame_arena, gs->cam_pos, light_dir, R3D_FLAG_CLEAR_ALL);
+  R3D_Ctx* shadow_pass = r3dc_begin_depth(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, R3D_FLAG_CLEAR_ALL);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -262,8 +262,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // LIGHTPASS
   ///////////////////////
-  R3D_Ctx* light_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, 
-      gs->cam_pos, light_dir, 0);
+  R3D_Ctx* light_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);

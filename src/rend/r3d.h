@@ -28,7 +28,7 @@ typedef struct {
 } R3D_Ctx;
 
 R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
-R3D_Ctx* r3dc_begin_depth(Arena *arena, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
 void r3dc_end(R3D_Ctx *rctx);
 
 void r3dc_imm_verts(R3D_Ctx *rctx, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
