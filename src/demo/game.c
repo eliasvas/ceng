@@ -137,8 +137,8 @@ void game_update(struct Game_State *gs, float dt) {
 
 void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   s32 line_count_per_axis = cell_count + 1; 
-  Tri_Vertex *points = arena_push_array(gs->frame_arena, Tri_Vertex, line_count_per_axis*4);
-  color c1 = v4m(0.7,0.7,0.7,1);
+  Uber_Vertex *points = arena_push_array(gs->frame_arena, Uber_Vertex, line_count_per_axis*4);
+  color c1 = v4m(0.9,0.9,0.9,1);
 
   m4 model = m4_translate(v3m(0, 0, 0));
 
@@ -147,16 +147,16 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
     v3 start = v3m(-cell_count/2.0,0, line_x - cell_count/2.0);
     v3 end   = v3m(+cell_count/2.0,0, line_x - cell_count/2.0);
 
-    points[point_idx++] = (Tri_Vertex) {.pos = start, .color = c1};
-    points[point_idx++] = (Tri_Vertex) {.pos = end, .color = c1};
+    points[point_idx++] = (Uber_Vertex) {.pos = start, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
+    points[point_idx++] = (Uber_Vertex) {.pos = end, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
   }
 
   for (s32 line_z = 0; line_z < line_count_per_axis; line_z +=1) {
     v3 start = v3m(line_z - cell_count/2.0, 0,-cell_count/2.0);
     v3 end   = v3m(line_z - cell_count/2.0, 0,+cell_count/2.0);
 
-    points[point_idx++] = (Tri_Vertex) {.pos = start, .color = c1};
-    points[point_idx++] = (Tri_Vertex) {.pos = end, .color = c1};
+    points[point_idx++] = (Uber_Vertex) {.pos = start, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
+    points[point_idx++] = (Uber_Vertex) {.pos = end, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
   }
 
   assert(point_idx == line_count_per_axis*4);
@@ -180,6 +180,8 @@ void game_render(struct Game_State *gs, float dt) {
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
 
   // 0. Draw grid
+  R3D_Ctx* shadow_pass2 = r3dc_begin_depth(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3m(0,0,0), R3D_FLAG_CLEAR_ALL);
+  r3dc_end(shadow_pass2);
   game_draw_origin_grid(gs, 10);
   // Draw the test model
   m4 vp = m4_mult(gs->proj, gs->view);

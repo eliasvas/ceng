@@ -5,9 +5,37 @@
 #include "frz/frz.h"
 #include "ogl.h"
 
-typedef FRZ_Vertex Tri_Vertex;
+//typedef FRZ_Vertex Tri_Vertex;
+//#define TRI_VERTEX_VARG(vt) vt.pos.x, vt.pos.y, vt.pos.z
 
-#define TRI_VERTEX_VARG(vt) vt.pos.x, vt.pos.y, vt.pos.z
+
+typedef struct {
+  v3 pos;
+  v3 norm;
+  v4 tangent;
+
+  v2 tc_0;
+  v2 tc_1;
+  v2 tc_2;
+  v2 tc_3;
+
+  v4 col_0;
+  v4 col_1;
+  v4 col_2;
+  v4 col_3;
+
+  iv4 joint_0;
+  iv4 joint_1;
+  iv4 joint_2;
+  iv4 joint_3;
+
+  v4 weight_0;
+  v4 weight_1;
+  v4 weight_2;
+  v4 weight_3;
+
+} Uber_Vertex;
+
 
 typedef enum {
   R3D_FLAG_CLEAR_ALL     = (0x1 << 0),
@@ -20,7 +48,7 @@ typedef struct {
   rect viewport;
   m4 view;
   m4 proj;
-  m4 lsm;
+  m4 lsms[4];
   v3 cam_pos;
   v3 light_dir;
 
@@ -31,7 +59,7 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
 R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
 void r3dc_end(R3D_Ctx *rctx);
 
-void r3dc_imm_verts(R3D_Ctx *rctx, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
+void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);

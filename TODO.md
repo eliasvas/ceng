@@ -26,8 +26,8 @@
     - Currently particles are z-facing.. make them billboards or something
 
 ## Graphics
-    - Shadows!!!!
     - Shader permutations https://therealmjp.github.io/posts/shader-permutations-part1/
+    - we could support immediate trivertices and convert to default ubervertex on demand, for simpler API
 
 ## Assets
     - With current handling textures can't be customized (e.g different magFilter)

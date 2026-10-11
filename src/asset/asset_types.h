@@ -11,34 +11,6 @@
 ///////////////////////////////
 
 typedef struct {
-  v3 pos;
-  v3 norm;
-  v4 tangent;
-
-  v2 tc_0;
-  v2 tc_1;
-  v2 tc_2;
-  v2 tc_3;
-
-  v4 col_0;
-  v4 col_1;
-  v4 col_2;
-  v4 col_3;
-
-  iv4 joint_0;
-  iv4 joint_1;
-  iv4 joint_2;
-  iv4 joint_3;
-
-  v4 weight_0;
-  v4 weight_1;
-  v4 weight_2;
-  v4 weight_3;
-
-} Uber_Vertex;
-
-
-typedef struct {
   Asset_Id tex_asset_id;
   s32 tc_idx; // e.g tc_0 or tc_1
   b32 active;

@@ -2,8 +2,6 @@
 #include "asset/asset_mgr.h"
 
 // Maybe asset management should happen somewhere..
-static Ogl_Render_Bundle tri_bundle = {};
-static Ogl_Render_Bundle tri_shadow_bundle = {};
 static Ogl_Render_Bundle uber_bundle = {};
 static Ogl_Render_Bundle uber_shadow_bundle = {};
 
@@ -13,96 +11,31 @@ static Ogl_Render_Target shadow_rt;
 // Triangle Shaders
 ////////////////////////////////////////////////
 
-const char* tri_vs = R"(#version 460 core
-layout(location=0) in vec3 pos;
-layout(location=1) in vec3 norm;
-layout(location=2) in vec2 tc;
-layout(location=3) in vec4 color;
-
-layout (std140) uniform PerFrameData { 
-  mat4 lsm;
-  mat4 view_proj;
-  vec3 cam_pos;
-  vec3 light_dir;
-};
-layout (std140) uniform ModelMatrix { mat4 model; };
-
-out VS_OUT {
-  vec4 color;
-  vec3 norm;
-  vec2 tc;
-  vec3 frag_pos;
-  vec4 frag_pos_ls;
-} vs_out;
-
-void main() { 
-	gl_Position = view_proj * model * vec4(pos, 1.0);
-  vs_out.color = color;
-  vs_out.norm = norm;
-  vs_out.tc = tc;
-
-  vs_out.frag_pos = vec3(model * vec4(pos, 1.0));
-  vs_out.frag_pos_ls = lsm * vec4(vs_out.frag_pos, 1.0);
-}
-)";
-
-const char *tri_fs = R"(#version 460 core
-layout(location = 0) out vec4 out_color;
-uniform sampler2D shadow_map;
+const char* shadow_fs= R"(#version 460 core
+layout(location = 0) out vec4 out_color[4];
 
 in VS_OUT {
   vec4 color;
+  vec4 wp;
+  vec3 view_dir;
   vec3 norm;
-  vec2 tc;
+  vec3 tang;
+  vec3 binorm;
+  vec2 tc[4];
   vec3 frag_pos;
-  vec4 frag_pos_ls;
+  vec4 frag_pos_ls[4];
 } fs_in;
 
-float shadow_calc(vec4 frag_pos_ls) {
-  // project to get actual NDC
-  vec3 proj_coords = frag_pos_ls.xyz / frag_pos_ls.w;
-  // go to [0,1] range (to sample the tex)
-  proj_coords = proj_coords*0.5+0.5;
-  // sample the tex
-  float closest_depth = texture(shadow_map, proj_coords.xy).r;
-  float current_depth = proj_coords.z;
-  float bias = 0.005;
-  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
-
-  return shadow;
-}
-
 void main() {
-  out_color = fs_in.color;
+  //float depth = gl_FragCoord.z;
 
-  float shadow = shadow_calc(fs_in.frag_pos_ls);
-  out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
-}
-)";
-
-const char* shadow_fs= R"(#version 460 core
-layout(location = 0) out vec4 out_color;
-
-// NOTE: These are not used since we only do ortho shadows!
-float near = 0.1;
-float far  = 100.0;
-float linearize_depth(float depth) {
-    float ndc_z = depth * 2.0 - 1.0;
-    return (2.0 * near * far) / (far + near - ndc_z * (far - near));
-}
-
-void main() {
-#if 0
-  float depth = linearize_depth(gl_FragCoord.z)/far;
-#else
-  float depth = gl_FragCoord.z;
-#endif
-  out_color = vec4(vec3(depth), 1.0);
+  for (int i = 0 ; i < 4; i+=1) {
+    float depth2 = fs_in.frag_pos_ls[i].z;
+    out_color[i] = vec4(vec3(depth2), 1.0);
+  }
   //out_color = fs_in.color;
 }
 )";
-
-
 
 const char* uber_vs = R"(#version 460 core
 precision highp float;
@@ -124,7 +57,7 @@ layout(location=11) in ivec4 joint_0;
 layout(location=12) in vec4 weight_0;
 
 layout (std140) uniform PerFrameData { 
-  mat4 lsm;
+  mat4 lsms[4];
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
@@ -159,7 +92,7 @@ out VS_OUT {
   vec3 binorm;
   vec2 tc[4];
   vec3 frag_pos;
-  vec4 frag_pos_ls;
+  vec4 frag_pos_ls[4];
 } vs_out;
 
 void main() { 
@@ -193,7 +126,9 @@ void main() {
   vs_out.view_dir = normalize(cam_pos.xyz - vs_out.wp.xyz);
 
   vs_out.frag_pos = vec3(model_matrix * vec4(pos, 1.0));
-  vs_out.frag_pos_ls = lsm * vec4(vs_out.frag_pos, 1.0);
+  for (int i = 0; i < 4; i+=1) {
+    vs_out.frag_pos_ls[i] = lsms[i] * vec4(vs_out.frag_pos, 1.0);
+  }
 }
 )";
 
@@ -203,7 +138,7 @@ precision highp float;
 layout(location = 0) out vec4 out_color;
 
 layout (std140) uniform PerFrameData { 
-  mat4 lsm;
+  mat4 lsms[4];
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
@@ -233,7 +168,7 @@ in VS_OUT {
   vec3 binorm;
   vec2 tc[4];
   vec3 frag_pos;
-  vec4 frag_pos_ls;
+  vec4 frag_pos_ls[4];
 } fs_in;
 
 uniform sampler2D base_color_tex;
@@ -264,12 +199,12 @@ void main() {
   ivec2 texture_size;
   vec2 tc;
   out_color = fs_in.color * texture(base_color_tex, fs_in.tc[base_tc_idx]);
-  out_color += emissive_factor * texture(emissive_tex, fs_in.tc[emissive_tc_idx]);
-  out_color += 0.1 * texture(occlusion_tex, fs_in.tc[occlusion_tc_idx]);
-  out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
-  out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
+  //out_color += emissive_factor * texture(emissive_tex, fs_in.tc[emissive_tc_idx]);
+  //out_color += 0.1 * texture(occlusion_tex, fs_in.tc[occlusion_tc_idx]);
+  //out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
+  //out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
 
-  float shadow = shadow_calc(fs_in.frag_pos_ls);
+  float shadow = shadow_calc(fs_in.frag_pos_ls[0]);
   out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
 #else
 
@@ -344,7 +279,7 @@ void main() {
 )";
 
 typedef struct {
-  m4 lsm;
+  m4 lsms[4];
   m4 view_proj;
   v3 cam_pos;
   f32 _padding;
@@ -370,50 +305,12 @@ typedef struct {
 } Material_UBO;
 
 void r3d_try_load_shaders() {
-
-  m4 m = {};
-  if (tri_bundle.sp.impl_state == 0) {
-
+  if (uber_bundle.sp.impl_state == 0) {
 
 #define SHADOWMAP_DIM 2048
-    ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, 1, OGL_TEX_FORMAT_RGBA8U, true);
+    ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, 4, OGL_TEX_FORMAT_RGBA8U, true);
 
-    tri_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(tri_vs, tri_fs),
-      .textures[0] = (Ogl_Tex_Slot){ .name = "shadow_map", .tex = shadow_rt.depth_attachment },
-      .vbos = {
-        [0] = {
-          // the vertex buffer for this should probably be made after r_end has been called
-          .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Tri_Vertex)),
-          .vattribs = {
-            [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, pos), .stride = sizeof(Tri_Vertex), .instanced = false, },
-            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC3,  .offset = offsetof(Tri_Vertex, norm), .stride = sizeof(Tri_Vertex), .instanced = false,  },
-            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC2,  .offset = offsetof(Tri_Vertex, uv),    .stride = sizeof(Tri_Vertex), .instanced = false,  },
-            [3] = { .location = 3, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Tri_Vertex, color),  .stride = sizeof(Tri_Vertex), .instanced = false,  },
-          },
-        },
-      },
-      .ubos = { 
-        [0] = { .name = "PerFrameData", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(PerFrameData_UBO)), .start_offset = 0, .size = sizeof(PerFrameData_UBO) },
-        [1] = { .name = "ModelMatrix", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, (m4[]) { m }, 1, sizeof(m4)), .start_offset = 0, .size = sizeof(m4) }, },
-      //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
-      .dyn_state = (Ogl_Dyn_State){
-//        .viewport = viewport,
-//        .scissor  = scissor,
-        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
-      },
-      .depth_state = (Ogl_Depth_State) {
-        .dwrite = OGL_DEPTH_WRITE_ENABLED,
-        .dfunc  = OGL_DFUNC_LEQUAL,
-      },
-    };
 
-    tri_shadow_bundle = tri_bundle;
-    tri_shadow_bundle.sp = ogl_shader_make(tri_vs, shadow_fs);
-    tri_shadow_bundle.rt = shadow_rt;
-  }
-
-  if (uber_bundle.sp.impl_state == 0) {
     uber_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(uber_vs, uber_fs),
 
@@ -455,14 +352,15 @@ void r3d_try_load_shaders() {
           },
         },
       },
-      .ubos = { [0] = { .name = "PerFrameData", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(PerFrameData_UBO)), .start_offset = 0, .size = sizeof(PerFrameData_UBO) }, 
-                [1] = { .name = "Material", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Material_UBO)), .start_offset = 0, .size = sizeof(Material_UBO) },
-                [2] = { .name = "JointMatrices", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(m4)*32), .start_offset = 0, .size = sizeof(m4)*32 },
+      .ubos = {
+        [0] = { .name = "PerFrameData", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(PerFrameData_UBO)), .start_offset = 0, .size = sizeof(PerFrameData_UBO) }, 
+        [1] = { .name = "Material", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Material_UBO)), .start_offset = 0, .size = sizeof(Material_UBO) },
+        [2] = { .name = "JointMatrices", .buffer = ogl_buf_make(OGL_BUF_KIND_UNIFORM, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(m4)*32), .start_offset = 0, .size = sizeof(m4)*32 },
       },
       //.rt = ogl_render_target_make(screen_dim.x, screen_dim.y, 2, OGL_TEX_FORMAT_RGBA8U, true),
       .dyn_state = (Ogl_Dyn_State){
-//        .viewport = viewport,
-//        .scissor  = scissor,
+        //.viewport = viewport,
+        //.scissor  = scissor,
         .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
       },
       .depth_state = (Ogl_Depth_State) {
@@ -477,14 +375,31 @@ void r3d_try_load_shaders() {
   }
 }
 
+// Fixed bounds for now
+static v4 r3d_get_cascade_bounds() {
+  return v4m(10,20,40,100);
+}
 
 ////////////////////////////////////
 // Context API! (More compact!)
 ////////////////////////////////////
 
 R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-  m4 lsm = lsm_from_vp(view, proj, light_dir);
 
+  v4 cascade_bounds = r3d_get_cascade_bounds();
+  m4 persp_mats[] = {
+    m4_persp(45, viewport.w/viewport.h, 0.1, cascade_bounds.raw[0]),
+    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[0], cascade_bounds.raw[1]),
+    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[1], cascade_bounds.raw[2]),
+    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[2], cascade_bounds.raw[3]),
+  };
+  m4 lsms[] = {
+    lsm_from_vp(view, persp_mats[0], light_dir),
+    lsm_from_vp(view, persp_mats[1], light_dir),
+    lsm_from_vp(view, persp_mats[2], light_dir),
+    lsm_from_vp(view, persp_mats[3], light_dir),
+  };
+  m4 lsm = lsm_from_vp(view, proj, light_dir);
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
@@ -497,7 +412,7 @@ R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     .viewport = rctx->viewport,
     .proj = rctx->proj,
     .view = rctx->view,
-    .lsm = lsm,
+    .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = &shadow_rt,
@@ -510,6 +425,20 @@ R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
 }
 
 R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+
+  v4 cascade_bounds = r3d_get_cascade_bounds();
+  m4 persp_mats[] = {
+    m4_persp(45, viewport.w/viewport.h, 0.1, cascade_bounds.raw[0]),
+    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[0], cascade_bounds.raw[1]),
+    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[1], cascade_bounds.raw[2]),
+    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[2], cascade_bounds.raw[3]),
+  };
+  m4 lsms[] = {
+    lsm_from_vp(view, persp_mats[0], light_dir),
+    lsm_from_vp(view, persp_mats[1], light_dir),
+    lsm_from_vp(view, persp_mats[2], light_dir),
+    lsm_from_vp(view, persp_mats[3], light_dir),
+  };
   m4 lsm = lsm_from_vp(view, proj, light_dir);
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
@@ -523,7 +452,8 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     .viewport = viewport,
     .proj = rctx->proj,
     .view = rctx->view,
-    .lsm = lsm,
+    //.lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
+    .lsms = {lsm},
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = nullptr,
@@ -540,11 +470,12 @@ void r3dc_end(R3D_Ctx *rctx) {
 }
 
 void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
-  m4 lsm = rctx->lsm;
-
   m4 vp = m4_mult(rctx->proj, rctx->view);
   PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
-    .lsm = lsm,
+    .lsms[0] = rctx->lsms[0],
+    .lsms[1] = rctx->lsms[1],
+    .lsms[2] = rctx->lsms[2],
+    .lsms[3] = rctx->lsms[3],
     .view_proj = vp,
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,
@@ -552,21 +483,44 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
 
+void r3d_set_def_material(m4 model) {
+  Ogl_Tex *texture = AM_GET((Asset_Id){}, tex);
+  uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("base_color_tex"), .tex = *(texture),};
+  uber_bundle.textures[1] = (Ogl_Tex_Slot){.name = ("normal_tex"), .tex = *(texture),};
+  uber_bundle.textures[2] = (Ogl_Tex_Slot){.name = ("metallic_roughness_tex"), .tex = *(texture),};
+  uber_bundle.textures[3] = (Ogl_Tex_Slot){.name = ("emissive_tex"), .tex = *(texture),};
+  uber_bundle.textures[4] = (Ogl_Tex_Slot){.name = ("occlusion_tex"), .tex = *(texture),};
 
-void r3dc_imm_verts(R3D_Ctx *rctx, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
-  Ogl_Render_Bundle bundle = (rctx->rt) ? tri_shadow_bundle : tri_bundle; 
+  Material_UBO material_ubo = (Material_UBO) {
+    .base_color_factor = v4m(1,1,1,1),
+    .metallic_factor = 1.0,
+    .roughness_factor = 1.0,
+    .emissive_factor = v4_zero,
+    .base_tc_idx = 0,
+    .metallic_roughness_tc_idx = 0,
+    .normal_tc_idx = 0,
+    .occlusion_tc_idx = 0,
+    .model_matrix = model,
+  };
+  ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
+}
 
-  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Tri_Vertex)*vert_count);
-  bundle.vbos[0].buffer = vbo;
 
-  r3dc_set_per_frame_ubo(rctx, &bundle.ubos[0].buffer);
-  ogl_buf_update(&bundle.ubos[1].buffer, 0, &model, 1, sizeof(m4));
+
+void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
+  Ogl_Render_Bundle *bundle = (rctx->rt) ? &uber_shadow_bundle : &uber_bundle; 
+
+  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
+  bundle->vbos[0].buffer = vbo;
+
+  r3dc_set_per_frame_ubo(rctx, &bundle->ubos[0].buffer);
+  r3d_set_def_material(model);
 
   // Set dynamically before drawcall currently
-  bundle.dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
-  bundle.dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
+  bundle->dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
+  bundle->dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
 
-  ogl_render_bundle_draw(&bundle, prim, vert_count, 1);
+  ogl_render_bundle_draw(bundle, prim, vert_count, 1);
 
   // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
   ogl_buf_deinit(&vbo);
@@ -574,46 +528,48 @@ void r3dc_imm_verts(R3D_Ctx *rctx, FRZ_Vertex *verts, s32 vert_count, Ogl_Prim_T
 
 
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
-  Tri_Vertex cube_verts[36] = {
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .color = c}
+  Uber_Vertex cube_verts[36] = {
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)}
   };
+
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
+
 
 void r3d_set_material(Mesh_Primitive_Info *info, m4 model, color tint) {
   Material_Info *material = &info->material;
@@ -745,7 +701,7 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 
 f32 _blend_factor = 0.0;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint) {
-  Ogl_Render_Bundle bundle = (rctx->rt) ? uber_shadow_bundle : uber_bundle; 
+  Ogl_Render_Bundle *bundle = (rctx->rt) ? &uber_shadow_bundle : &uber_bundle; 
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
@@ -777,38 +733,38 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
     m4 *joint_matrices = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, anim_idx, time_sec);
 #endif
 
-    ogl_buf_update(&bundle.ubos[2].buffer, 0, joint_matrices, 1, sizeof(m4)*JOINT_MAT_COUNT);
+    ogl_buf_update(&bundle->ubos[2].buffer, 0, joint_matrices, 1, sizeof(m4)*JOINT_MAT_COUNT);
     release_scratch(temp);
 
     for (s64 primitive_idx = 0; primitive_idx < mesh->prim_count; primitive_idx+=1) {
       Mesh_Primitive_Info *prim =  &mesh->prims[primitive_idx];
       m4 model_matrix = m4_mult(model, (joint_count) ? m4d(1.0) : mesh_global);
 
-      bundle.vbos[0].buffer = prim->vbo;
-      bundle.index_buffer = prim->ibo;
-      bundle.dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
-      bundle.dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
+      bundle->vbos[0].buffer = prim->vbo;
+      bundle->index_buffer = prim->ibo;
+      bundle->dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
+      bundle->dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
 
-      r3dc_set_per_frame_ubo(rctx, &bundle.ubos[0].buffer);
+      r3dc_set_per_frame_ubo(rctx, &bundle->ubos[0].buffer);
       r3d_set_material(prim, model_matrix, tint);
 
       if (prim->ibo.count) {
-        ogl_render_bundle_draw_indexed(&bundle, prim->type, prim->ibo.count);
+        ogl_render_bundle_draw_indexed(bundle, prim->type, prim->ibo.count);
       } else {
-        ogl_render_bundle_draw(&bundle, prim->type, prim->vbo.count, 1);
+        ogl_render_bundle_draw(bundle, prim->type, prim->vbo.count, 1);
       }
     }
   }
 }
 
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
-  Tri_Vertex cube_verts[6] = {
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .color = c},
-    (Tri_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .color = c},
+  Uber_Vertex cube_verts[6] = {
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
   };
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
@@ -822,23 +778,23 @@ void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type pri
   m4 vp = proj;
 #endif
 
-  color c = clr_256(250, 40,30, 100);
+  color c = clr_256(250, 40,30, 200);
 
   frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
 
-  Tri_Vertex frustum[8] = {
-    (Tri_Vertex) {.pos = f.points[0], .color = c},
-    (Tri_Vertex) {.pos = f.points[1], .color = c},
-    (Tri_Vertex) {.pos = f.points[2], .color = c},
-    (Tri_Vertex) {.pos = f.points[3], .color = c},
+  Uber_Vertex frustum[8] = {
+    (Uber_Vertex) {.pos = f.points[0], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[1], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[2], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[3], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
 
-    (Tri_Vertex) {.pos = f.points[4], .color = c},
-    (Tri_Vertex) {.pos = f.points[5], .color = c},
-    (Tri_Vertex) {.pos = f.points[6], .color = c},
-    (Tri_Vertex) {.pos = f.points[7], .color = c},
+    (Uber_Vertex) {.pos = f.points[4], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[5], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[6], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[7], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
   };
 
-  Tri_Vertex verts[] = {
+  Uber_Vertex verts[] = {
     frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
     frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
     frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
