@@ -359,6 +359,7 @@ vec3 fxaa(vec2 p, ivec2 size) {
 void main() {
   ivec2 size = textureSize(u_tex, 0);
   out_color = vec4(fxaa(fs_in.tc, size), 1);
+  //out_color = vec4(texture(u_tex, fs_in.tc).xyz, 1);
 }
 )";
 

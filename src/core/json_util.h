@@ -19,10 +19,12 @@ typedef enum {
   JSON_TOKEN_KIND_NULL,
   JSON_TOKEN_KIND_STRING,
 } Json_Token_Kind;
+
 typedef struct {
   str8 buf;
   Json_Token_Kind kind;
 } Json_Token;
+
 typedef struct {
   Json_Token *tokens;
   u64 count;
