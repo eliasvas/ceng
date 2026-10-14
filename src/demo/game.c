@@ -11,6 +11,8 @@
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
 
+static v3 cam_pos;
+
 extern f32 _blend_factor;
 
 extern void platform_play_sound(const char *sound);
@@ -101,6 +103,8 @@ void game_init(struct Game_State *gs) {
 
   // serializer test
   //wserializer_test(gs->persistent_arena);
+
+  cam_pos = v3m(0,15,8);
 }
 
 extern void r2d_try_load_shaders();
@@ -169,9 +173,45 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
   R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
-  r3dc_imm_frustum(grid_pass, v3m(0,4,7), gs->view, gs->proj, OGL_PRIM_TYPE_LINE);
-  //r3dc_imm_frustum(grid_pass, v3m(0,4,5), gs->view, gs->proj, OGL_PRIM_TYPE_TRIANGLE);
+  //r3dc_imm_frustum(grid_pass, v3m(0,4,7), gs->view, gs->proj, OGL_PRIM_TYPE_LINE);
 
+  //r3dc_imm_frustum(grid_pass, v3m(0,4,7), grid_pass->lsms[0], m4d(1.0), OGL_PRIM_TYPE_LINE);
+  //r3dc_imm_cube(grid_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.8,0.8,0.8,0.2), m4_scale(v3m(3,3,3)));
+
+
+#if 1
+  /////////////////////////////////////////////
+  // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+  /////////////////////////////////////////////
+
+  m4 test_view = m4_look_at(v3m(0,-0.2,0), v3m(0.3,0,-0.3), v3m(0,1,0));
+  {
+    // 0. Render p_0 (the nearer frustum's bbox
+    m4 p_0 = m4_persp(45, 1, 0.1, 5);
+    frustum f = frustum_make_ndc();
+    f = frustum_transform_points(f, m4_inv(m4_mult(p_0, test_view)));
+    bbox box = bbox_from_frustum(f);
+    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+    r3dc_imm_frustum(grid_pass, v3m(0,0,0), test_view, p_0, OGL_PRIM_TYPE_LINE);
+    r3dc_imm_cube(grid_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
+  }
+
+
+
+  {
+    // 1. Render p_1 (the 2nd nearer frustum's bbox
+    m4 p_1 = m4_persp(45, 1, 5, 5 + 5* (1+sin(gs->time_sec))/2.0);
+    frustum f = frustum_make_ndc();
+    f = frustum_transform_points(f, m4_inv(m4_mult(p_1, test_view)));
+    bbox box = bbox_from_frustum(f);
+    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+    r3dc_imm_frustum(grid_pass, v3m(0,0,0), test_view, p_1, OGL_PRIM_TYPE_LINE);
+    r3dc_imm_cube(grid_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
+  }
+#endif
+
+
+  // Render the frustuM?
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
 
 
@@ -179,13 +219,23 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 }
 
 void game_render(struct Game_State *gs, float dt) {
-  v3 cam_pos = v3m(0,4,8);
+
+  /////////////////////////////////////// 
+  // Very sketchy camera controls
+  /////////////////////////////////////// 
+  if (input_key_down(&gs->input, KEY_SCANCODE_Q)) { cam_pos.y -= dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_E)) { cam_pos.y += dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_W)) { cam_pos.z -= dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_S)) { cam_pos.z += dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_A)) { cam_pos.x -= dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_D)) { cam_pos.x += dt * 10; }
+
   gs->cam_pos = cam_pos;
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
-  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 20);
+  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 40);
 
   // 0. Draw grid
-  R3D_Ctx* shadow_pass2 = r3dc_begin_depth(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3m(0,0,0), R3D_FLAG_CLEAR_ALL);
+  R3D_Ctx* shadow_pass2 = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3m(0,0,0), 0,R3D_FLAG_CLEAR_ALL);
   r3dc_end(shadow_pass2);
   game_draw_origin_grid(gs, 10);
   // Draw the test model
@@ -249,7 +299,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-  R3D_Ctx* shadow_pass = r3dc_begin_depth(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, R3D_FLAG_CLEAR_ALL);
+  R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,0, R3D_FLAG_CLEAR_ALL);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);

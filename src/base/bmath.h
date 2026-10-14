@@ -964,6 +964,21 @@ static v3 frustum_calc_center(frustum *f) {
   return center;
 }
 
+static bbox bbox_from_frustum(frustum f) {
+  bbox bounds = {
+    .min = v3m(F32_MAX,F32_MAX,F32_MAX),
+    .max = v3m(F32_MIN,F32_MIN,F32_MIN),
+  };
+  for (s32 p = 0; p < FRUSTUM_CORNERS; p+=1) {
+    for (s32 comp_idx = 0; comp_idx < 3; comp_idx+=1) {
+      bounds.min.raw[comp_idx] = MIN(bounds.min.raw[comp_idx], f.points[p].raw[comp_idx]);
+      bounds.max.raw[comp_idx] = MAX(bounds.max.raw[comp_idx], f.points[p].raw[comp_idx]);
+    }
+  }
+  return bounds;
+}
+
+
 static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
   //proj = m4_persp(100, 19.0/6.0, 0.1, 20);
 
@@ -980,17 +995,9 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
   m4 lsm_view = m4_look_at(v3_add(f_center, ld), f_center, v3m(0,1,0));
 
   // 1. Calculate the ortho matrix by finding the view-space bounds of the frustum  
-  bbox bounds = {
-    .min = v3m(F32_MAX,F32_MAX,F32_MAX),
-    .max = v3m(F32_MIN,F32_MIN,F32_MIN),
-  };
   frustum fv = frustum_transform_points(f, lsm_view);
-  for (s32 p = 0; p < FRUSTUM_CORNERS; p+=1) {
-    for (s32 comp_idx = 0; comp_idx < 3; comp_idx+=1) {
-      bounds.min.raw[comp_idx] = MIN(bounds.min.raw[comp_idx], fv.points[p].raw[comp_idx]);
-      bounds.max.raw[comp_idx] = MAX(bounds.max.raw[comp_idx], fv.points[p].raw[comp_idx]);
-    }
-  }
+  bbox bounds = bbox_from_frustum(fv);
+  // 2. Calculate the actual ortho matrix (+zMult)
   f32 z_mult = 1.0;
   bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * z_mult) : (bounds.min.z / z_mult);
   bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / z_mult) : (bounds.max.z * z_mult);

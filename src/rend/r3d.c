@@ -478,21 +478,31 @@ void r3d_try_load_shaders(rect viewport) {
 
 // Fixed bounds for now
 static v4 r3d_get_cascade_bounds() {
-  return v4m(7,10,15,20);
+  return v4m(40,45,70,100);
+}
+
+static color r3d_get_cascade_idx_color(s32 cascade_idx) {
+  switch (cascade_idx) {
+    case 0: return CLR_BLUE_HIPPIE; 
+    case 1: return CLR_RED_RICH; 
+    case 2: return CLR_GREEN_EVA; 
+    case 3: return CLR_PURPLE_C64; 
+    default: return CLR_WHITE;
+  }
 }
 
 ////////////////////////////////////
 // Context API! (More compact!)
 ////////////////////////////////////
 
-R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-
+R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags) {
   v4 cascade_bounds = r3d_get_cascade_bounds();
+  f32 aspect = viewport.w/viewport.h;
   m4 persp_mats[] = {
-    m4_persp(45, viewport.w/viewport.h, 0.1, cascade_bounds.raw[0]),
-    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[0], cascade_bounds.raw[1]),
-    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[1], cascade_bounds.raw[2]),
-    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[2], cascade_bounds.raw[3]),
+    m4_persp(45, aspect, 0.1, cascade_bounds.raw[0]),
+    m4_persp(45, aspect, cascade_bounds.raw[0], cascade_bounds.raw[1]),
+    m4_persp(45, aspect, cascade_bounds.raw[1], cascade_bounds.raw[2]),
+    m4_persp(45, aspect, cascade_bounds.raw[2], cascade_bounds.raw[3]),
   };
   m4 lsms[] = {
     lsm_from_vp(view, persp_mats[0], light_dir),
@@ -502,17 +512,19 @@ R3D_Ctx* r3dc_begin_depth(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
   };
   m4 lsm = lsm_from_vp(view, proj, light_dir);
 
+  // Because of depth_i render the correct cascade as lsm
+  lsm = lsms[cascade_idx];
+
+
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
   // FIXME: HACK HACK HACK HACK HACK
-  rctx->view = m4d(1.0);
-  rctx->proj = lsm;
   rctx->cam_pos = cam_pos;
   *rctx = (R3D_Ctx) {
     .arena = arena,
     .viewport = rctx->viewport,
-    .proj = rctx->proj,
-    .view = rctx->view,
+    .proj = lsm,
+    .view = m4d(1.0),
     .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
     .cam_pos = cam_pos,
     .light_dir = light_dir,
@@ -873,9 +885,8 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
 }
 
 void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type prim) {
-  proj = m4_persp(100, rctx->viewport.w/rctx->viewport.h, 0.1, 10);
 
-#if 0
+#if 1
   m4 vp = m4_mult(proj, view);
 #else
   m4 vp = proj;
