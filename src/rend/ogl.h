@@ -321,6 +321,7 @@ typedef struct {
 
   void ogl_init();
   void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a);
+  void ogl_clear_depth(Ogl_Render_Target *rt);
   void ogl_clear(Ogl_Render_Target *rt);
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
@@ -357,10 +358,30 @@ void ogl_init() {
 void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a) {
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
+
+    uint32_t draw_buffer_idx = 0;
+    GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
+    for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
+      if (rt->aflags & (0x1 << attachment_idx)) {
+        draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
+      }
+    }
+    glDrawBuffers(draw_buffer_idx, draw_buffers);
   }
+  // Why disable scissor?
   glDisable(GL_SCISSOR_TEST);
   glClearColor(r,g,b,a);
   glClear(GL_COLOR_BUFFER_BIT);
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
+}
+
+void ogl_clear_depth(Ogl_Render_Target *rt) {
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
+  }
+  glDisable(GL_SCISSOR_TEST);
   glClear(GL_DEPTH_BUFFER_BIT);
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -369,6 +390,7 @@ void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a) {
 
 void ogl_clear(Ogl_Render_Target *rt) {
   ogl_clear_color(rt,0,0,0,0);
+  ogl_clear_depth(rt);
 }
 
  
@@ -728,7 +750,7 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_R
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, rt->depth_attachment.impl_state, 0);
   }
 
-#if 0
+#if 1
   // FIXME: This also happens in bind maybe its not needed here as well
   uint32_t draw_buffer_idx = 0;
   GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
@@ -742,6 +764,7 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_R
 
   assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
+  // TODO: Is this really needed? we don't _really_ need to cleanup shit
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

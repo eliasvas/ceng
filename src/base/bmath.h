@@ -998,7 +998,7 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
   frustum fv = frustum_transform_points(f, lsm_view);
   bbox bounds = bbox_from_frustum(fv);
   // 2. Calculate the actual ortho matrix (+zMult)
-  f32 z_mult = 1.0;
+  f32 z_mult = 2.0;
   bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * z_mult) : (bounds.min.z / z_mult);
   bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / z_mult) : (bounds.max.z * z_mult);
   m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, bounds.min.z, bounds.max.z);

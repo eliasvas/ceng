@@ -174,7 +174,8 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
 
   R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
-#if 1
+  ogl_clear(grid_pass->rt);
+#if 0
   /////////////////////////////////////////////
   // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
   /////////////////////////////////////////////
@@ -227,7 +228,7 @@ void game_render(struct Game_State *gs, float dt) {
 
   gs->cam_pos = cam_pos;
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
-  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 40);
+  gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
   m4 vp = m4_mult(gs->proj, gs->view);
 
 
@@ -283,14 +284,21 @@ void game_render(struct Game_State *gs, float dt) {
   // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
 
   //v3 light_dir = v3_norm(v3m(0.2,1,-1));
-  v3 light_dir = v3_norm(v3m(0,1,1));
+  v3 light_dir = v3_norm(v3m(0.1,1,1));
 
+#if 1
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-  for (s32 cascade_idx = 0; cascade_idx < 2; cascade_idx+=1) {
+  for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
     R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,
     cascade_idx, R3D_FLAG_CLEAR_ALL);
+    // FIXME: FLAG_CLEAR_ALL_IS_CRINGE
+    if (cascade_idx == 0) {
+      assert(shadow_pass->rt->aflags == OGL_RT_ALL);
+      ogl_clear_color(shadow_pass->rt,1,1,1,1);
+    }
+    ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
       m4 world = m4_from_transform(cmd->xform);
@@ -307,6 +315,7 @@ void game_render(struct Game_State *gs, float dt) {
     }
     r3dc_end(shadow_pass);
   } 
+#endif
 
   ///////////////////////
   // Origin Grid (+extras)
@@ -314,7 +323,7 @@ void game_render(struct Game_State *gs, float dt) {
   game_draw_origin_grid(gs, 10);
 
   ///////////////////////
-  // LIGHTPASS
+  // COLOR PASS
   ///////////////////////
   R3D_Ctx* light_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {

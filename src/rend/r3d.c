@@ -31,10 +31,11 @@ in VS_OUT {
 
 layout (std140) uniform PerFrameData { 
   mat4 lsms[4];
-  mat4 view_proj;
+  mat4 view;
+  mat4 proj;
   vec3 cam_pos;
   vec3 light_dir;
-  int cascade_idx;
+  vec4 cascade_bounds;
 };
 
 void main() {
@@ -63,10 +64,11 @@ layout(location=12) in vec4 weight_0;
 
 layout (std140) uniform PerFrameData { 
   mat4 lsms[4];
-  mat4 view_proj;
+  mat4 view;
+  mat4 proj;
   vec3 cam_pos;
   vec3 light_dir;
-  int cascade_idx;
+  vec4 cascade_bounds;
 };
 
 layout(std140) uniform Material {
@@ -110,7 +112,7 @@ void main() {
     weight_0.z * joint_mat[joint_0.z] +
     weight_0.w * joint_mat[joint_0.w];
 
-	gl_Position = view_proj * model_matrix * skinMat * vec4(pos, 1.0);
+	gl_Position = proj * view * model_matrix * skinMat * vec4(pos, 1.0);
 
   vs_out.tc[0] = tc_0;
   vs_out.tc[1] = tc_1;
@@ -145,10 +147,11 @@ layout(location = 0) out vec4 out_color;
 
 layout (std140) uniform PerFrameData { 
   mat4 lsms[4];
-  mat4 view_proj;
+  mat4 view;
+  mat4 proj;
   vec3 cam_pos;
   vec3 light_dir;
-  int cascade_idx;
+  vec4 cascade_bounds;
 };
 
 layout(std140) uniform Material {
@@ -186,7 +189,45 @@ uniform sampler2D occlusion_tex;
 
 uniform sampler2D shadow_map[4];
 
-float shadow_calc(vec4 frag_pos_ls) {
+int get_cascade_layer(vec3 frag_pos_ws) {
+  // Find the depth of the fragment from camera POV
+  vec4 frag_pos_vs = view * vec4(frag_pos_ws, 1);
+  float depth_value = abs(frag_pos_vs.z);
+  // Find the actual depth value
+  int layer = -1;
+  for (int i = 0; i < 4; i+=1) {
+    if (depth_value < cascade_bounds[i]) {
+      layer = i;
+      break;
+    }
+  }
+  if (layer == -1) {
+    layer = 3;
+  }
+
+  return layer;
+}
+
+float shadow_calc(vec3 frag_pos_ws) {
+  int layer = get_cascade_layer(frag_pos_ws);
+
+  vec4 frag_pos_lightspace = fs_in.frag_pos_ls[layer];
+
+  // project to get actual NDC (not needed for ortho but still)
+  vec3 proj_coords = frag_pos_lightspace.xyz / frag_pos_lightspace.w;
+  // go to [0,1] range (to sample the tex)
+  proj_coords = proj_coords*0.5+0.5;
+  // sample the tex
+  float closest_depth = texture(shadow_map[layer], proj_coords.xy).r;
+  float current_depth = proj_coords.z;
+  float bias = 0.005;
+  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
+
+  return shadow;
+}
+
+#if 0
+float shadow_calc_old(vec4 frag_pos_ls) {
   // project to get actual NDC (not needed for ortho but still)
   vec3 proj_coords = frag_pos_ls.xyz / frag_pos_ls.w;
   // go to [0,1] range (to sample the tex)
@@ -199,6 +240,7 @@ float shadow_calc(vec4 frag_pos_ls) {
 
   return shadow;
 }
+#endif
 
 void main() {
 
@@ -211,7 +253,14 @@ void main() {
   out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
   out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
 
-  float shadow = shadow_calc(fs_in.frag_pos_ls[0]);
+  float shadow = shadow_calc(fs_in.frag_pos_ws);
+
+  int layer = get_cascade_layer(fs_in.frag_pos_ws);
+  if (layer == 0) { out_color.r = 1.0; }
+  if (layer == 1) { out_color.g = 1.0; }
+  if (layer == 2) { out_color.b = 1.0; }
+  if (layer == 3) { out_color.rgb = vec3(1.0); }
+
   out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
 #else
 
@@ -373,12 +422,13 @@ void main() {
 
 typedef struct {
   m4 lsms[4];
-  m4 view_proj;
+  m4 view;
+  m4 proj;
   v3 cam_pos;
   f32 _padding;
   v3 light_dir;
   f32 _padding2;
-  s32 cascade_idx;
+  v4 cascade_bounds;
 } PerFrameData_UBO;
 
 typedef struct {
@@ -487,7 +537,7 @@ void r3d_try_load_shaders(rect viewport) {
 
 // Fixed bounds for now
 static v4 r3d_get_cascade_bounds() {
-  return v4m(20,45,70,100);
+  return v4m(20,30,40,100);
 }
 
 static color r3d_get_cascade_idx_color(s32 cascade_idx) {
@@ -538,9 +588,6 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
     .rt = &shadow_rt,
     .cascade_idx = cascade_idx,
   };
-  if (flags & R3D_FLAG_CLEAR_ALL) {
-    ogl_clear_color(rctx->rt,1,1,1,1);
-  }
 
   return rctx;
 }
@@ -560,12 +607,7 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     lsm_from_vp(view, persp_mats[2], light_dir),
     lsm_from_vp(view, persp_mats[3], light_dir),
   };
-  m4 lsm = lsm_from_vp(view, proj, light_dir);
-
-  // FIXME: HACK HACK HACK HACK AHCK HACK 
-  // Because of depth_i render the correct cascade as lsm
-  lsm = lsms[1];
-
+  //m4 lsm = lsm_from_vp(view, proj, light_dir);
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
@@ -578,15 +620,11 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     .viewport = viewport,
     .proj = rctx->proj,
     .view = rctx->view,
-    //.lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
-    .lsms = {lsm},
+    .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = &offscreen_rt,
   };
-  if (flags & R3D_FLAG_CLEAR_ALL) {
-    ogl_clear(rctx->rt);
-  }
 
   return rctx;
 }
@@ -596,16 +634,16 @@ void r3dc_end(R3D_Ctx *rctx) {
 }
 
 void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
-  m4 vp = m4_mult(rctx->proj, rctx->view);
   PerFrameData_UBO pf_ubo = (PerFrameData_UBO) {
     .lsms[0] = rctx->lsms[0],
     .lsms[1] = rctx->lsms[1],
     .lsms[2] = rctx->lsms[2],
     .lsms[3] = rctx->lsms[3],
-    .view_proj = vp,
+    .view = rctx->view,
+    .proj = rctx->proj,
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,
-    .cascade_idx = rctx->cascade_idx,
+    .cascade_bounds = r3d_get_cascade_bounds(),
   };
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
@@ -844,6 +882,12 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
   Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
   bundle->rt = *rctx->rt;
 
+  ////////////////////////////////////////
+  // Hacky hack
+  Ogl_Render_Target_Attachment_Flags prev_flags = bundle->rt.aflags;
+  bundle->rt.aflags = (0x1 << rctx->cascade_idx); 
+  ////////////////////////////////////////
+
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     m4 mesh_global = calc_transform(info, mesh->node_idx);
@@ -896,6 +940,12 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
       }
     }
   }
+
+  ////////////////////////////////////////
+  // HACK
+  bundle->rt.aflags = prev_flags;
+  ////////////////////////////////////////
+
 }
 
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
