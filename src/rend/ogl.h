@@ -1,3 +1,5 @@
+// TODO: remove all external defs like s32/u32 to be actually cross-project..
+// TODO: Maybe we can make a macro like OGL_SCOPY(..) to shallow copy and be able to use Bundles/RTs as caches!
 /* 
 ogl - a minimal OpenGL abstraction layer - eliasvas
 
@@ -140,7 +142,7 @@ typedef enum {
 #define OGL_MAX_VERTEX_BUFFERS 8
 #define OGL_MAX_ATTRIBS 20
 #define OGL_MAX_UNIFORM_BUFFERS 4
-#define OGL_MAX_ACTIVE_TEXTURES 6
+#define OGL_MAX_ACTIVE_TEXTURES 9
 #define OGL_MAX_RENDER_TARGET_ATTACHMENTS 4
 
 typedef enum {
@@ -280,8 +282,18 @@ typedef struct {
   Ogl_Tex tex;
 } Ogl_Tex_Slot;
 
+
+typedef enum {
+  OGL_RT_A0 = (0x1 << 0),
+  OGL_RT_A1 = (0x1 << 1),
+  OGL_RT_A2 = (0x1 << 2),
+  OGL_RT_A3 = (0x1 << 3),
+  OGL_RT_ALL = (OGL_RT_A0 | OGL_RT_A1 | OGL_RT_A2 | OGL_RT_A3),
+} Ogl_Render_Target_Attachment_Flags;
+
 typedef struct {
   Ogl_Tex attachments[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
+  Ogl_Render_Target_Attachment_Flags aflags; 
   Ogl_Tex depth_attachment;
 
   uint32_t width; 
@@ -308,6 +320,7 @@ typedef struct {
 #ifndef OGL_IMPLEMENTATION
 
   void ogl_init();
+  void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a);
   void ogl_clear(Ogl_Render_Target *rt);
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
@@ -328,8 +341,8 @@ typedef struct {
 void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t index_count);
   void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
 
-  void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth);
-  Ogl_Render_Target ogl_render_target_make(uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth);
+
+  void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_Render_Target_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth);
   void ogl_render_target_deinit(Ogl_Render_Target *rt);
 
 #else
@@ -341,18 +354,23 @@ void ogl_init() {
   glBindVertexArray(vao);
 }
 
-void ogl_clear(Ogl_Render_Target *rt) {
+void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a) {
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
   }
   glDisable(GL_SCISSOR_TEST);
-  glClearColor(0,0,0,0);
+  glClearColor(r,g,b,a);
   glClear(GL_COLOR_BUFFER_BIT);
   glClear(GL_DEPTH_BUFFER_BIT);
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 }
+
+void ogl_clear(Ogl_Render_Target *rt) {
+  ogl_clear_color(rt,0,0,0,0);
+}
+
  
 static int64_t ogl_buf_count_bytes(Ogl_Buf *buf) {
   return buf->count * buf->bytes_per_elem;
@@ -687,11 +705,10 @@ void ogl_tex_deinit(Ogl_Tex *tex) {
   tex->impl_state = 0;
 }
 
-void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth) {
-  assert(attachment_count <= OGL_MAX_RENDER_TARGET_ATTACHMENTS);
-
+void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_Render_Target_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth) {
   rt->width = w;
   rt->height = h;
+  rt->aflags = aflags;
 
   GLuint fbo = 0;
   glGenFramebuffers(1, &fbo);
@@ -699,9 +716,11 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint3
   assert(rt->impl_state);
   glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
 
-  for (uint32_t attachment_idx = 0; attachment_idx < attachment_count; ++attachment_idx) {
-    rt->attachments[attachment_idx] = ogl_tex_make(NULL, rt->width, rt->height, format, (Ogl_Tex_Params){});
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachment_idx, GL_TEXTURE_2D, rt->attachments[attachment_idx].impl_state, 0);
+  for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; attachment_idx+=1) {
+    if (aflags & (0x1 << attachment_idx)) {
+      rt->attachments[attachment_idx] = ogl_tex_make(NULL, rt->width, rt->height, format, (Ogl_Tex_Params){});
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachment_idx, GL_TEXTURE_2D, rt->attachments[attachment_idx].impl_state, 0);
+    }
   }
 
   if (add_depth) {
@@ -709,21 +728,21 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, uint3
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, rt->depth_attachment.impl_state, 0);
   }
 
+#if 0
+  // FIXME: This also happens in bind maybe its not needed here as well
+  uint32_t draw_buffer_idx = 0;
   GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
-  for (uint32_t attachment_idx = 0; attachment_idx < attachment_count; ++attachment_idx) {
-    draw_buffers[attachment_idx] = GL_COLOR_ATTACHMENT0 + attachment_idx;
+  for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
+    if (rt->aflags & (0x1 << attachment_idx)) {
+      draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
+    }
   }
-  glDrawBuffers(attachment_count, draw_buffers);
+  glDrawBuffers(draw_buffer_idx, draw_buffers);
+#endif
 
   assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-Ogl_Render_Target ogl_render_target_make(uint32_t w, uint32_t h, uint32_t attachment_count, Ogl_Tex_Format format, bool add_depth) {
-  Ogl_Render_Target rt = {};
-  ogl_render_target_init(&rt, w, h, attachment_count, format, add_depth);
-  return rt;
 }
 
 void ogl_render_target_deinit(Ogl_Render_Target *rt) {
@@ -795,9 +814,20 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
       glUniform1iv(tex_loc, 1, samplers);
     }
   }
+
   // Bind the render target 
   if (bundle->rt.width * bundle->rt.height > 0) {
     glBindFramebuffer(GL_FRAMEBUFFER, bundle->rt.impl_state);
+
+    uint32_t draw_buffer_idx = 0;
+    GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
+    for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
+      if (bundle->rt.aflags & (0x1 << attachment_idx)) {
+        draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
+      }
+    }
+    glDrawBuffers(draw_buffer_idx, draw_buffers);
+
     assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
   } else {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

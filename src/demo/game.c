@@ -172,13 +172,8 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
 
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
+
   R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
-  //r3dc_imm_frustum(grid_pass, v3m(0,4,7), gs->view, gs->proj, OGL_PRIM_TYPE_LINE);
-
-  //r3dc_imm_frustum(grid_pass, v3m(0,4,7), grid_pass->lsms[0], m4d(1.0), OGL_PRIM_TYPE_LINE);
-  //r3dc_imm_cube(grid_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.8,0.8,0.8,0.2), m4_scale(v3m(3,3,3)));
-
-
 #if 1
   /////////////////////////////////////////////
   // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
@@ -233,12 +228,6 @@ void game_render(struct Game_State *gs, float dt) {
   gs->cam_pos = cam_pos;
   gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 40);
-
-  // 0. Draw grid
-  R3D_Ctx* shadow_pass2 = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3m(0,0,0), 0,R3D_FLAG_CLEAR_ALL);
-  r3dc_end(shadow_pass2);
-  game_draw_origin_grid(gs, 10);
-  // Draw the test model
   m4 vp = m4_mult(gs->proj, gs->view);
 
 
@@ -299,22 +288,30 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
-  R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,0, R3D_FLAG_CLEAR_ALL);
-  for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
-    Entity_Render_Command *cmd = &gs->world->rcommands[i];
-    m4 world = m4_from_transform(cmd->xform);
-    //m4 mvp = m4_mult(vp, world);
-    if (cmd->has_asset) {
-      Model_Info *model = AM_GET(cmd->asset_id, model);
-      //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
-      m4 local_matrix = m4d(1.0); 
-      world = m4_mult(world, local_matrix);
-      r3dc_imm_model(shadow_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
-    } else {
-      r3dc_imm_cube(shadow_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+  for (s32 cascade_idx = 0; cascade_idx < 2; cascade_idx+=1) {
+    R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,
+    cascade_idx, R3D_FLAG_CLEAR_ALL);
+    for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
+      Entity_Render_Command *cmd = &gs->world->rcommands[i];
+      m4 world = m4_from_transform(cmd->xform);
+      //m4 mvp = m4_mult(vp, world);
+      if (cmd->has_asset) {
+        Model_Info *model = AM_GET(cmd->asset_id, model);
+        //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
+        m4 local_matrix = m4d(1.0); 
+        world = m4_mult(world, local_matrix);
+        r3dc_imm_model(shadow_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
+      } else {
+        r3dc_imm_cube(shadow_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+      }
     }
-  }
-  r3dc_end(shadow_pass);
+    r3dc_end(shadow_pass);
+  } 
+
+  ///////////////////////
+  // Origin Grid (+extras)
+  ///////////////////////
+  game_draw_origin_grid(gs, 10);
 
   ///////////////////////
   // LIGHTPASS

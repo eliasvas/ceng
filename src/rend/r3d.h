@@ -51,6 +51,7 @@ typedef struct {
   m4 lsms[4];
   v3 cam_pos;
   v3 light_dir;
+  s32 cascade_idx;
 
   Ogl_Render_Target *rt;
 } R3D_Ctx;

@@ -15,7 +15,7 @@ static Ogl_Render_Target shadow_rt;
 ////////////////////////////////////////////////
 
 const char* shadow_fs= R"(#version 460 core
-layout(location = 0) out vec4 out_color[4];
+layout(location = 0) out vec4 out_color;
 
 in VS_OUT {
   vec4 color;
@@ -25,18 +25,21 @@ in VS_OUT {
   vec3 tang;
   vec3 binorm;
   vec2 tc[4];
-  vec3 frag_pos;
+  vec3 frag_pos_ws;
   vec4 frag_pos_ls[4];
 } fs_in;
 
-void main() {
-  //float depth = gl_FragCoord.z;
+layout (std140) uniform PerFrameData { 
+  mat4 lsms[4];
+  mat4 view_proj;
+  vec3 cam_pos;
+  vec3 light_dir;
+  int cascade_idx;
+};
 
-  for (int i = 0 ; i < 4; i+=1) {
-    float depth2 = fs_in.frag_pos_ls[i].z;
-    out_color[i] = vec4(vec3(depth2), 1.0);
-  }
-  //out_color = fs_in.color;
+void main() {
+  float depth = gl_FragCoord.z;
+  out_color = vec4(vec3(depth),1);
 }
 )";
 
@@ -63,6 +66,7 @@ layout (std140) uniform PerFrameData {
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
+  int cascade_idx;
 };
 
 layout(std140) uniform Material {
@@ -93,7 +97,7 @@ out VS_OUT {
   vec3 tang;
   vec3 binorm;
   vec2 tc[4];
-  vec3 frag_pos;
+  vec3 frag_pos_ws;
   vec4 frag_pos_ls[4];
 } vs_out;
 
@@ -127,9 +131,9 @@ void main() {
   vs_out.wp = model_matrix * vec4(pos, 1.0f);
   vs_out.view_dir = normalize(cam_pos.xyz - vs_out.wp.xyz);
 
-  vs_out.frag_pos = vec3(model_matrix * vec4(pos, 1.0));
+  vs_out.frag_pos_ws = vec3(model_matrix * vec4(pos, 1.0));
   for (int i = 0; i < 4; i+=1) {
-    vs_out.frag_pos_ls[i] = lsms[i] * vec4(vs_out.frag_pos, 1.0);
+    vs_out.frag_pos_ls[i] = lsms[i] * vec4(vs_out.frag_pos_ws, 1.0);
   }
 }
 )";
@@ -144,6 +148,7 @@ layout (std140) uniform PerFrameData {
   mat4 view_proj;
   vec3 cam_pos;
   vec3 light_dir;
+  int cascade_idx;
 };
 
 layout(std140) uniform Material {
@@ -169,7 +174,7 @@ in VS_OUT {
   vec3 tang;
   vec3 binorm;
   vec2 tc[4];
-  vec3 frag_pos;
+  vec3 frag_pos_ws;
   vec4 frag_pos_ls[4];
 } fs_in;
 
@@ -179,15 +184,15 @@ uniform sampler2D metallic_roughness_tex;
 uniform sampler2D emissive_tex;
 uniform sampler2D occlusion_tex;
 
-uniform sampler2D shadow_map;
+uniform sampler2D shadow_map[4];
 
 float shadow_calc(vec4 frag_pos_ls) {
-  // project to get actual NDC
+  // project to get actual NDC (not needed for ortho but still)
   vec3 proj_coords = frag_pos_ls.xyz / frag_pos_ls.w;
   // go to [0,1] range (to sample the tex)
   proj_coords = proj_coords*0.5+0.5;
   // sample the tex
-  float closest_depth = texture(shadow_map, proj_coords.xy).r;
+  float closest_depth = texture(shadow_map[0], proj_coords.xy).r;
   float current_depth = proj_coords.z;
   float bias = 0.005;
   float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
@@ -373,6 +378,7 @@ typedef struct {
   f32 _padding;
   v3 light_dir;
   f32 _padding2;
+  s32 cascade_idx;
 } PerFrameData_UBO;
 
 typedef struct {
@@ -394,7 +400,7 @@ typedef struct {
 
 void r3d_try_load_shaders(rect viewport) {
   if (fxaa_bundle.sp.impl_state == 0) {
-    ogl_render_target_init(&offscreen_rt, viewport.w, viewport.h, 1, OGL_TEX_FORMAT_RGBA8U, 1);
+    ogl_render_target_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
 
     fxaa_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(fxaa_vs, fxaa_fs),
@@ -410,7 +416,7 @@ void r3d_try_load_shaders(rect viewport) {
   if (uber_bundle.sp.impl_state == 0) {
 
 #define SHADOWMAP_DIM 2048
-    ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, 4, OGL_TEX_FORMAT_RGBA8U, true);
+    ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_ALL, OGL_TEX_FORMAT_RGBA32F, true);
 
     uber_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(uber_vs, uber_fs),
@@ -420,7 +426,10 @@ void r3d_try_load_shaders(rect viewport) {
       .textures[2] = (Ogl_Tex_Slot){ .name = "metallic_roughness_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[3] = (Ogl_Tex_Slot){ .name = "emissive_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[4] = (Ogl_Tex_Slot){ .name = "occlusion_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
-      .textures[5] = (Ogl_Tex_Slot){ .name = "shadow_map", .tex = shadow_rt.depth_attachment },
+      .textures[5] = (Ogl_Tex_Slot){ .name = "shadow_map[0]", .tex = shadow_rt.attachments[0]},
+      .textures[6] = (Ogl_Tex_Slot){ .name = "shadow_map[1]", .tex = shadow_rt.attachments[1]},
+      .textures[7] = (Ogl_Tex_Slot){ .name = "shadow_map[2]", .tex = shadow_rt.attachments[2]},
+      .textures[8] = (Ogl_Tex_Slot){ .name = "shadow_map[3]", .tex = shadow_rt.attachments[3]},
       .vbos = {
         [0] = {
           .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Uber_Vertex)),
@@ -478,7 +487,7 @@ void r3d_try_load_shaders(rect viewport) {
 
 // Fixed bounds for now
 static v4 r3d_get_cascade_bounds() {
-  return v4m(40,45,70,100);
+  return v4m(20,45,70,100);
 }
 
 static color r3d_get_cascade_idx_color(s32 cascade_idx) {
@@ -511,10 +520,8 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
     lsm_from_vp(view, persp_mats[3], light_dir),
   };
   m4 lsm = lsm_from_vp(view, proj, light_dir);
-
   // Because of depth_i render the correct cascade as lsm
   lsm = lsms[cascade_idx];
-
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
@@ -529,23 +536,23 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = &shadow_rt,
+    .cascade_idx = cascade_idx,
   };
   if (flags & R3D_FLAG_CLEAR_ALL) {
-    ogl_clear(rctx->rt);
+    ogl_clear_color(rctx->rt,1,1,1,1);
   }
 
   return rctx;
 }
 
 R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-
-#if 0
   v4 cascade_bounds = r3d_get_cascade_bounds();
+  f32 aspect = viewport.w/viewport.h;
   m4 persp_mats[] = {
-    m4_persp(45, viewport.w/viewport.h, 0.1, cascade_bounds.raw[0]),
-    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[0], cascade_bounds.raw[1]),
-    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[1], cascade_bounds.raw[2]),
-    m4_persp(45, viewport.w/viewport.h, cascade_bounds.raw[2], cascade_bounds.raw[3]),
+    m4_persp(45, aspect, 0.1, cascade_bounds.raw[0]),
+    m4_persp(45, aspect, cascade_bounds.raw[0], cascade_bounds.raw[1]),
+    m4_persp(45, aspect, cascade_bounds.raw[1], cascade_bounds.raw[2]),
+    m4_persp(45, aspect, cascade_bounds.raw[2], cascade_bounds.raw[3]),
   };
   m4 lsms[] = {
     lsm_from_vp(view, persp_mats[0], light_dir),
@@ -553,8 +560,12 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     lsm_from_vp(view, persp_mats[2], light_dir),
     lsm_from_vp(view, persp_mats[3], light_dir),
   };
-#endif
   m4 lsm = lsm_from_vp(view, proj, light_dir);
+
+  // FIXME: HACK HACK HACK HACK AHCK HACK 
+  // Because of depth_i render the correct cascade as lsm
+  lsm = lsms[1];
+
 
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
@@ -594,6 +605,7 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
     .view_proj = vp,
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,
+    .cascade_idx = rctx->cascade_idx,
   };
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
@@ -623,7 +635,15 @@ void r3d_set_def_material(m4 model) {
 
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
-  Ogl_Render_Bundle *bundle = (rctx->rt == &shadow_rt) ? &uber_shadow_bundle : &uber_bundle; 
+  Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
+  bundle->rt = *rctx->rt;
+
+  ////////////////////////////////////////
+  // Hacky hack
+  Ogl_Render_Target_Attachment_Flags prev_flags = bundle->rt.aflags;
+  bundle->rt.aflags = (0x1 << rctx->cascade_idx); 
+  ////////////////////////////////////////
+
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
   bundle->vbos[0].buffer = vbo;
@@ -636,6 +656,11 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
   bundle->dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
 
   ogl_render_bundle_draw(bundle, prim, vert_count, 1);
+
+  ////////////////////////////////////////
+  // HACK
+  bundle->rt.aflags = prev_flags;
+  ////////////////////////////////////////
 
   // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
   ogl_buf_deinit(&vbo);
@@ -816,7 +841,8 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 
 f32 _blend_factor = 0.0;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint) {
-  Ogl_Render_Bundle *bundle = (rctx->rt == &shadow_rt) ? &uber_shadow_bundle : &uber_bundle; 
+  Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
+  bundle->rt = *rctx->rt;
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
