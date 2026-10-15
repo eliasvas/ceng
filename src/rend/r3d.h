@@ -53,7 +53,7 @@ typedef struct {
   v3 light_dir;
   s32 cascade_idx;
 
-  Ogl_Render_Target *rt;
+  Ogl_RT *rt;
 } R3D_Ctx;
 
 R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);

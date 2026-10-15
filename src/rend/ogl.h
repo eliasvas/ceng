@@ -1,5 +1,5 @@
-// TODO: remove all external defs like s32/u32 to be actually cross-project..
 // TODO: Maybe we can make a macro like OGL_SCOPY(..) to shallow copy and be able to use Bundles/RTs as caches!
+// FIXME: our whole glDrawBuffer/glColorMask is duplicated many times, do something about this..
 /* 
 ogl - a minimal OpenGL abstraction layer - eliasvas
 
@@ -282,6 +282,15 @@ typedef struct {
   Ogl_Tex tex;
 } Ogl_Tex_Slot;
 
+//FIXME: Should probably name it oglRT
+
+typedef enum {
+  OGL_RT_CMASK_R = (0x1 << 0),
+  OGL_RT_CMASK_G = (0x1 << 1),
+  OGL_RT_CMASK_B = (0x1 << 2),
+  OGL_RT_CMASK_A = (0x1 << 3),
+  OGL_RT_CMASK_ALL = (OGL_RT_CMASK_R | OGL_RT_CMASK_G | OGL_RT_CMASK_B | OGL_RT_CMASK_A),
+} Ogl_RT_Color_Mask; 
 
 typedef enum {
   OGL_RT_A0 = (0x1 << 0),
@@ -289,17 +298,18 @@ typedef enum {
   OGL_RT_A2 = (0x1 << 2),
   OGL_RT_A3 = (0x1 << 3),
   OGL_RT_ALL = (OGL_RT_A0 | OGL_RT_A1 | OGL_RT_A2 | OGL_RT_A3),
-} Ogl_Render_Target_Attachment_Flags;
+} Ogl_RT_Attachment_Flags;
 
 typedef struct {
   Ogl_Tex attachments[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
-  Ogl_Render_Target_Attachment_Flags aflags; 
+  Ogl_RT_Attachment_Flags aflags; 
+  Ogl_RT_Color_Mask cmask; 
   Ogl_Tex depth_attachment;
 
   uint32_t width; 
   uint32_t height;
   uint64_t impl_state;
-} Ogl_Render_Target;
+} Ogl_RT;
 
 // This is a dirty cache pretty much..
 typedef struct {
@@ -311,7 +321,7 @@ typedef struct {
   Ogl_Uniform_Buffer_Slot ubos[OGL_MAX_UNIFORM_BUFFERS];
   Ogl_Tex_Slot            textures[OGL_MAX_ACTIVE_TEXTURES];
 
-  Ogl_Render_Target rt;
+  Ogl_RT rt;
 
   Ogl_Depth_State depth_state;
   Ogl_Dyn_State dyn_state;
@@ -320,9 +330,9 @@ typedef struct {
 #ifndef OGL_IMPLEMENTATION
 
   void ogl_init();
-  void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a);
-  void ogl_clear_depth(Ogl_Render_Target *rt);
-  void ogl_clear(Ogl_Render_Target *rt);
+  void ogl_clear_color(Ogl_RT *rt, f32 r, f32 g, f32 b, f32 a);
+  void ogl_clear_depth(Ogl_RT *rt);
+  void ogl_clear(Ogl_RT *rt);
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
   bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
@@ -343,8 +353,8 @@ void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type pri
   void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
 
 
-  void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_Render_Target_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth);
-  void ogl_render_target_deinit(Ogl_Render_Target *rt);
+  void ogl_rt_init(Ogl_RT *rt, uint32_t w, uint32_t h, Ogl_RT_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth);
+  void ogl_rt_deinit(Ogl_RT *rt);
 
 #else
 
@@ -355,7 +365,7 @@ void ogl_init() {
   glBindVertexArray(vao);
 }
 
-void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a) {
+void ogl_clear_color(Ogl_RT *rt, f32 r, f32 g, f32 b, f32 a) {
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
 
@@ -367,6 +377,7 @@ void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a) {
       }
     }
     glDrawBuffers(draw_buffer_idx, draw_buffers);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // ?????
   }
   // Why disable scissor?
   glDisable(GL_SCISSOR_TEST);
@@ -377,7 +388,7 @@ void ogl_clear_color(Ogl_Render_Target *rt, f32 r, f32 g, f32 b, f32 a) {
   }
 }
 
-void ogl_clear_depth(Ogl_Render_Target *rt) {
+void ogl_clear_depth(Ogl_RT *rt) {
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
   }
@@ -388,18 +399,16 @@ void ogl_clear_depth(Ogl_Render_Target *rt) {
   }
 }
 
-void ogl_clear(Ogl_Render_Target *rt) {
+void ogl_clear(Ogl_RT *rt) {
   ogl_clear_color(rt,0,0,0,0);
   ogl_clear_depth(rt);
 }
-
  
 static int64_t ogl_buf_count_bytes(Ogl_Buf *buf) {
   return buf->count * buf->bytes_per_elem;
 }
 
-
-static s32 gl_type_from_ogl_index_buf(Ogl_Buf *ibo) {
+static GLint gl_type_from_ogl_index_buf(Ogl_Buf *ibo) {
   switch(ibo->bytes_per_elem) {
     case 1: return GL_UNSIGNED_BYTE;
     case 2: return GL_UNSIGNED_SHORT;
@@ -407,6 +416,7 @@ static s32 gl_type_from_ogl_index_buf(Ogl_Buf *ibo) {
     default: return GL_UNSIGNED_INT;
   }
 }
+
 static GLuint ogl_to_gl_buf_hint(Ogl_Buf_Hint hint) {
   switch (hint) {
     case OGL_BUF_HINT_STATIC:  return GL_STATIC_DRAW;
@@ -633,18 +643,22 @@ static bool ogl_tex_format_is_floating_point(Ogl_Tex_Format format) {
 
 static GLint ogl_tex_format_to_gl_internal_format(Ogl_Tex_Format format) {
   switch (format) {
-    // TODO: Why do we have to do this? Isn't there a common way to express one component textures? read spec
-#if (ARCH_WASM64 || ARCH_WASM32)
-    case OGL_TEX_FORMAT_R8U:     return GL_LUMINANCE;
-    case OGL_TEX_FORMAT_R32F:    return GL_LUMINANCE;
-#else
+    case OGL_TEX_FORMAT_R8U:     return GL_R8;
+    case OGL_TEX_FORMAT_R32F:    return GL_R32F;
+    case OGL_TEX_FORMAT_RGBA8U:  return GL_RGBA8;
+    case OGL_TEX_FORMAT_RGBA32F: return GL_RGBA32F;
+  }
+}
+
+static GLint ogl_tex_format_to_gl_format(Ogl_Tex_Format format) {
+  switch (format) {
     case OGL_TEX_FORMAT_R8U:     return GL_RED;
     case OGL_TEX_FORMAT_R32F:    return GL_RED;
-#endif
     case OGL_TEX_FORMAT_RGBA8U:  return GL_RGBA;
     case OGL_TEX_FORMAT_RGBA32F: return GL_RGBA;
   }
 }
+
 static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
   switch (format) {
     case OGL_TEX_FORMAT_R32F:    return 1;
@@ -662,9 +676,9 @@ void ogl_tex_update(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex
 
   GLenum type = (ogl_tex_format_is_floating_point(tex->format)) ? GL_FLOAT : GL_UNSIGNED_BYTE;
   GLint internal_format = ogl_tex_format_to_gl_internal_format(tex->format);
-  GLenum image_format = internal_format;
+  GLenum image_format = ogl_tex_format_to_gl_format(tex->format);
 
-  // This is pretty much a hack to make depth buffers easily w/ this
+  // FIXME: This is pretty much a hack to make depth buffers easily w/ this
   if (params.is_depth) {
     type = GL_UNSIGNED_INT_24_8;
     internal_format = GL_DEPTH24_STENCIL8;
@@ -727,10 +741,11 @@ void ogl_tex_deinit(Ogl_Tex *tex) {
   tex->impl_state = 0;
 }
 
-void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_Render_Target_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth) {
+void ogl_rt_init(Ogl_RT *rt, uint32_t w, uint32_t h, Ogl_RT_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth) {
   rt->width = w;
   rt->height = h;
   rt->aflags = aflags;
+  rt->cmask = OGL_RT_CMASK_ALL;
 
   GLuint fbo = 0;
   glGenFramebuffers(1, &fbo);
@@ -752,6 +767,8 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_R
 
 #if 1
   // FIXME: This also happens in bind maybe its not needed here as well
+  // FIXME: This happens 2 times!!!
+  // FIXME: This happens 2 times!!!
   uint32_t draw_buffer_idx = 0;
   GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
   for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
@@ -760,6 +777,12 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_R
     }
   }
   glDrawBuffers(draw_buffer_idx, draw_buffers);
+  glColorMask(
+    (rt->cmask&OGL_RT_CMASK_R) > 0,
+    (rt->cmask&OGL_RT_CMASK_G) > 0,
+    (rt->cmask&OGL_RT_CMASK_B) > 0,
+    (rt->cmask&OGL_RT_CMASK_A) > 0
+  );
 #endif
 
   assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
@@ -768,7 +791,7 @@ void ogl_render_target_init(Ogl_Render_Target *rt, uint32_t w, uint32_t h, Ogl_R
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void ogl_render_target_deinit(Ogl_Render_Target *rt) {
+void ogl_rt_deinit(Ogl_RT *rt) {
   glDeleteFramebuffers(1, (GLuint*)&rt->impl_state);
 }
 
@@ -850,10 +873,16 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
       }
     }
     glDrawBuffers(draw_buffer_idx, draw_buffers);
-
+    glColorMask(
+      (bundle->rt.cmask&OGL_RT_CMASK_R) > 0,
+      (bundle->rt.cmask&OGL_RT_CMASK_G) > 0,
+      (bundle->rt.cmask&OGL_RT_CMASK_B) > 0,
+      (bundle->rt.cmask&OGL_RT_CMASK_A) > 0
+    );
     assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
   } else {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
   }
 
@@ -874,7 +903,6 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   } else {
     glDisable(GL_BLEND);
   }

@@ -295,7 +295,6 @@ void game_render(struct Game_State *gs, float dt) {
     cascade_idx, R3D_FLAG_CLEAR_ALL);
     // FIXME: FLAG_CLEAR_ALL_IS_CRINGE
     if (cascade_idx == 0) {
-      assert(shadow_pass->rt->aflags == OGL_RT_ALL);
       ogl_clear_color(shadow_pass->rt,1,1,1,1);
     }
     ogl_clear_depth(shadow_pass->rt);

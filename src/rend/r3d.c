@@ -4,10 +4,10 @@
 // Maybe asset management should happen somewhere..
 static Ogl_Render_Bundle fxaa_bundle = {};
 static Ogl_Render_Bundle uber_bundle = {};
-static Ogl_Render_Target offscreen_rt;
+static Ogl_RT offscreen_rt;
 
 static Ogl_Render_Bundle uber_shadow_bundle = {};
-static Ogl_Render_Target shadow_rt;
+static Ogl_RT shadow_rt;
 
 
 ////////////////////////////////////////////////
@@ -36,11 +36,12 @@ layout (std140) uniform PerFrameData {
   vec3 cam_pos;
   vec3 light_dir;
   vec4 cascade_bounds;
+  int cascade_idx;
 };
 
 void main() {
   float depth = gl_FragCoord.z;
-  out_color = vec4(vec3(depth),1);
+  out_color[cascade_idx] = depth;
 }
 )";
 
@@ -69,6 +70,7 @@ layout (std140) uniform PerFrameData {
   vec3 cam_pos;
   vec3 light_dir;
   vec4 cascade_bounds;
+  int cascade_idx;
 };
 
 layout(std140) uniform Material {
@@ -152,6 +154,7 @@ layout (std140) uniform PerFrameData {
   vec3 cam_pos;
   vec3 light_dir;
   vec4 cascade_bounds;
+  int cascade_idx;
 };
 
 layout(std140) uniform Material {
@@ -187,7 +190,7 @@ uniform sampler2D metallic_roughness_tex;
 uniform sampler2D emissive_tex;
 uniform sampler2D occlusion_tex;
 
-uniform sampler2D shadow_map[4];
+uniform sampler2D shadow_map;
 
 int get_cascade_layer(vec3 frag_pos_ws) {
   // Find the depth of the fragment from camera POV
@@ -218,29 +221,17 @@ float shadow_calc(vec3 frag_pos_ws) {
   // go to [0,1] range (to sample the tex)
   proj_coords = proj_coords*0.5+0.5;
   // sample the tex
-  float closest_depth = texture(shadow_map[layer], proj_coords.xy).r;
+  float closest_depth = texture(shadow_map, proj_coords.xy)[layer];
   float current_depth = proj_coords.z;
+
+  // This is wrong!
   float bias = 0.005;
+
   float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
 
   return shadow;
 }
 
-#if 0
-float shadow_calc_old(vec4 frag_pos_ls) {
-  // project to get actual NDC (not needed for ortho but still)
-  vec3 proj_coords = frag_pos_ls.xyz / frag_pos_ls.w;
-  // go to [0,1] range (to sample the tex)
-  proj_coords = proj_coords*0.5+0.5;
-  // sample the tex
-  float closest_depth = texture(shadow_map[0], proj_coords.xy).r;
-  float current_depth = proj_coords.z;
-  float bias = 0.005;
-  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
-
-  return shadow;
-}
-#endif
 
 void main() {
 
@@ -254,12 +245,15 @@ void main() {
   out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
 
   float shadow = shadow_calc(fs_in.frag_pos_ws);
-
+  ////////////////////////////////
+  // For visualization
+#if 0
   int layer = get_cascade_layer(fs_in.frag_pos_ws);
   if (layer == 0) { out_color.r = 1.0; }
   if (layer == 1) { out_color.g = 1.0; }
   if (layer == 2) { out_color.b = 1.0; }
   if (layer == 3) { out_color.rgb = vec3(1.0); }
+#endif
 
   out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
 #else
@@ -418,8 +412,6 @@ void main() {
 )";
 
 
-
-
 typedef struct {
   m4 lsms[4];
   m4 view;
@@ -429,6 +421,8 @@ typedef struct {
   v3 light_dir;
   f32 _padding2;
   v4 cascade_bounds;
+  int cascade_idx;
+  f32 _padding3,_padding4, _padding5;
 } PerFrameData_UBO;
 
 typedef struct {
@@ -450,7 +444,7 @@ typedef struct {
 
 void r3d_try_load_shaders(rect viewport) {
   if (fxaa_bundle.sp.impl_state == 0) {
-    ogl_render_target_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
+    ogl_rt_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
 
     fxaa_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(fxaa_vs, fxaa_fs),
@@ -466,7 +460,7 @@ void r3d_try_load_shaders(rect viewport) {
   if (uber_bundle.sp.impl_state == 0) {
 
 #define SHADOWMAP_DIM 2048
-    ogl_render_target_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_ALL, OGL_TEX_FORMAT_RGBA32F, true);
+    ogl_rt_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_A0, OGL_TEX_FORMAT_RGBA32F, true);
 
     uber_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(uber_vs, uber_fs),
@@ -476,10 +470,7 @@ void r3d_try_load_shaders(rect viewport) {
       .textures[2] = (Ogl_Tex_Slot){ .name = "metallic_roughness_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[3] = (Ogl_Tex_Slot){ .name = "emissive_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[4] = (Ogl_Tex_Slot){ .name = "occlusion_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
-      .textures[5] = (Ogl_Tex_Slot){ .name = "shadow_map[0]", .tex = shadow_rt.attachments[0]},
-      .textures[6] = (Ogl_Tex_Slot){ .name = "shadow_map[1]", .tex = shadow_rt.attachments[1]},
-      .textures[7] = (Ogl_Tex_Slot){ .name = "shadow_map[2]", .tex = shadow_rt.attachments[2]},
-      .textures[8] = (Ogl_Tex_Slot){ .name = "shadow_map[3]", .tex = shadow_rt.attachments[3]},
+      .textures[5] = (Ogl_Tex_Slot){ .name = "shadow_map", .tex = shadow_rt.attachments[0]},
       .vbos = {
         [0] = {
           .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, nullptr, REND_MAX_INSTANCES, sizeof(Uber_Vertex)),
@@ -532,6 +523,8 @@ void r3d_try_load_shaders(rect viewport) {
     uber_shadow_bundle = uber_bundle;
     uber_shadow_bundle.sp = ogl_shader_make(uber_vs, shadow_fs);
     uber_shadow_bundle.rt = shadow_rt;
+    uber_shadow_bundle.dyn_state.flags = OGL_DYN_STATE_FLAG_SCISSOR; 
+
   }
 }
 
@@ -588,6 +581,7 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
     .rt = &shadow_rt,
     .cascade_idx = cascade_idx,
   };
+  shadow_rt.cmask = OGL_RT_CMASK_R << cascade_idx;
 
   return rctx;
 }
@@ -630,6 +624,7 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
 }
 
 void r3dc_end(R3D_Ctx *rctx) {
+  rctx->rt->cmask = OGL_RT_CMASK_ALL;
   // TBA
 }
 
@@ -644,6 +639,7 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,
     .cascade_bounds = r3d_get_cascade_bounds(),
+    .cascade_idx = rctx->cascade_idx,
   };
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
@@ -676,13 +672,6 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
   Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
   bundle->rt = *rctx->rt;
 
-  ////////////////////////////////////////
-  // Hacky hack
-  Ogl_Render_Target_Attachment_Flags prev_flags = bundle->rt.aflags;
-  bundle->rt.aflags = (0x1 << rctx->cascade_idx); 
-  ////////////////////////////////////////
-
-
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
   bundle->vbos[0].buffer = vbo;
 
@@ -694,11 +683,6 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
   bundle->dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
 
   ogl_render_bundle_draw(bundle, prim, vert_count, 1);
-
-  ////////////////////////////////////////
-  // HACK
-  bundle->rt.aflags = prev_flags;
-  ////////////////////////////////////////
 
   // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
   ogl_buf_deinit(&vbo);
@@ -882,12 +866,6 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
   Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
   bundle->rt = *rctx->rt;
 
-  ////////////////////////////////////////
-  // Hacky hack
-  Ogl_Render_Target_Attachment_Flags prev_flags = bundle->rt.aflags;
-  bundle->rt.aflags = (0x1 << rctx->cascade_idx); 
-  ////////////////////////////////////////
-
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
     m4 mesh_global = calc_transform(info, mesh->node_idx);
@@ -896,7 +874,7 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
     // Skeletal animation part..
     Temp_Arena temp = get_scratch(0,0);
 
-#if 0 
+#if 0
     //f32 _blend_factor = 0.5;
     m4 *joint_matrices_a = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 0, time_sec);
     m4 *joint_matrices_b = calc_joint_mats_for_animation(temp.arena, info, mesh_idx, 1, time_sec);
@@ -940,11 +918,6 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
       }
     }
   }
-
-  ////////////////////////////////////////
-  // HACK
-  bundle->rt.aflags = prev_flags;
-  ////////////////////////////////////////
 
 }
 
