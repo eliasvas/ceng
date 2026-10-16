@@ -527,6 +527,10 @@ void r3d_try_load_shaders(rect viewport) {
 
     postproc_bundle = (Ogl_Render_Bundle){
       .sp = ogl_shader_make(postproc_vs, postproc_fs),
+      .depth_state = (Ogl_Depth_State) {
+        .dwrite = OGL_DEPTH_WRITE_DISABLED,
+        .dfunc  = OGL_DFUNC_ALWAYS,
+      },
       .dyn_state = (Ogl_Dyn_State){
         //.viewport = viewport,
         //.scissor  = scissor,
@@ -612,8 +616,7 @@ void r3d_try_load_shaders(rect viewport) {
   }
 
   if (uber_transparent_bundle.sp.impl_state == 0) {
-    // FIXME: Also support RGBA16F ok?
-    ogl_rt_init(&transparent_rt, viewport.w, viewport.h, OGL_RT_A0 | OGL_RT_A1, OGL_TEX_FORMAT_RGBA32F, true);
+    ogl_rt_init(&transparent_rt, viewport.w, viewport.h, OGL_RT_A0 | OGL_RT_A1, OGL_TEX_FORMAT_RGBA16F, true);
     uber_transparent_bundle = uber_bundle;
     uber_transparent_bundle.sp = ogl_shader_make(uber_vs, transparent_fs);
     uber_transparent_bundle.rt = transparent_rt;
@@ -656,62 +659,19 @@ static color r3d_get_cascade_idx_color(s32 cascade_idx) {
 // Context API! (More compact!)
 ////////////////////////////////////
 
-R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags) {
+// FIXME: we should use a 'm4 proj' for the angle e.g, don't just do 45 degrees every time!
+m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index) {
   v4 cascade_bounds = r3d_get_cascade_bounds();
   f32 aspect = viewport.w/viewport.h;
-  m4 persp_mats[] = {
-    m4_persp(45, aspect, 0.1, cascade_bounds.raw[0]),
-    m4_persp(45, aspect, cascade_bounds.raw[0], cascade_bounds.raw[1]),
-    m4_persp(45, aspect, cascade_bounds.raw[1], cascade_bounds.raw[2]),
-    m4_persp(45, aspect, cascade_bounds.raw[2], cascade_bounds.raw[3]),
-  };
-  m4 lsms[] = {
-    lsm_from_vp(view, persp_mats[0], light_dir),
-    lsm_from_vp(view, persp_mats[1], light_dir),
-    lsm_from_vp(view, persp_mats[2], light_dir),
-    lsm_from_vp(view, persp_mats[3], light_dir),
-  };
-  m4 lsm = lsm_from_vp(view, proj, light_dir);
-  // Because of depth_i render the correct cascade as lsm
-  lsm = lsms[cascade_idx];
+  m4 persp_mat = m4_persp(45, aspect, (index == 0) ? 0.1 : cascade_bounds.raw[index-1], cascade_bounds.raw[index]);
+  m4 lsm = lsm_from_vp(view, persp_mat, light_dir);
 
-  R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
-  rctx->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
-  // FIXME: HACK HACK HACK HACK HACK
-  rctx->cam_pos = cam_pos;
-  *rctx = (R3D_Ctx) {
-    .arena = arena,
-    .viewport = rctx->viewport,
-    .proj = lsm,
-    .view = m4d(1.0),
-    .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
-    .cam_pos = cam_pos,
-    .light_dir = light_dir,
-    .rt = &shadow_rt,
-    .cascade_idx = cascade_idx,
-  };
-  shadow_rt.cmask = OGL_RT_CMASK_R << cascade_idx;
-
-  return rctx;
+  return lsm;
 }
 
-R3D_Ctx* r3dc_begin_opaque(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-  v4 cascade_bounds = r3d_get_cascade_bounds();
-  f32 aspect = viewport.w/viewport.h;
-  m4 persp_mats[] = {
-    m4_persp(45, aspect, 0.1, cascade_bounds.raw[0]),
-    m4_persp(45, aspect, cascade_bounds.raw[0], cascade_bounds.raw[1]),
-    m4_persp(45, aspect, cascade_bounds.raw[1], cascade_bounds.raw[2]),
-    m4_persp(45, aspect, cascade_bounds.raw[2], cascade_bounds.raw[3]),
-  };
-  m4 lsms[] = {
-    lsm_from_vp(view, persp_mats[0], light_dir),
-    lsm_from_vp(view, persp_mats[1], light_dir),
-    lsm_from_vp(view, persp_mats[2], light_dir),
-    lsm_from_vp(view, persp_mats[3], light_dir),
-  };
-  //m4 lsm = lsm_from_vp(view, proj, light_dir);
 
+// @TIP: We use this forward pass as a base for the others as well!
+R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
   rctx->view = view;
@@ -723,60 +683,65 @@ R3D_Ctx* r3dc_begin_opaque(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam
     .viewport = viewport,
     .proj = rctx->proj,
     .view = rctx->view,
-    .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
+    .lsms = {
+      r3d_calc_lsm_i(view, viewport, light_dir, 0),
+      r3d_calc_lsm_i(view, viewport, light_dir, 1),
+      r3d_calc_lsm_i(view, viewport, light_dir, 2),
+      r3d_calc_lsm_i(view, viewport, light_dir, 3),
+    },
     .cam_pos = cam_pos,
     .light_dir = light_dir,
-    .rt = &offscreen_rt,
+    .rt = nullptr,
   };
 
   return rctx;
+}
+
+
+R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags) {
+  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, view, proj, cam_pos, light_dir, flags);
+  pass->rt = &shadow_rt;
+  pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
+  pass->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
+
+  //FIXME: Hack, because we only use (proj * view)
+  pass->view = m4d(1.0),
+  pass->proj = r3d_calc_lsm_i(view, viewport, light_dir, cascade_idx),
+
+  pass->cascade_idx = cascade_idx;
+  return pass;
+}
+
+R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, view, proj, cam_pos, light_dir, flags);
+  pass->rt = &offscreen_rt;
+  return pass;
+}
+
+void r3d_clear() {
+  // 0. Clear offscreen RT
+  ogl_clear(&offscreen_rt);
+
+  // 1. Clear transparent accum to v4m(0) and reveal to v4m(1)
+  ogl_clear_color(&transparent_rt, 0, (float[]){0, 0, 0, 0});
+  ogl_clear_color(&transparent_rt, 1, (float[]){1, 1, 1, 1});
+
+  // 2. Clear cascaded shadow map
+  ogl_clear_color(&shadow_rt, 0, (float[]){1,1,1,1});
+  ogl_clear_depth(&shadow_rt);
 }
 
 R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-  v4 cascade_bounds = r3d_get_cascade_bounds();
-  f32 aspect = viewport.w/viewport.h;
-  m4 persp_mats[] = {
-    m4_persp(45, aspect, 0.1, cascade_bounds.raw[0]),
-    m4_persp(45, aspect, cascade_bounds.raw[0], cascade_bounds.raw[1]),
-    m4_persp(45, aspect, cascade_bounds.raw[1], cascade_bounds.raw[2]),
-    m4_persp(45, aspect, cascade_bounds.raw[2], cascade_bounds.raw[3]),
-  };
-  m4 lsms[] = {
-    lsm_from_vp(view, persp_mats[0], light_dir),
-    lsm_from_vp(view, persp_mats[1], light_dir),
-    lsm_from_vp(view, persp_mats[2], light_dir),
-    lsm_from_vp(view, persp_mats[3], light_dir),
-  };
-  //m4 lsm = lsm_from_vp(view, proj, light_dir);
+  // Copy the offscreen (pass) RT's depth buffer to the transparent RT
+  ogl_copy_depth_buffer(&offscreen_rt, &transparent_rt, viewport);
 
-  R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
-  rctx->viewport = viewport;
-  rctx->view = view;
-  rctx->proj = proj;
-  rctx->cam_pos = cam_pos;
-  *rctx = (R3D_Ctx) {
-    .arena = arena,
-    // FIXME: Is this correct?
-    .viewport = viewport,
-    .proj = rctx->proj,
-    .view = rctx->view,
-    .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
-    .cam_pos = cam_pos,
-    .light_dir = light_dir,
-    .rt = &transparent_rt,
-  };
-
-  // Clear accum to v4m(0) and reveal to v4m(1)
-  ogl_clear_color(rctx->rt, 0, (float[]){0, 0, 0, 0});
-  ogl_clear_color(rctx->rt, 1, (float[]){1, 1, 1, 1});
-  // Copy the offscreen (opaque) RT's depth buffer to the transparent RT
-  ogl_copy_depth_buffer(&offscreen_rt, rctx->rt, viewport);
-
-  return rctx;
+  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, view, proj, cam_pos, light_dir, flags);
+  pass->rt = &transparent_rt;
+  return pass;
 }
 
 void r3dc_end(R3D_Ctx *rctx) {
-  rctx->rt->cmask = OGL_RT_CMASK_ALL;
+  if (rctx->rt) rctx->rt->cmask = OGL_RT_CMASK_ALL;
   // TBA
 }
 
@@ -823,8 +788,10 @@ void r3d_set_def_material(m4 model) {
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
   Ogl_Render_Bundle *bundle = &uber_bundle; 
   if (rctx->rt == &shadow_rt) bundle = &uber_shadow_bundle;
-  if (rctx->rt== &transparent_rt) bundle = &uber_transparent_bundle;
-  bundle->rt = *rctx->rt;
+  if (rctx->rt == &transparent_rt) bundle = &uber_transparent_bundle;
+
+  if (rctx->rt) bundle->rt = *rctx->rt;
+  else bundle->rt = (Ogl_RT){};
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
   bundle->vbos[0].buffer = vbo;
@@ -1020,7 +987,7 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
   Ogl_Render_Bundle *bundle = &uber_bundle; 
   if (rctx->rt == &shadow_rt) bundle = &uber_shadow_bundle;
   if (rctx->rt== &transparent_rt) bundle = &uber_transparent_bundle;
-  bundle->rt = *rctx->rt;
+  if (rctx->rt) bundle->rt = *rctx->rt;
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
@@ -1089,7 +1056,7 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
 
-void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type prim) {
+void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, Ogl_Prim_Type prim) {
 
 #if 1
   m4 vp = m4_mult(proj, view);

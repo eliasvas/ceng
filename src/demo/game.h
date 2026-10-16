@@ -58,7 +58,6 @@ struct Game_State {
   m4 view;
   m4 proj;
   v3 cam_pos;
-
 };
 
 void game_init(Game_State *gs);

@@ -171,53 +171,15 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
   assert(point_idx == line_count_per_axis*4);
 
-
-  // TODO: could move this to draw pass, or have draw_origin accept an rctx?
-
-  R3D_Ctx* grid_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
-  ogl_clear(grid_pass->rt);
-
-  // FIXME: Add he weighted blended shenanigans here too!
-#if 0
-  /////////////////////////////////////////////
-  // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-  /////////////////////////////////////////////
-
-  m4 test_view = m4_look_at(v3m(0,-0.2,0), v3m(0.3,0,-0.3), v3m(0,1,0));
-  {
-    // 0. Render p_0 (the nearer frustum's bbox
-    m4 p_0 = m4_persp(45, 1, 0.1, 5);
-    frustum f = frustum_make_ndc();
-    f = frustum_transform_points(f, m4_inv(m4_mult(p_0, test_view)));
-    bbox box = bbox_from_frustum(f);
-    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-    r3dc_imm_frustum(grid_pass, v3m(0,0,0), test_view, p_0, OGL_PRIM_TYPE_LINE);
-    r3dc_imm_cube(grid_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
-  }
-
-
-
-  {
-    // 1. Render p_1 (the 2nd nearer frustum's bbox
-    m4 p_1 = m4_persp(45, 1, 5, 5 + 5* (1+sin(gs->time_sec))/2.0);
-    frustum f = frustum_make_ndc();
-    f = frustum_transform_points(f, m4_inv(m4_mult(p_1, test_view)));
-    bbox box = bbox_from_frustum(f);
-    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-    r3dc_imm_frustum(grid_pass, v3m(0,0,0), test_view, p_1, OGL_PRIM_TYPE_LINE);
-    r3dc_imm_cube(grid_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
-  }
-#endif
-
-
-  // Render the frustuM?
+  // Render the grid
+  R3D_Ctx* grid_pass = r3dc_begin_forward(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
-
-
   r3dc_end(grid_pass);
+
 }
 
 void game_render(struct Game_State *gs, float dt) {
+  r3d_clear();
 
   /////////////////////////////////////// 
   // Very sketchy camera controls
@@ -296,10 +258,6 @@ void game_render(struct Game_State *gs, float dt) {
   for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
     R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,
     cascade_idx, R3D_FLAG_CLEAR_ALL);
-    // FIXME: FLAG_CLEAR_ALL_IS_CRINGE
-    if (cascade_idx == 0) {
-      ogl_clear_color(shadow_pass->rt,0, (float[]){1,1,1,1});
-    }
     ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
@@ -307,7 +265,6 @@ void game_render(struct Game_State *gs, float dt) {
       //m4 mvp = m4_mult(vp, world);
       if (cmd->has_asset) {
         Model_Info *model = AM_GET(cmd->asset_id, model);
-        //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
         m4 local_matrix = m4d(1.0); 
         world = m4_mult(world, local_matrix);
         r3dc_imm_model(shadow_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
@@ -319,15 +276,11 @@ void game_render(struct Game_State *gs, float dt) {
   } 
 #endif
 
-  ///////////////////////
-  // Origin Grid (+extras)
-  ///////////////////////
-  game_draw_origin_grid(gs, 10);
 
   ///////////////////////
   // OPAQUE PASS
   ///////////////////////
-  R3D_Ctx* opaque_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -335,7 +288,6 @@ void game_render(struct Game_State *gs, float dt) {
     if (color_is_opaque(cmd->tint)) {
       if (cmd->has_asset) {
         Model_Info *model = AM_GET(cmd->asset_id, model);
-        //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
         m4 local_matrix = m4d(1.0); 
         world = m4_mult(world, local_matrix);
         r3dc_imm_model(opaque_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
@@ -361,7 +313,6 @@ void game_render(struct Game_State *gs, float dt) {
     if (!color_is_opaque(cmd->tint)) {
       if (cmd->has_asset) {
         Model_Info *model = AM_GET(cmd->asset_id, model);
-        //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
         m4 local_matrix = m4d(1.0); 
         world = m4_mult(world, local_matrix);
         r3dc_imm_model(transparent_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
@@ -377,6 +328,63 @@ void game_render(struct Game_State *gs, float dt) {
 #endif
   }
   r3dc_end(transparent_pass);
+
+#if 0
+  transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  m4 view = gs->view;
+  view.col[3][0] = 0;
+  view.col[3][1] = 0;
+  view.col[3][2] = 0;
+  /*
+  m4 lsm_0 = r3d_calc_lsm_i(gs->view, gs->game_viewport, light_dir, 0);
+  frustum f = frustum_make_ndc();
+  f = frustum_transform_points(f, m4_inv(lsm_0));
+  bbox box = bbox_from_frustum(f);
+  m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+  */
+  //s32 index = 0;
+  f32 aspect = gs->game_viewport.w/gs->game_viewport.h;
+  m4 persp_mat = m4_persp(45, aspect, 0.1,10);
+  r3dc_imm_frustum(transparent_pass, view, persp_mat, OGL_PRIM_TYPE_LINE);
+
+
+  frustum f = frustum_make_ndc();
+  f = frustum_transform_points(f, m4_inv(m4_mult(persp_mat, view)));
+  bbox box = bbox_from_frustum(f);
+  m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+  r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
+#endif
+
+  // FIXME: Add he weighted blended shenanigans here too!
+#if 0
+  /////////////////////////////////////////////
+  // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+  /////////////////////////////////////////////
+
+  m4 test_view = m4_look_at(v3m(0,-0.0,0), v3m(0.3,0,-0.3), v3m(0,1,0));
+  {
+    // 0. Render p_0 (the nearer frustum's bbox
+    m4 p_0 = m4_persp(45, 1, 0.1, 5);
+    frustum f = frustum_make_ndc();
+    f = frustum_transform_points(f, m4_inv(m4_mult(p_0, test_view)));
+    bbox box = bbox_from_frustum(f);
+    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+    r3dc_imm_frustum(transparent_pass, v3m(0,0,0), test_view, p_0, OGL_PRIM_TYPE_LINE);
+    r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
+  }
+  {
+    // 1. Render p_1 (the 2nd nearer frustum's bbox
+    m4 p_1 = m4_persp(45, 1, 5, 5 + 5 * (1+sin(gs->time_sec))/2.0);
+    frustum f = frustum_make_ndc();
+    f = frustum_transform_points(f, m4_inv(m4_mult(p_1, test_view)));
+    bbox box = bbox_from_frustum(f);
+    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+    r3dc_imm_frustum(transparent_pass, v3m(0,0,0), test_view, p_1, OGL_PRIM_TYPE_LINE);
+    r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
+  }
+#endif
+  r3dc_end(transparent_pass);
+
 
 #if 0
   ///////////////////////
@@ -415,6 +423,14 @@ void game_render(struct Game_State *gs, float dt) {
   // POSTPROC PASS 
   ///////////////////////
   r3d_do_postproc(gs->game_viewport);
+
+
+  ///////////////////////
+  // Origin Grid
+  ///////////////////////
+  ogl_copy_depth_buffer(opaque_pass->rt, 0, gs->game_viewport);
+  game_draw_origin_grid(gs, 10);
+
 
 
   // Gui Test
@@ -467,8 +483,6 @@ void game_render(struct Game_State *gs, float dt) {
     gui_pop_pref_width();
     gui_scroll_list_end(STR8L("MyScrollTest"));
   gui_end();
-
-
 #endif
 
 }

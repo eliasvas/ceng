@@ -1,5 +1,4 @@
 // TODO: Maybe we can make a macro like OGL_SCOPY(..) to shallow copy and be able to use Bundles/RTs as caches!
-// FIXME: our whole glDrawBuffer/glColorMask is duplicated many times, do something about this..
 // FIXME: The example needs some work ok? maybe it should be a function so it gets compiled every time for checking
 // TODO: Stencil, do we need anything for stencil in the API?
 
@@ -214,6 +213,7 @@ typedef enum {
   OGL_TEX_FORMAT_R8U,
   OGL_TEX_FORMAT_RGBA8U,
   OGL_TEX_FORMAT_RGBA32F,
+  OGL_TEX_FORMAT_RGBA16F,
 } Ogl_Tex_Format;
 
 typedef struct {
@@ -388,46 +388,6 @@ void ogl_init() {
   glBindVertexArray(vao);
 }
 
-void ogl_clear_color(Ogl_RT *rt, s32 attachment_idx, float *fv){
-  if (rt && rt->impl_state) {
-    glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
-
-    uint32_t draw_buffer_idx = 0;
-    GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
-    for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
-      if (rt->aflags & (0x1 << attachment_idx)) {
-        draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
-      }
-    }
-    glDrawBuffers(draw_buffer_idx, draw_buffers);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // ?????
-  }
-  // Why disable scissor?
-  glDisable(GL_SCISSOR_TEST);
-  //glClearColor(r,g,b,a);
-  glClearBufferfv(GL_COLOR, attachment_idx, fv);
-  //glClear(GL_COLOR_BUFFER_BIT);
-  if (rt && rt->impl_state) {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  }
-}
-
-void ogl_clear_depth(Ogl_RT *rt) {
-  if (rt && rt->impl_state) {
-    glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
-  }
-  glDisable(GL_SCISSOR_TEST);
-  glClear(GL_DEPTH_BUFFER_BIT);
-  if (rt && rt->impl_state) {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  }
-}
-
-void ogl_clear(Ogl_RT *rt) {
-  ogl_clear_color(rt,0, (float[]){0,0,0,0});
-  ogl_clear_depth(rt);
-}
- 
 static int64_t ogl_buf_count_bytes(Ogl_Buf *buf) {
   return buf->count * buf->bytes_per_elem;
 }
@@ -677,6 +637,7 @@ static bool ogl_tex_format_is_floating_point(Ogl_Tex_Format format) {
     case OGL_TEX_FORMAT_R8U:     return false;
     case OGL_TEX_FORMAT_RGBA8U:  return false;
     case OGL_TEX_FORMAT_RGBA32F: return true;
+    case OGL_TEX_FORMAT_RGBA16F: return true;
   }
 }
 
@@ -686,6 +647,7 @@ static GLint ogl_tex_format_to_gl_internal_format(Ogl_Tex_Format format) {
     case OGL_TEX_FORMAT_R32F:    return GL_R32F;
     case OGL_TEX_FORMAT_RGBA8U:  return GL_RGBA8;
     case OGL_TEX_FORMAT_RGBA32F: return GL_RGBA32F;
+    case OGL_TEX_FORMAT_RGBA16F: return GL_RGBA16F;
   }
 }
 
@@ -695,6 +657,7 @@ static GLint ogl_tex_format_to_gl_format(Ogl_Tex_Format format) {
     case OGL_TEX_FORMAT_R32F:    return GL_RED;
     case OGL_TEX_FORMAT_RGBA8U:  return GL_RGBA;
     case OGL_TEX_FORMAT_RGBA32F: return GL_RGBA;
+    case OGL_TEX_FORMAT_RGBA16F: return GL_RGBA;
   }
 }
 
@@ -704,6 +667,7 @@ static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
     case OGL_TEX_FORMAT_R8U:     return 1;
     case OGL_TEX_FORMAT_RGBA8U:  return 4;
     case OGL_TEX_FORMAT_RGBA32F: return 4;
+    case OGL_TEX_FORMAT_RGBA16F: return 4;
   }
 }
 
@@ -780,6 +744,23 @@ void ogl_tex_deinit(Ogl_Tex *tex) {
   tex->impl_state = 0;
 }
 
+static void rt_bind_attachments(Ogl_RT *rt) {
+    uint32_t draw_buffer_idx = 0;
+    GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
+    for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
+      if (rt->aflags & (0x1 << attachment_idx)) {
+        draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
+      }
+    }
+    glDrawBuffers(draw_buffer_idx, draw_buffers);
+    glColorMask(
+      (rt->cmask & OGL_RT_CMASK_R) > 0,
+      (rt->cmask & OGL_RT_CMASK_G) > 0,
+      (rt->cmask & OGL_RT_CMASK_B) > 0,
+      (rt->cmask & OGL_RT_CMASK_A) > 0
+    );
+}
+
 void ogl_rt_init(Ogl_RT *rt, uint32_t w, uint32_t h, Ogl_RT_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth) {
   rt->width = w;
   rt->height = h;
@@ -803,26 +784,7 @@ void ogl_rt_init(Ogl_RT *rt, uint32_t w, uint32_t h, Ogl_RT_Attachment_Flags afl
     rt->depth_attachment = ogl_tex_make(NULL, rt->width, rt->height, OGL_TEX_FORMAT_R32F,(Ogl_Tex_Params){.is_depth = true,});
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, rt->depth_attachment.impl_state, 0);
   }
-
-#if 1
-  // FIXME: This also happens in bind maybe its not needed here as well
-  // FIXME: This happens 2 times!!!
-  // FIXME: This happens 2 times!!!
-  uint32_t draw_buffer_idx = 0;
-  GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
-  for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
-    if (rt->aflags & (0x1 << attachment_idx)) {
-      draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
-    }
-  }
-  glDrawBuffers(draw_buffer_idx, draw_buffers);
-  glColorMask(
-    (rt->cmask&OGL_RT_CMASK_R) > 0,
-    (rt->cmask&OGL_RT_CMASK_G) > 0,
-    (rt->cmask&OGL_RT_CMASK_B) > 0,
-    (rt->cmask&OGL_RT_CMASK_A) > 0
-  );
-#endif
+  rt_bind_attachments(rt);
 
   assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
@@ -903,21 +865,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   // Bind the render target 
   if (bundle->rt.width * bundle->rt.height > 0) {
     glBindFramebuffer(GL_FRAMEBUFFER, bundle->rt.impl_state);
-
-    uint32_t draw_buffer_idx = 0;
-    GLenum draw_buffers[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
-    for (uint32_t attachment_idx = 0; attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; ++attachment_idx) {
-      if (bundle->rt.aflags & (0x1 << attachment_idx)) {
-        draw_buffers[draw_buffer_idx++] = GL_COLOR_ATTACHMENT0 + attachment_idx;
-      }
-    }
-    glDrawBuffers(draw_buffer_idx, draw_buffers);
-    glColorMask(
-      (bundle->rt.cmask&OGL_RT_CMASK_R) > 0,
-      (bundle->rt.cmask&OGL_RT_CMASK_G) > 0,
-      (bundle->rt.cmask&OGL_RT_CMASK_B) > 0,
-      (bundle->rt.cmask&OGL_RT_CMASK_A) > 0
-    );
+    rt_bind_attachments(&bundle->rt);
     assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
   } else {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -976,8 +924,8 @@ void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type pri
 
 // FIXME: I don't like this shit, we shouldn't be doing this.. maybe put the transparent attachments in offscreen_rt?
 void ogl_copy_depth_buffer(Ogl_RT *opaque, Ogl_RT *transparent, rect viewport) {
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, opaque->impl_state);
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, transparent->impl_state);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, (opaque) ? opaque->impl_state : 0);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (transparent) ? transparent->impl_state : 0);
   glBlitFramebuffer(
     viewport.x, viewport.y, viewport.w, viewport.h,
     viewport.x, viewport.y, viewport.w, viewport.h,
@@ -986,6 +934,36 @@ void ogl_copy_depth_buffer(Ogl_RT *opaque, Ogl_RT *transparent, rect viewport) {
   );
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+void ogl_clear_color(Ogl_RT *rt, s32 attachment_idx, float *fv){
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
+    rt_bind_attachments(rt);
+  }
+  // Why disable scissor?
+  glDisable(GL_SCISSOR_TEST);
+  glClearBufferfv(GL_COLOR, attachment_idx, fv);
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
+}
+
+void ogl_clear_depth(Ogl_RT *rt) {
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
+  }
+  glDisable(GL_SCISSOR_TEST);
+  glClear(GL_DEPTH_BUFFER_BIT);
+  if (rt && rt->impl_state) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
+}
+
+void ogl_clear(Ogl_RT *rt) {
+  ogl_clear_color(rt,0, (float[]){0,0,0,0});
+  ogl_clear_depth(rt);
+}
+ 
 
 #endif
 

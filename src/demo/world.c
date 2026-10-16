@@ -409,6 +409,8 @@ void world_update_render(Game_State *gs, f32 dt) {
     }
   }
 
+  // FIXME: Why is this here??? Probably should be part of the transparent pass?
   particle_mgr_render(gs, world->pmgr);
+
   arena_clear(world->frame_arena);
 }

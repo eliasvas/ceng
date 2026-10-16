@@ -56,7 +56,10 @@ typedef struct {
   Ogl_RT *rt;
 } R3D_Ctx;
 
-R3D_Ctx* r3dc_begin_opaque(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
+void r3d_clear();
+
+R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags);
 void r3dc_end(R3D_Ctx *rctx);
@@ -65,7 +68,7 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
-void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type prim);
+void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, Ogl_Prim_Type prim);
 
 struct Model_Info;
 m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
