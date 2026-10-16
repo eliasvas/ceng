@@ -76,7 +76,7 @@ void game_init(struct Game_State *gs) {
       transform pillar_xform = transform_make(v3m(width, height+0.5, 1), QUAT_ONE, v3_one);
       Entity *pillar = setup_wall(world_add(gs->world), pillar_xform);
       pillar->tint = CLR_BLUE_HIPPIE;
-      pillar->tint.a = 0.3;
+      pillar->tint.a = 0.5;
     }
   }
 #endif

@@ -69,9 +69,7 @@ void main() {
   // the weight function
   float weight = clamp(pow(min(1.0, fs_color.a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
   // accum is for color accumulation
-  //accum = vec4(fs_color.rgb * fs_color.a, fs_color.a) * weight;
-  accum = fs_color;
-  // revealage = color.a
+  accum = vec4(fs_color.rgb * fs_color.a, fs_color.a) * weight;
   reveal = fs_color.a;
 }
 )";
@@ -475,20 +473,20 @@ vec3 fxaa(vec2 p, ivec2 size) {
 void main() {
   ivec2 size = textureSize(u_tex, 0);
   // Calculate opaque color
-  vec4 opaque_color = vec4(fxaa(fs_in.tc, size), 1);
+  vec3 opaque_color = fxaa(fs_in.tc, size);
   // Calculate transparent color
   ivec2 coords = ivec2(gl_FragCoord.xy);
   float revealage = texelFetch(reveal, coords, 0).r;
 
-  vec4 transparent_color = vec4(0);
+  vec3 transparent_color = vec3(0);
   if (!eqf(revealage, 1.0f)) {
     vec4 accumulation = texelFetch(accum, coords, 0);
     if (isinf(max3(abs(accumulation.rgb)))) accumulation.rgb = vec3(accumulation.a);
     vec3 average_color = accumulation.rgb / max(accumulation.a, EPSILON);
-    transparent_color = vec4(average_color, 1.0f - revealage);
+    transparent_color = average_color.xyz;
   }
   float alpha = 1.0 - revealage;
-  out_color = vec4(transparent_color.xyz * alpha + opaque_color.xyz * revealage, 1.0);
+  out_color = vec4(transparent_color * alpha + opaque_color * revealage, 1.0);
 }
 )";
 
