@@ -150,6 +150,7 @@ typedef void (*glDrawElementsPROC)(GLenum mode, GLsizei count, GLenum type, cons
 typedef void (*glDrawBuffersPROC)(GLsizei n, const GLenum *bufs);
 typedef void (*glClearPROC)(GLbitfield mask);
 typedef void (*glClearColorPROC)(GLfloat, GLfloat, GLfloat, GLfloat);
+typedef void (*glClearBufferfvPROC)(GLenum buffer, GLint drawbuffer, const GLfloat *value);
 typedef void (*glViewportPROC)(GLint, GLint, GLsizei, GLsizei);
 typedef void (*glGetActiveAttribPROC)(GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name);
 typedef GLint (*glGetAttribLocationPROC)(GLuint program, const GLchar *name);
@@ -159,13 +160,16 @@ typedef void (*glBindFramebufferPROC)(GLenum target, GLuint framebuffer);
 typedef void (*glFramebufferTexture2DPROC)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
 typedef GLenum (*glCheckFramebufferStatusPROC)(GLenum target);
 typedef void (*glDeleteFramebuffersPROC)(GLsizei n, const GLuint *framebuffers);
+typedef void (*glBlitFramebufferPROC)(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
 typedef void (*glVertexAttribDivisorPROC)(GLuint index, GLuint divisor);
 typedef GLuint (*glGetUniformBlockIndexPROC)(GLuint program, const GLchar *uniformBlockName);
 typedef void (*glUniformBlockBindingPROC)(GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding);
 typedef void (*glBindBufferRangePROC)(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
 typedef void (*glUniform1ivPROC)(GLint location, GLsizei count, const GLint *value);
 typedef void (*glBlendFuncSeparatePROC)(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha);
+typedef void (*glBlendFunciPROC)(GLuint buf, GLenum sfactor, GLenum dfactor);
 typedef void (*glBlendEquationSeparatePROC)(GLenum modeRGB, GLenum modeAlpha);
+typedef void (*glBlendFunci)(GLenum modeRGB, GLenum modeAlpha);
 typedef void (*glDrawArraysInstancedPROC)(GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
 
 glShaderSourcePROC glShaderSourceSRC = NULL;
@@ -203,6 +207,7 @@ glDrawElementsPROC glDrawElementsSRC = NULL;
 glDrawBuffersPROC glDrawBuffersSRC = NULL;
 glClearPROC glClearSRC = NULL;
 glClearColorPROC glClearColorSRC = NULL;
+glClearBufferfvPROC glClearBufferfvSRC = NULL;
 glViewportPROC glViewportSRC = NULL;
 glGetActiveAttribPROC glGetActiveAttribSRC = NULL;
 glGetAttribLocationPROC glGetAttribLocationSRC = NULL;
@@ -212,12 +217,14 @@ glBindFramebufferPROC glBindFramebufferSRC = NULL;
 glFramebufferTexture2DPROC glFramebufferTexture2DSRC = NULL;
 glCheckFramebufferStatusPROC glCheckFramebufferStatusSRC = NULL;
 glDeleteFramebuffersPROC glDeleteFramebuffersSRC = NULL;
+glBlitFramebufferPROC glBlitFramebufferSRC = NULL;
 glVertexAttribDivisorPROC glVertexAttribDivisorSRC = NULL;
 glGetUniformBlockIndexPROC glGetUniformBlockIndexSRC = NULL;
 glUniformBlockBindingPROC glUniformBlockBindingSRC = NULL;
 glBindBufferRangePROC glBindBufferRangeSRC = NULL;
 glUniform1ivPROC glUniform1ivSRC = NULL;
 glBlendFuncSeparatePROC glBlendFuncSeparateSRC = NULL;
+glBlendFunciPROC glBlendFunciSRC = NULL;
 glBlendEquationSeparatePROC glBlendEquationSeparateSRC = NULL;
 glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 
@@ -256,6 +263,7 @@ glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 #define glDrawBuffers glDrawBuffersSRC
 #define glClear glClearSRC
 #define glClearColor glClearColorSRC
+#define glClearBufferfv glClearBufferfvSRC
 #define glViewport glViewportSRC
 #define glGetActiveAttrib glGetActiveAttribSRC
 #define glGetAttribLocation glGetAttribLocationSRC
@@ -265,11 +273,13 @@ glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 #define glFramebufferTexture2D glFramebufferTexture2DSRC
 #define glCheckFramebufferStatus glCheckFramebufferStatusSRC
 #define glDeleteFramebuffers glDeleteFramebuffersSRC
+#define glBlitFramebuffer glBlitFramebufferSRC
 #define glVertexAttribDivisor glVertexAttribDivisorSRC
 #define glGetUniformBlockIndex glGetUniformBlockIndexSRC
 #define glUniformBlockBinding glUniformBlockBindingSRC
 #define glBindBufferRange glBindBufferRangeSRC
 #define glBlendFuncSeparate glBlendFuncSeparateSRC
+#define glBlendFunci glBlendFunciSRC
 #define glBlendEquationSeparate glBlendEquationSeparateSRC
 #define glDrawArraysInstanced glDrawArraysInstancedSRC
 
@@ -318,6 +328,7 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glDrawBuffers);
     GL_PROC_DEF(proc, glClear);
     GL_PROC_DEF(proc, glClearColor);
+    GL_PROC_DEF(proc, glClearBufferfv);
     GL_PROC_DEF(proc, glGetActiveAttrib);
     GL_PROC_DEF(proc, glGetAttribLocation);
     GL_PROC_DEF(proc, glGenerateMipmap);
@@ -327,6 +338,7 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glFramebufferTexture2D);
     GL_PROC_DEF(proc, glCheckFramebufferStatus);
     GL_PROC_DEF(proc, glDeleteFramebuffers);
+    GL_PROC_DEF(proc, glBlitFramebuffer);
 
     GL_PROC_DEF(proc, glVertexAttribDivisor);
 
@@ -337,6 +349,7 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glUniform1iv);
     GL_PROC_DEF(proc, glViewport);
     GL_PROC_DEF(proc, glBlendFuncSeparate);
+    GL_PROC_DEF(proc, glBlendFunci);
     GL_PROC_DEF(proc, glBlendEquationSeparate);
     GL_PROC_DEF(proc, glDrawArraysInstanced);
     if (
@@ -370,10 +383,12 @@ int GL_loadGL(GLloadfunc proc) {
         glGetUniformLocationSRC == NULL ||
         glUniformMatrix4fvSRC == NULL ||
         glBlendFuncSeparateSRC == NULL ||
+        glBlendFunciSRC == NULL ||
         glBlendEquationSeparateSRC == NULL ||
         glDrawArraysInstancedSRC == NULL ||
         glClearSRC == NULL ||
         glClearColorSRC == NULL ||
+        glClearBufferfvSRC == NULL ||
         glViewportSRC == NULL
 	)
         return 1;

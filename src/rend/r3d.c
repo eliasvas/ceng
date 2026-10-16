@@ -1,18 +1,80 @@
 #include "rend/rend_inc.h"
 #include "asset/asset_mgr.h"
+// FIXME: Too much code duplication here..
+// FIXME: these globals should be in a shared place, maybe asset system ok?
 
 // Maybe asset management should happen somewhere..
-static Ogl_Render_Bundle fxaa_bundle = {};
+static Ogl_Render_Bundle postproc_bundle = {};
 static Ogl_Render_Bundle uber_bundle = {};
 static Ogl_RT offscreen_rt;
 
 static Ogl_Render_Bundle uber_shadow_bundle = {};
 static Ogl_RT shadow_rt;
 
+static Ogl_Render_Bundle uber_transparent_bundle = {};
+static Ogl_RT transparent_rt;
+
 
 ////////////////////////////////////////////////
 // 3D Shader
 ////////////////////////////////////////////////
+
+const char* transparent_fs= R"(#version 460 core
+layout(location = 0) out vec4 accum;
+layout(location = 1) out float reveal;
+
+layout (std140) uniform PerFrameData { 
+  mat4 lsms[4];
+  mat4 view;
+  mat4 proj;
+  vec3 cam_pos;
+  vec3 light_dir;
+  vec4 cascade_bounds;
+  int cascade_idx;
+};
+
+layout(std140) uniform Material {
+  vec4 base_color_factor;
+  vec4 emissive_factor;
+  float metallic_factor;
+  float roughness_factor;
+
+  int base_tc_idx;
+  int normal_tc_idx;
+  int metallic_roughness_tc_idx;
+  int emissive_tc_idx;
+  int occlusion_tc_idx;
+
+  mat4 model_matrix;
+};
+
+in VS_OUT {
+  vec4 color;
+  vec4 wp;
+  vec3 view_dir;
+  vec3 norm;
+  vec3 tang;
+  vec3 binorm;
+  vec2 tc[4];
+  vec3 frag_pos_ws;
+  vec4 frag_pos_ls[4];
+} fs_in;
+
+uniform sampler2D base_color_tex;
+
+void main() {
+  // Calculate the color like in regular VS
+  vec4 fs_color = fs_in.color * texture(base_color_tex, fs_in.tc[base_tc_idx]);
+
+  // the weight function
+  float weight = clamp(pow(min(1.0, fs_color.a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
+  // accum is for color accumulation
+  //accum = vec4(fs_color.rgb * fs_color.a, fs_color.a) * weight;
+  accum = fs_color;
+  // revealage = color.a
+  reveal = fs_color.a;
+}
+)";
 
 const char* shadow_fs= R"(#version 460 core
 layout(location = 0) out vec4 out_color;
@@ -332,7 +394,7 @@ void main() {
 // FXAA Shader
 ////////////////////////////////////////////////
 
-const char* fxaa_vs= R"(#version 460 core
+const char* postproc_vs= R"(#version 460 core
 vec2 vertices[4] = vec2[](
   vec2(-1,+1),
   vec2(-1,-1),
@@ -359,14 +421,20 @@ void main() {
 }
 )";
 
-const char* fxaa_fs= R"(#version 460 core
+const char* postproc_fs= R"(#version 460 core
 layout(location = 0) out vec4 out_color;
+
+const float EPSILON = 0.00001f;
+bool eqf(float a, float b) { return abs(a - b) <= (abs(a) < abs(b) ? abs(b) : abs(a)) * EPSILON; }
+float max3(vec3 v) { return max(max(v.x, v.y), v.z); }
 
 in VS_OUT {
   vec2 tc;
 } fs_in;
 
 uniform sampler2D u_tex;
+uniform sampler2D accum;
+uniform sampler2D reveal;
 
 // Ref: https://www.4rknova.com/blog/2015/02/15/fxaa
 vec3 sample_tex(vec2 p) { return texture(u_tex, p).xyz; }
@@ -406,8 +474,21 @@ vec3 fxaa(vec2 p, ivec2 size) {
 
 void main() {
   ivec2 size = textureSize(u_tex, 0);
-  out_color = vec4(fxaa(fs_in.tc, size), 1);
-  //out_color = vec4(texture(u_tex, fs_in.tc).xyz, 1);
+  // Calculate opaque color
+  vec4 opaque_color = vec4(fxaa(fs_in.tc, size), 1);
+  // Calculate transparent color
+  ivec2 coords = ivec2(gl_FragCoord.xy);
+  float revealage = texelFetch(reveal, coords, 0).r;
+
+  vec4 transparent_color = vec4(0);
+  if (!eqf(revealage, 1.0f)) {
+    vec4 accumulation = texelFetch(accum, coords, 0);
+    if (isinf(max3(abs(accumulation.rgb)))) accumulation.rgb = vec3(accumulation.a);
+    vec3 average_color = accumulation.rgb / max(accumulation.a, EPSILON);
+    transparent_color = vec4(average_color, 1.0f - revealage);
+  }
+  float alpha = 1.0 - revealage;
+  out_color = vec4(transparent_color.xyz * alpha + opaque_color.xyz * revealage, 1.0);
 }
 )";
 
@@ -443,15 +524,15 @@ typedef struct {
 } Material_UBO;
 
 void r3d_try_load_shaders(rect viewport) {
-  if (fxaa_bundle.sp.impl_state == 0) {
+  if (postproc_bundle.sp.impl_state == 0) {
     ogl_rt_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
 
-    fxaa_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(fxaa_vs, fxaa_fs),
+    postproc_bundle = (Ogl_Render_Bundle){
+      .sp = ogl_shader_make(postproc_vs, postproc_fs),
       .dyn_state = (Ogl_Dyn_State){
         //.viewport = viewport,
         //.scissor  = scissor,
-        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
+        .flags    = OGL_DYN_STATE_FLAG_SCISSOR,
         //.flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
       },
     };
@@ -512,11 +593,16 @@ void r3d_try_load_shaders(rect viewport) {
       .dyn_state = (Ogl_Dyn_State){
         //.viewport = viewport,
         //.scissor  = scissor,
-        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
+        .flags    = OGL_DYN_STATE_FLAG_SCISSOR, 
       },
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_ENABLED,
         .dfunc  = OGL_DFUNC_LESS,
+      },
+      .blend_state[0] = (Ogl_Blend_State) {
+        .enabled = true,
+        .sfactor = OGL_SRC_ALPHA,
+        .dfactor = OGL_ONE_MINUS_SRC_ALPHA,
       },
     };
 
@@ -524,8 +610,33 @@ void r3d_try_load_shaders(rect viewport) {
     uber_shadow_bundle.sp = ogl_shader_make(uber_vs, shadow_fs);
     uber_shadow_bundle.rt = shadow_rt;
     uber_shadow_bundle.dyn_state.flags = OGL_DYN_STATE_FLAG_SCISSOR; 
-
+    M_ZERO_ARRAY(uber_shadow_bundle.blend_state);
   }
+
+  if (uber_transparent_bundle.sp.impl_state == 0) {
+    // FIXME: Also support RGBA16F ok?
+    ogl_rt_init(&transparent_rt, viewport.w, viewport.h, OGL_RT_A0 | OGL_RT_A1, OGL_TEX_FORMAT_RGBA32F, true);
+    uber_transparent_bundle = uber_bundle;
+    uber_transparent_bundle.sp = ogl_shader_make(uber_vs, transparent_fs);
+    uber_transparent_bundle.rt = transparent_rt;
+    uber_transparent_bundle.dyn_state.flags = OGL_DYN_STATE_FLAG_SCISSOR; 
+
+    uber_transparent_bundle.depth_state = (Ogl_Depth_State) {
+      .dwrite = OGL_DEPTH_WRITE_DISABLED,
+      .dfunc  = OGL_DFUNC_LESS,
+    };
+    uber_transparent_bundle.blend_state[0] = (Ogl_Blend_State) {
+      .enabled = true,
+      .sfactor = OGL_ONE,
+      .dfactor = OGL_ONE,
+    };
+    uber_transparent_bundle.blend_state[1] = (Ogl_Blend_State) {
+      .enabled = true,
+      .sfactor = OGL_ZERO,
+      .dfactor = OGL_ONE_MINUS_SRC_COLOR,
+    };
+  }
+
 }
 
 // Fixed bounds for now
@@ -586,7 +697,7 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
   return rctx;
 }
 
-R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+R3D_Ctx* r3dc_begin_opaque(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
   v4 cascade_bounds = r3d_get_cascade_bounds();
   f32 aspect = viewport.w/viewport.h;
   m4 persp_mats[] = {
@@ -619,6 +730,49 @@ R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_
     .light_dir = light_dir,
     .rt = &offscreen_rt,
   };
+
+  return rctx;
+}
+
+R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+  v4 cascade_bounds = r3d_get_cascade_bounds();
+  f32 aspect = viewport.w/viewport.h;
+  m4 persp_mats[] = {
+    m4_persp(45, aspect, 0.1, cascade_bounds.raw[0]),
+    m4_persp(45, aspect, cascade_bounds.raw[0], cascade_bounds.raw[1]),
+    m4_persp(45, aspect, cascade_bounds.raw[1], cascade_bounds.raw[2]),
+    m4_persp(45, aspect, cascade_bounds.raw[2], cascade_bounds.raw[3]),
+  };
+  m4 lsms[] = {
+    lsm_from_vp(view, persp_mats[0], light_dir),
+    lsm_from_vp(view, persp_mats[1], light_dir),
+    lsm_from_vp(view, persp_mats[2], light_dir),
+    lsm_from_vp(view, persp_mats[3], light_dir),
+  };
+  //m4 lsm = lsm_from_vp(view, proj, light_dir);
+
+  R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
+  rctx->viewport = viewport;
+  rctx->view = view;
+  rctx->proj = proj;
+  rctx->cam_pos = cam_pos;
+  *rctx = (R3D_Ctx) {
+    .arena = arena,
+    // FIXME: Is this correct?
+    .viewport = viewport,
+    .proj = rctx->proj,
+    .view = rctx->view,
+    .lsms = {lsms[0],lsms[1],lsms[2],lsms[3]},
+    .cam_pos = cam_pos,
+    .light_dir = light_dir,
+    .rt = &transparent_rt,
+  };
+
+  // Clear accum to v4m(0) and reveal to v4m(1)
+  ogl_clear_color(rctx->rt, 0, (float[]){0, 0, 0, 0});
+  ogl_clear_color(rctx->rt, 1, (float[]){1, 1, 1, 1});
+  // Copy the offscreen (opaque) RT's depth buffer to the transparent RT
+  ogl_copy_depth_buffer(&offscreen_rt, rctx->rt, viewport);
 
   return rctx;
 }
@@ -669,7 +823,9 @@ void r3d_set_def_material(m4 model) {
 
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
-  Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
+  Ogl_Render_Bundle *bundle = &uber_bundle; 
+  if (rctx->rt == &shadow_rt) bundle = &uber_shadow_bundle;
+  if (rctx->rt== &transparent_rt) bundle = &uber_transparent_bundle;
   bundle->rt = *rctx->rt;
 
   Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
@@ -863,7 +1019,9 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 
 f32 _blend_factor = 0.0;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint) {
-  Ogl_Render_Bundle *bundle = (rctx->rt != &offscreen_rt) ? &uber_shadow_bundle : &uber_bundle; 
+  Ogl_Render_Bundle *bundle = &uber_bundle; 
+  if (rctx->rt == &shadow_rt) bundle = &uber_shadow_bundle;
+  if (rctx->rt== &transparent_rt) bundle = &uber_transparent_bundle;
   bundle->rt = *rctx->rt;
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
@@ -969,10 +1127,12 @@ void r3dc_imm_frustum(R3D_Ctx *rctx, v3 eye, m4 view, m4 proj, Ogl_Prim_Type pri
   r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
 }
 
-void r3d_do_fxaa(rect viewport) {
-  fxaa_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
-  fxaa_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
-  fxaa_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = offscreen_rt.attachments[0] };
-  ogl_render_bundle_draw(&fxaa_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+void r3d_do_postproc(rect viewport) {
+  postproc_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
+  postproc_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
+  postproc_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = offscreen_rt.attachments[0] };
+  postproc_bundle.textures[1] = (Ogl_Tex_Slot){ .name = "accum", .tex = transparent_rt.attachments[0] };
+  postproc_bundle.textures[2] = (Ogl_Tex_Slot){ .name = "reveal", .tex = transparent_rt.attachments[1] };
+  ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
 }
 

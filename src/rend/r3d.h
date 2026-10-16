@@ -56,7 +56,8 @@ typedef struct {
   Ogl_RT *rt;
 } R3D_Ctx;
 
-R3D_Ctx* r3dc_begin_color(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_opaque(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags);
 void r3dc_end(R3D_Ctx *rctx);
 
@@ -71,6 +72,6 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint);
 
 void r3d_try_load_shaders(rect viewport);
-void r3d_do_fxaa(rect viewport);
+void r3d_do_postproc(rect viewport);
 
 #endif

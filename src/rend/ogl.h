@@ -1,5 +1,8 @@
 // TODO: Maybe we can make a macro like OGL_SCOPY(..) to shallow copy and be able to use Bundles/RTs as caches!
 // FIXME: our whole glDrawBuffer/glColorMask is duplicated many times, do something about this..
+// FIXME: The example needs some work ok? maybe it should be a function so it gets compiled every time for checking
+// TODO: Stencil, do we need anything for stencil in the API?
+
 /* 
 ogl - a minimal OpenGL abstraction layer - eliasvas
 
@@ -242,6 +245,25 @@ typedef struct {
   Ogl_Depth_Write_State dwrite;
 } Ogl_Depth_State;
 
+typedef enum {
+  OGL_ONE,
+  OGL_ZERO,
+  OGL_SRC_COLOR,
+  OGL_ONE_MINUS_SRC_COLOR,
+  OGL_DST_COLOR,
+  OGL_ONE_MINUS_DST_COLOR,
+  OGL_SRC_ALPHA,
+  OGL_ONE_MINUS_SRC_ALPHA,
+  OGL_DST_ALPHA,
+  OGL_ONE_MINUS_DST_ALPHA,
+} Ogl_Blend_Factor;
+
+typedef struct {
+  b32 enabled;
+  Ogl_Blend_Factor sfactor;
+  Ogl_Blend_Factor dfactor;
+} Ogl_Blend_State;
+
 typedef struct {
   // This is kind-of a hack, we use Ogl_Vert_Attrib's and don't fill most fields
   Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
@@ -251,7 +273,6 @@ typedef struct {
 
 typedef enum { 
   OGL_DYN_STATE_FLAG_SCISSOR    = (0x1 << 0),
-  OGL_DYN_STATE_FLAG_BLEND      = (0x1 << 2),
 } Ogl_Dyn_State_Flags;
 
 typedef union {
@@ -324,15 +345,17 @@ typedef struct {
   Ogl_RT rt;
 
   Ogl_Depth_State depth_state;
+  Ogl_Blend_State blend_state[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
   Ogl_Dyn_State dyn_state;
 } Ogl_Render_Bundle;
 
 #ifndef OGL_IMPLEMENTATION
 
   void ogl_init();
-  void ogl_clear_color(Ogl_RT *rt, f32 r, f32 g, f32 b, f32 a);
+  void ogl_clear_color(Ogl_RT *rt, s32 attachment_idx, float *fv);
   void ogl_clear_depth(Ogl_RT *rt);
   void ogl_clear(Ogl_RT *rt);
+  void ogl_copy_depth_buffer(Ogl_RT *opaque, Ogl_RT *transparent, rect viewport);
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
   bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
@@ -365,7 +388,7 @@ void ogl_init() {
   glBindVertexArray(vao);
 }
 
-void ogl_clear_color(Ogl_RT *rt, f32 r, f32 g, f32 b, f32 a) {
+void ogl_clear_color(Ogl_RT *rt, s32 attachment_idx, float *fv){
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, rt->impl_state);
 
@@ -381,8 +404,9 @@ void ogl_clear_color(Ogl_RT *rt, f32 r, f32 g, f32 b, f32 a) {
   }
   // Why disable scissor?
   glDisable(GL_SCISSOR_TEST);
-  glClearColor(r,g,b,a);
-  glClear(GL_COLOR_BUFFER_BIT);
+  //glClearColor(r,g,b,a);
+  glClearBufferfv(GL_COLOR, attachment_idx, fv);
+  //glClear(GL_COLOR_BUFFER_BIT);
   if (rt && rt->impl_state) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
@@ -400,7 +424,7 @@ void ogl_clear_depth(Ogl_RT *rt) {
 }
 
 void ogl_clear(Ogl_RT *rt) {
-  ogl_clear_color(rt,0,0,0,0);
+  ogl_clear_color(rt,0, (float[]){0,0,0,0});
   ogl_clear_depth(rt);
 }
  
@@ -414,6 +438,21 @@ static GLint gl_type_from_ogl_index_buf(Ogl_Buf *ibo) {
     case 2: return GL_UNSIGNED_SHORT;
     case 4: return GL_UNSIGNED_INT;
     default: return GL_UNSIGNED_INT;
+  }
+}
+
+static uint ogl_blend_factor_to_gl_blend_factor(Ogl_Blend_Factor factor) {
+  switch (factor) {
+    case OGL_ONE:                 return GL_ONE;
+    case OGL_ZERO:                return GL_ZERO;
+    case OGL_SRC_COLOR:           return GL_SRC_COLOR;
+    case OGL_ONE_MINUS_SRC_COLOR: return GL_ONE_MINUS_SRC_COLOR;
+    case OGL_DST_COLOR:           return GL_DST_COLOR;
+    case OGL_ONE_MINUS_DST_COLOR: return GL_ONE_MINUS_DST_COLOR;
+    case OGL_SRC_ALPHA:           return GL_SRC_ALPHA;
+    case OGL_ONE_MINUS_SRC_ALPHA: return GL_ONE_MINUS_SRC_ALPHA;
+    case OGL_DST_ALPHA:           return GL_DST_ALPHA;
+    case OGL_ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
   }
 }
 
@@ -896,16 +935,32 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   } else {
     glDisable(GL_SCISSOR_TEST);
   }
+
+  // depth state
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(ogl_to_gl_depth_func(bundle->depth_state.dfunc));
   glDepthMask((bundle->depth_state.dwrite == OGL_DEPTH_WRITE_ENABLED) ? GL_TRUE : GL_FALSE);
-  if (bundle->dyn_state.flags & OGL_DYN_STATE_FLAG_BLEND) {
-    glEnable(GL_BLEND);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
-  } else {
+
+  // blend state
+  b32 blend_enabled = false;
+  for (s32 blend_attachment_idx = 0; blend_attachment_idx < OGL_MAX_RENDER_TARGET_ATTACHMENTS; blend_attachment_idx+=1) {
+    Ogl_Blend_State *bstate = &bundle->blend_state[blend_attachment_idx];
+    if (bstate->enabled) {
+      if (!blend_enabled) {
+        glEnable(GL_BLEND);
+        blend_enabled = true;
+      }
+      glBlendFunci(
+          blend_attachment_idx,
+          ogl_blend_factor_to_gl_blend_factor(bstate->sfactor),
+          ogl_blend_factor_to_gl_blend_factor(bstate->dfactor)
+      );
+    }
+  }
+  if (!blend_enabled) {
     glDisable(GL_BLEND);
   }
+
 }
 
 void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count) {
@@ -917,6 +972,19 @@ void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint3
 void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t index_count) {
   ogl_render_bundle_bind(bundle);
   glDrawElements(ogl_prim_type_to_gl_type(prim), index_count, gl_type_from_ogl_index_buf(&bundle->index_buffer), nullptr);
+}
+
+// FIXME: I don't like this shit, we shouldn't be doing this.. maybe put the transparent attachments in offscreen_rt?
+void ogl_copy_depth_buffer(Ogl_RT *opaque, Ogl_RT *transparent, rect viewport) {
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, opaque->impl_state);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, transparent->impl_state);
+  glBlitFramebuffer(
+    viewport.x, viewport.y, viewport.w, viewport.h,
+    viewport.x, viewport.y, viewport.w, viewport.h,
+    GL_DEPTH_BUFFER_BIT,
+    GL_NEAREST
+  );
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 #endif

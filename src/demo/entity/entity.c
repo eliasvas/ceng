@@ -358,7 +358,7 @@ Entity *setup_coin(Entity *e, transform xform) {
   e->kind = ENTITY_KIND_COIN;
   entity_setup_const_data(e, e->kind);
   e->dynamic = true;
-  e->tint = v4m(0.95,0.9,0.0,1.0);
+  e->tint = v4m(0.95,0.9,0.0,0.3);
   return e;
 }
 

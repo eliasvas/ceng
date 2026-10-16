@@ -89,7 +89,8 @@ void particle_mgr_update(Particle_Mgr *pmgr, f32 dt) {
 
 // FIXME: slowest code in the universe
 void particle_mgr_render(Game_State *gs, Particle_Mgr *pmgr) {
-  R3D_Ctx* particle_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
+  // FIXME: Should be transparent!
+  R3D_Ctx* particle_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
   for (s64 particle_idx = 0; particle_idx < pmgr->particle_next_idx; particle_idx+=1) {
     Particle *p = &pmgr->particles[particle_idx];
     if (particle_active(p)) {

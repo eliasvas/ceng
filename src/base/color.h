@@ -40,4 +40,8 @@ static u32 u32_from_color(color c) {
   return res;
 }
 
+static b32 color_is_opaque(color c) {
+  return EQUALF(c.a, 1.0, 0.001);
+}
+
 #endif

@@ -76,6 +76,7 @@ void game_init(struct Game_State *gs) {
       transform pillar_xform = transform_make(v3m(width, height+0.5, 1), QUAT_ONE, v3_one);
       Entity *pillar = setup_wall(world_add(gs->world), pillar_xform);
       pillar->tint = CLR_BLUE_HIPPIE;
+      pillar->tint.a = 0.3;
     }
   }
 #endif
@@ -173,8 +174,10 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
   // TODO: could move this to draw pass, or have draw_origin accept an rctx?
 
-  R3D_Ctx* grid_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
+  R3D_Ctx* grid_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
   ogl_clear(grid_pass->rt);
+
+  // FIXME: Add he weighted blended shenanigans here too!
 #if 0
   /////////////////////////////////////////////
   // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
@@ -295,7 +298,7 @@ void game_render(struct Game_State *gs, float dt) {
     cascade_idx, R3D_FLAG_CLEAR_ALL);
     // FIXME: FLAG_CLEAR_ALL_IS_CRINGE
     if (cascade_idx == 0) {
-      ogl_clear_color(shadow_pass->rt,1,1,1,1);
+      ogl_clear_color(shadow_pass->rt,0, (float[]){1,1,1,1});
     }
     ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
@@ -322,32 +325,65 @@ void game_render(struct Game_State *gs, float dt) {
   game_draw_origin_grid(gs, 10);
 
   ///////////////////////
-  // COLOR PASS
+  // OPAQUE PASS
   ///////////////////////
-  R3D_Ctx* light_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  R3D_Ctx* opaque_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
-    if (cmd->has_asset) {
-      Model_Info *model = AM_GET(cmd->asset_id, model);
-      //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
-      m4 local_matrix = m4d(1.0); 
-      world = m4_mult(world, local_matrix);
-      r3dc_imm_model(light_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
-    } else {
-      r3dc_imm_cube(light_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+    // FIXME: Currently we are using only entity tint to see whether object is transparent/opaque
+    if (color_is_opaque(cmd->tint)) {
+      if (cmd->has_asset) {
+        Model_Info *model = AM_GET(cmd->asset_id, model);
+        //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
+        m4 local_matrix = m4d(1.0); 
+        world = m4_mult(world, local_matrix);
+        r3dc_imm_model(opaque_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
+      } else {
+        r3dc_imm_cube(opaque_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+      }
     }
 
     // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
     m4 world_collider = m4_from_transform(cmd->collider_xform);
-    r3dc_imm_cube(light_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
+    r3dc_imm_cube(opaque_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
   }
-  r3dc_end(light_pass);
+  r3dc_end(opaque_pass);
 
+  ///////////////////////
+  // TRANSPARENT PASS
+  ///////////////////////
+  R3D_Ctx* transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
+    Entity_Render_Command *cmd = &gs->world->rcommands[i];
+    m4 world = m4_from_transform(cmd->xform);
+    // FIXME: Currently we are using only entity tint to see whether object is transparent/opaque
+    if (!color_is_opaque(cmd->tint)) {
+      if (cmd->has_asset) {
+        Model_Info *model = AM_GET(cmd->asset_id, model);
+        //m4 local_matrix = m4_mult(m4_scale(v3m(1, 1, 1)),m4_translate(v3m(0,-0.5,0)));
+        m4 local_matrix = m4d(1.0); 
+        world = m4_mult(world, local_matrix);
+        r3dc_imm_model(transparent_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
+      } else {
+        r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+      }
+    }
+
+#if 0
+    // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
+    m4 world_collider = m4_from_transform(cmd->collider_xform);
+    r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
+#endif
+  }
+  r3dc_end(transparent_pass);
+
+#if 0
   ///////////////////////
   // BVH PASS 
   ///////////////////////
-  R3D_Ctx* bvh_pass = r3dc_begin_color(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  // FIXME: Should be transparent
+  R3D_Ctx* bvh_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
   // BVH vis
   BVH_Render_Config bvh_rc = {
     .colors = {
@@ -373,11 +409,12 @@ void game_render(struct Game_State *gs, float dt) {
   assert(root);
   world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
   r3dc_end(bvh_pass);
+#endif
 
   ///////////////////////
-  // FXAA PASS 
+  // POSTPROC PASS 
   ///////////////////////
-  r3d_do_fxaa(gs->game_viewport);
+  r3d_do_postproc(gs->game_viewport);
 
 
   // Gui Test

@@ -208,8 +208,13 @@ void r2d_try_load_shaders() {
       .dyn_state = (Ogl_Dyn_State){
 //        .viewport = viewport,
 //        .scissor  = scissor,
-        .flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR,
-      }
+        .flags    = OGL_DYN_STATE_FLAG_SCISSOR,
+      },
+      .blend_state[0] = (Ogl_Blend_State) {
+        .enabled = true,
+        .sfactor = OGL_SRC_ALPHA,
+        .dfactor = OGL_ONE_MINUS_SRC_ALPHA,
+      },
     };
   }
 }
