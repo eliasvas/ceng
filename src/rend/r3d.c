@@ -280,13 +280,18 @@ float shadow_calc(vec3 frag_pos_ws) {
   vec3 proj_coords = frag_pos_lightspace.xyz / frag_pos_lightspace.w;
   // go to [0,1] range (to sample the tex)
   proj_coords = proj_coords*0.5+0.5;
+
+  // If we sample outside the light's projection discard
+  if (any(lessThan(proj_coords, vec3(0.0))) || any(greaterThan(proj_coords, vec3(1.0)))) {
+    return 0.0;
+  }
+
   // sample the tex
   float closest_depth = texture(shadow_map, proj_coords.xy)[layer];
   float current_depth = proj_coords.z;
 
   // This is wrong!
   float bias = 0.005;
-
   float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
 
   return shadow;
@@ -641,23 +646,33 @@ void r3d_try_load_shaders(rect viewport) {
 }
 
 // Fixed bounds for now
-static v4 r3d_get_cascade_bounds() {
+v4 r3d_get_cascade_bounds() {
   return v4m(20,30,40,100);
 }
 
-static color r3d_get_cascade_idx_color(s32 cascade_idx) {
+color r3d_get_cascade_idx_color(s32 cascade_idx) {
+  color c = CLR_WHITE;
   switch (cascade_idx) {
-    case 0: return CLR_BLUE_HIPPIE; 
-    case 1: return CLR_RED_RICH; 
-    case 2: return CLR_GREEN_EVA; 
-    case 3: return CLR_PURPLE_C64; 
-    default: return CLR_WHITE;
+    case 0: 
+      c = CLR_BLUE_HIPPIE;
+      break; 
+    case 1: 
+      c = CLR_RED_RICH;
+      break;
+    case 2:
+      c = CLR_GREEN_EVA; 
+      break;
+    case 3:
+      c = CLR_PURPLE_C64; 
+      break;
+    default: 
+      c = CLR_WHITE;
+      break;
   }
+  c.a = 0.5;
+  return c;
 }
 
-////////////////////////////////////
-// Context API! (More compact!)
-////////////////////////////////////
 
 // FIXME: we should use a 'm4 proj' for the angle e.g, don't just do 45 degrees every time!
 m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index) {
@@ -670,13 +685,23 @@ m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index) {
 }
 
 
+// If R3D_FLAG_CASCADE_TEST is set we just return a default view matrix for visualization purposes
+static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
+  //m4 shadow_view = (rflags & R3D_FLAG_CASCADE_TEST) ? m4d(1.0) : view;
+  m4 shadow_view = (rflags & R3D_FLAG_CASCADE_TEST) ? m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0)) : view;
+  return shadow_view;
+}
+
+////////////////////////////////////
+// Context API! (More compact!)
+////////////////////////////////////
+
 // @TIP: We use this forward pass as a base for the others as well!
 R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
   rctx->view = view;
   rctx->proj = proj;
-  rctx->cam_pos = cam_pos;
   *rctx = (R3D_Ctx) {
     .arena = arena,
     // FIXME: Is this correct?
@@ -684,11 +709,12 @@ R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
     .proj = rctx->proj,
     .view = rctx->view,
     .lsms = {
-      r3d_calc_lsm_i(view, viewport, light_dir, 0),
-      r3d_calc_lsm_i(view, viewport, light_dir, 1),
-      r3d_calc_lsm_i(view, viewport, light_dir, 2),
-      r3d_calc_lsm_i(view, viewport, light_dir, 3),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 0),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 1),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 2),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 3),
     },
+    //.cam_pos = (flags & R3D_FLAG_CASCADE_TEST) ? v3m(0,0,0) : cam_pos,
     .cam_pos = cam_pos,
     .light_dir = light_dir,
     .rt = nullptr,
@@ -706,7 +732,7 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
 
   //FIXME: Hack, because we only use (proj * view)
   pass->view = m4d(1.0),
-  pass->proj = r3d_calc_lsm_i(view, viewport, light_dir, cascade_idx),
+  pass->proj = r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, cascade_idx),
 
   pass->cascade_idx = cascade_idx;
   return pass;
@@ -1056,15 +1082,8 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
 
-void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, Ogl_Prim_Type prim) {
-
-#if 1
+void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, color c, Ogl_Prim_Type prim) {
   m4 vp = m4_mult(proj, view);
-#else
-  m4 vp = proj;
-#endif
-
-  color c = clr_256(250, 40,30, 200);
 
   frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
 

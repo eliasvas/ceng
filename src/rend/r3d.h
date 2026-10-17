@@ -38,7 +38,7 @@ typedef struct {
 
 
 typedef enum {
-  R3D_FLAG_CLEAR_ALL     = (0x1 << 0),
+  R3D_FLAG_CASCADE_TEST= (0x1 << 0),
   // ADD MORE
 } R3D_Ctx_Flags;
 
@@ -68,7 +68,7 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
-void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, Ogl_Prim_Type prim);
+void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, color c, Ogl_Prim_Type prim);
 
 struct Model_Info;
 m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
@@ -76,5 +76,10 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
 
 void r3d_try_load_shaders(rect viewport);
 void r3d_do_postproc(rect viewport);
+
+// Just exposed for testing by game.c
+v4 r3d_get_cascade_bounds();
+color r3d_get_cascade_idx_color(s32 cascade_idx);
+m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index);
 
 #endif

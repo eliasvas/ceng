@@ -530,6 +530,7 @@ static v3 m4_extract_scale(m4 m) {
 
   return scale;
 }
+
 static m4 m4_remove_scale(m4 m, v3 scale) {
   if (scale.x > 0.00001f) {
     for (s32 i = 0; i < 4; i+=1) {
@@ -980,14 +981,7 @@ static bbox bbox_from_frustum(frustum f) {
 
 
 static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
-  //proj = m4_persp(100, 19.0/6.0, 0.1, 20);
-
-#if 1
   m4 vp = m4_mult(proj, view);
-#else
-  // This will place the frustum in (0,0), good for testing
-  m4 vp = proj;
-#endif
 
   // 0. Calculate the view matrix for the LSM by finding the world frustum center
   frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
@@ -998,7 +992,7 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
   frustum fv = frustum_transform_points(f, lsm_view);
   bbox bounds = bbox_from_frustum(fv);
   // 2. Calculate the actual ortho matrix (+zMult)
-  f32 z_mult = 2.0;
+  f32 z_mult = 1.0;
   bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * z_mult) : (bounds.min.z / z_mult);
   bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / z_mult) : (bounds.max.z * z_mult);
   m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, bounds.min.z, bounds.max.z);
@@ -1006,6 +1000,5 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
 
   return lsm;
 }
-
 
 #endif

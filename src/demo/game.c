@@ -11,8 +11,6 @@
 #define ASSET_MGR_IMPLEMENTATION
 #include "asset/asset_mgr.h"
 
-static v3 cam_pos;
-
 extern f32 _blend_factor;
 
 extern void platform_play_sound(const char *sound);
@@ -105,7 +103,7 @@ void game_init(struct Game_State *gs) {
   // serializer test
   //wserializer_test(gs->persistent_arena);
 
-  cam_pos = v3m(0,15,8);
+  gs->cam_pos = v3m(0,15,8);
 }
 
 extern void r2d_try_load_shaders();
@@ -172,7 +170,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
 
   // Render the grid
-  R3D_Ctx* grid_pass = r3dc_begin_forward(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, R3D_FLAG_CLEAR_ALL);
+  R3D_Ctx* grid_pass = r3dc_begin_forward(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, v3_zero, 0);
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
   r3dc_end(grid_pass);
 
@@ -180,46 +178,22 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
 void game_render(struct Game_State *gs, float dt) {
   r3d_clear();
+  //R3D_Ctx_Flags rflags = 0;
+  R3D_Ctx_Flags rflags = R3D_FLAG_CASCADE_TEST;
 
   /////////////////////////////////////// 
   // Very sketchy camera controls
   /////////////////////////////////////// 
-  if (input_key_down(&gs->input, KEY_SCANCODE_Q)) { cam_pos.y -= dt * 10; }
-  if (input_key_down(&gs->input, KEY_SCANCODE_E)) { cam_pos.y += dt * 10; }
-  if (input_key_down(&gs->input, KEY_SCANCODE_W)) { cam_pos.z -= dt * 10; }
-  if (input_key_down(&gs->input, KEY_SCANCODE_S)) { cam_pos.z += dt * 10; }
-  if (input_key_down(&gs->input, KEY_SCANCODE_A)) { cam_pos.x -= dt * 10; }
-  if (input_key_down(&gs->input, KEY_SCANCODE_D)) { cam_pos.x += dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_Q)) { gs->cam_pos.y -= dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_E)) { gs->cam_pos.y += dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_W)) { gs->cam_pos.z -= dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_S)) { gs->cam_pos.z += dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_A)) { gs->cam_pos.x -= dt * 10; }
+  if (input_key_down(&gs->input, KEY_SCANCODE_D)) { gs->cam_pos.x += dt * 10; }
 
-  gs->cam_pos = cam_pos;
-  gs->view = m4_look_at(cam_pos, v3m(0,0,0), v3m(0,1,0));
+  gs->view = m4_look_at(gs->cam_pos, v3m(0,0,0), v3m(0,1,0));
   gs->proj = m4_persp(45, gs->game_viewport.w/gs->game_viewport.h, 0.1, 100);
   m4 vp = m4_mult(gs->proj, gs->view);
-
-
-#if 0
-  // Draw the lantern (for testing)
-  m4 lantern_model = m4_mult(m4_translate(v3m(0,0,0)), m4_scale(v3m(0.2,0.2,0.2)));
-  Model_Info *lantern = AM_GET(gs->lantern_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, lantern, vp, lantern_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
-
-  // Draw the fox (for testing)
-  m4 fox_model= m4_mult(
-      m4_translate(v3m(1,0,0)),
-      m4_mult(
-        m4_from_quat(quat_from_axis_angle((axis_angle){v3m(1,0,0), 0})), 
-        m4_scale(v3m(0.05,0.05,0.05))
-      )
-  );
-  Model_Info *fox = AM_GET(gs->fox_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, fox, vp, fox_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
-
-
-
-  m4 hero_model_matrix = m4_scale(v3m(3,3,3));
-  Model_Info *hero_model = AM_GET(gs->hero_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, hero_model, vp, hero_model_matrix, cam_pos, gs->time_sec, 1, CLR_WHITE);
-#endif
 
   // Do world picking..
   b32 lmb_pressed = input_mkey_pressed(&gs->input, INPUT_MOUSE_LMB);
@@ -232,7 +206,7 @@ void game_render(struct Game_State *gs, float dt) {
     v3 dir = v3_norm(v3_sub(far, near));
 
     ray r = (ray) {
-      .orig = cam_pos,
+      .orig = gs->cam_pos,
       .dir = dir,
       .t = 0,
     };
@@ -257,7 +231,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
     R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,
-    cascade_idx, R3D_FLAG_CLEAR_ALL);
+    cascade_idx, rflags);
     ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
@@ -280,7 +254,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // OPAQUE PASS
   ///////////////////////
-  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, rflags);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -305,7 +279,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
-  R3D_Ctx* transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+  R3D_Ctx* transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, rflags);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -320,40 +294,36 @@ void game_render(struct Game_State *gs, float dt) {
         r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
       }
     }
-
-#if 0
-    // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
-    m4 world_collider = m4_from_transform(cmd->collider_xform);
-    r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
-#endif
   }
   r3dc_end(transparent_pass);
 
+  if (rflags & R3D_FLAG_CASCADE_TEST) {
+    v4 cascade_bounds = r3d_get_cascade_bounds();
+
+    transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, rflags);
+    for (s32 cascade_idx = 0; cascade_idx < 1; cascade_idx+=1) {
+      //m4 view = m4d(1.0);
+      m4 view = m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
+      f32 aspect = gs->game_viewport.w/gs->game_viewport.h;
+      m4 persp_mat = m4_persp(45, aspect, (cascade_idx == 0) ? 0.1 : cascade_bounds.raw[cascade_idx-1], cascade_bounds.raw[cascade_idx]);
+      r3dc_imm_frustum(transparent_pass, view, persp_mat, CLR_RED_JAM, OGL_PRIM_TYPE_LINE);
+
+      // This visualizes the cascade AABB
 #if 0
-  transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
-  m4 view = gs->view;
-  view.col[3][0] = 0;
-  view.col[3][1] = 0;
-  view.col[3][2] = 0;
-  /*
-  m4 lsm_0 = r3d_calc_lsm_i(gs->view, gs->game_viewport, light_dir, 0);
-  frustum f = frustum_make_ndc();
-  f = frustum_transform_points(f, m4_inv(lsm_0));
-  bbox box = bbox_from_frustum(f);
-  m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-  */
-  //s32 index = 0;
-  f32 aspect = gs->game_viewport.w/gs->game_viewport.h;
-  m4 persp_mat = m4_persp(45, aspect, 0.1,10);
-  r3dc_imm_frustum(transparent_pass, view, persp_mat, OGL_PRIM_TYPE_LINE);
-
-
-  frustum f = frustum_make_ndc();
-  f = frustum_transform_points(f, m4_inv(m4_mult(persp_mat, view)));
-  bbox box = bbox_from_frustum(f);
-  m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-  r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
+      frustum f = frustum_make_ndc();
+      f = frustum_transform_points(f, m4_inv(m4_mult(persp_mat, view)));
+      bbox box = bbox_from_frustum(f);
+      m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
+      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, box_model);
 #endif
+
+      // This visualizes the actual oriented (via lD) volume of the cascade
+      color cc =  r3d_get_cascade_idx_color(cascade_idx);
+      m4 lsm = lsm_from_vp(view, persp_mat, light_dir);
+      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, m4_mult(m4_inv(lsm),m4_scale(v3m(2,2,2))));
+    }
+    r3dc_end(transparent_pass);
+  }
 
   // FIXME: Add he weighted blended shenanigans here too!
 #if 0
@@ -383,7 +353,30 @@ void game_render(struct Game_State *gs, float dt) {
     r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
   }
 #endif
-  r3dc_end(transparent_pass);
+
+#if 0
+  // Draw the lantern (for testing)
+  m4 lantern_model = m4_mult(m4_translate(v3m(0,0,0)), m4_scale(v3m(0.2,0.2,0.2)));
+  Model_Info *lantern = AM_GET(gs->lantern_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, lantern, vp, lantern_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
+
+  // Draw the fox (for testing)
+  m4 fox_model= m4_mult(
+      m4_translate(v3m(1,0,0)),
+      m4_mult(
+        m4_from_quat(quat_from_axis_angle((axis_angle){v3m(1,0,0), 0})), 
+        m4_scale(v3m(0.05,0.05,0.05))
+      )
+  );
+  Model_Info *fox = AM_GET(gs->fox_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, fox, vp, fox_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
+
+
+
+  m4 hero_model_matrix = m4_scale(v3m(3,3,3));
+  Model_Info *hero_model = AM_GET(gs->hero_model_asset_id, model);
+  r3d_imm_model(gs->game_viewport, hero_model, vp, hero_model_matrix, cam_pos, gs->time_sec, 1, CLR_WHITE);
+#endif
 
 
 #if 0
