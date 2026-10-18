@@ -33,7 +33,6 @@ void game_init(struct Game_State *gs) {
   hero->asset_id = gs->hero_model_asset_id;
   hero->anim_idx = 1;
   gs->hero_id = hero->id;
-
   assert(hero);
 
 #if 1
@@ -104,6 +103,9 @@ void game_init(struct Game_State *gs) {
   //wserializer_test(gs->persistent_arena);
 
   gs->cam_pos = v3m(0,15,8);
+  //gs->rflags = R3D_FLAG_CASCADE_TEST;
+  gs->rflags = 0;
+  gs->enabled_cascades= (0x1 | 0x2 | 0x4 | 0x8);
 }
 
 extern void r2d_try_load_shaders();
@@ -178,9 +180,6 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 
 void game_render(struct Game_State *gs, float dt) {
   r3d_clear();
-  //R3D_Ctx_Flags rflags = 0;
-  R3D_Ctx_Flags rflags = R3D_FLAG_CASCADE_TEST;
-
   /////////////////////////////////////// 
   // Very sketchy camera controls
   /////////////////////////////////////// 
@@ -230,8 +229,9 @@ void game_render(struct Game_State *gs, float dt) {
   // SHADOW PASS
   ///////////////////////
   for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
+    if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
     R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir,
-    cascade_idx, rflags);
+    cascade_idx, gs->rflags);
     ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
@@ -254,7 +254,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // OPAQUE PASS
   ///////////////////////
-  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, rflags);
+  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -279,7 +279,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
-  R3D_Ctx* transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, rflags);
+  R3D_Ctx* transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -297,11 +297,12 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(transparent_pass);
 
-  if (rflags & R3D_FLAG_CASCADE_TEST) {
+  if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
     v4 cascade_bounds = r3d_get_cascade_bounds();
 
-    transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, rflags);
-    for (s32 cascade_idx = 0; cascade_idx < 1; cascade_idx+=1) {
+    transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
+    for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
+      if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
       //m4 view = m4d(1.0);
       m4 view = m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
       f32 aspect = gs->game_viewport.w/gs->game_viewport.h;
@@ -432,9 +433,10 @@ void game_render(struct Game_State *gs, float dt) {
   gui_begin(gs->game_viewport, dt);
   gui_push_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);
 
+
   static Gui_Scroll_Data sdata = {
     .item_px = 30, // FIXME change this to 60 to see some weird stuff..
-    .item_count = 7,
+    .item_count = 9,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
     .scroll_button_color = clr(0.5,1,0.4,1),
@@ -442,9 +444,13 @@ void game_render(struct Game_State *gs, float dt) {
     .scroll_percent = 0,
   };
 
+
   Gui_Signal scroll_list = gui_scroll_list_begin(STR8L("MyScrollTest"), GUI_AXIS_Y, &sdata);
   assert(scroll_list.box);
   gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 400.0, 1.0});
+
+    gui_flag_selection(STR8L("rflags:"), 30, &gs->rflags, 4);
+    gui_flag_selection(STR8L("cascade:"), 30, &gs->enabled_cascades, 4);
 
     // Animation blending factor (for testing currently)
     gui_slider01(STR8L("blendFactor"), &_blend_factor, sdata.item_px, GUI_AXIS_X);

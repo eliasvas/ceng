@@ -8,4 +8,8 @@
 
 Gui_Signal gui_slider01(str8 label, f32 *value, f32 button_px, Gui_Axis axis);
 
+// gui_flag_selection(options)
+// ([]str labels later)
+Gui_Signal gui_flag_selection(str8 label, f32 button_px, u32 *value, s32 count);
+
 #endif

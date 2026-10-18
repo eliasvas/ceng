@@ -58,6 +58,8 @@ struct Game_State {
   m4 view;
   m4 proj;
   v3 cam_pos;
+  R3D_Ctx_Flags rflags;
+  u32 enabled_cascades;
 };
 
 void game_init(Game_State *gs);

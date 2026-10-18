@@ -995,7 +995,7 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
   f32 z_mult = 1.0;
   bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * z_mult) : (bounds.min.z / z_mult);
   bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / z_mult) : (bounds.max.z * z_mult);
-  m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, bounds.min.z, bounds.max.z);
+  m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
   m4 lsm = m4_mult(lsm_proj, lsm_view);
 
   return lsm;
