@@ -11,13 +11,14 @@ struct World;
 struct Entity;
 
 typedef struct {
- v3 vel;
- v3 acc;
+  v3 vel;
+  v3 acc;
 
- // Collider offset and dimension
- v3 col_off;
- v3 col_hdim;
- f32 mass;
+  // Collider offset and dimension
+  v3 col_off;
+  v3 col_hdim;
+  f32 mass;
+  b32 disabled;
 } Phys_Box;
 
 typedef enum : s32 {

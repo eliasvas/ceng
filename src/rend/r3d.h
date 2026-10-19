@@ -38,7 +38,11 @@ typedef struct {
 
 
 typedef enum {
-  R3D_FLAG_CASCADE_TEST= (0x1 << 0),
+  R3D_FLAG_RENDER_GRID   = (0x1 << 0),
+  R3D_FLAG_RENDER_MESHES = (0x1 << 1),
+  R3D_FLAG_RENDER_BOXES  = (0x1 << 2),
+  R3D_FLAG_CASCADE_TEST  = (0x1 << 3),
+  R3D_FLAG_BVH_TEST      = (0x1 << 4),
   // ADD MORE
 } R3D_Ctx_Flags;
 

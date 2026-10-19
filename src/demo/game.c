@@ -40,8 +40,8 @@ void game_init(struct Game_State *gs) {
   transform lgun_xform = transform_make(v3m(0.2, 0.25,-0.3), QUAT_ONE, v3m(0.1,0.1,0.1));
   Entity *hero_lgun = setup_none(world_add(gs->world), lgun_xform);
   hero_lgun->box = (Phys_Box) {
-    // Dont thino we need this MOFO
-    .col_off = v3m(10000000,0,0),
+    .disabled = true,
+    .col_off = v3m(1000000,0,0),
     .col_hdim = v3m(0.1,0.1,0.1),
   };
   hero_lgun->tint = CLR_WHITE;
@@ -52,7 +52,7 @@ void game_init(struct Game_State *gs) {
   transform rgun_xform = transform_make(v3m(-0.2, 0.25,-0.3), QUAT_ONE, v3m(0.1,0.1,0.1));
   Entity *hero_rgun = setup_none(world_add(gs->world), rgun_xform);
   hero_rgun->box = (Phys_Box) {
-    // Dont thino we need this MOFO
+    .disabled = true,
     .col_off = v3m(1000000,0,0),
     .col_hdim = v3m(0.1,0.1,0.1),
   };
@@ -103,8 +103,7 @@ void game_init(struct Game_State *gs) {
   //wserializer_test(gs->persistent_arena);
 
   gs->cam_pos = v3m(0,15,8);
-  //gs->rflags = R3D_FLAG_CASCADE_TEST;
-  gs->rflags = 0;
+  gs->rflags = R3D_FLAG_RENDER_GRID | R3D_FLAG_RENDER_MESHES | R3D_FLAG_RENDER_BOXES;
   gs->enabled_cascades= (0x1 | 0x2 | 0x4 | 0x8);
 }
 
@@ -259,48 +258,53 @@ void game_render(struct Game_State *gs, float dt) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
     // FIXME: Currently we are using only entity tint to see whether object is transparent/opaque
-    if (color_is_opaque(cmd->tint)) {
-      if (cmd->has_asset) {
-        Model_Info *model = AM_GET(cmd->asset_id, model);
-        m4 local_matrix = m4d(1.0); 
-        world = m4_mult(world, local_matrix);
-        r3dc_imm_model(opaque_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
-      } else {
-        r3dc_imm_cube(opaque_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+    if (gs->rflags & R3D_FLAG_RENDER_MESHES) {
+      if (color_is_opaque(cmd->tint)) {
+        if (cmd->has_asset) {
+          Model_Info *model = AM_GET(cmd->asset_id, model);
+          m4 local_matrix = m4d(1.0); 
+          world = m4_mult(world, local_matrix);
+          r3dc_imm_model(opaque_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
+        } else {
+          r3dc_imm_cube(opaque_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+        }
       }
     }
 
-    // TODO: Render the collider as well.. We need more stuff in Entity_Render_Command
-    m4 world_collider = m4_from_transform(cmd->collider_xform);
-    r3dc_imm_cube(opaque_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
+    if (gs->rflags & R3D_FLAG_RENDER_BOXES) {
+      m4 world_collider = m4_from_transform(cmd->collider_xform);
+      r3dc_imm_cube(opaque_pass, OGL_PRIM_TYPE_LINE_LOOP, cmd->collider_col, world_collider);
+    }
   }
   r3dc_end(opaque_pass);
 
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
-  R3D_Ctx* transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
-  for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
-    Entity_Render_Command *cmd = &gs->world->rcommands[i];
-    m4 world = m4_from_transform(cmd->xform);
-    // FIXME: Currently we are using only entity tint to see whether object is transparent/opaque
-    if (!color_is_opaque(cmd->tint)) {
-      if (cmd->has_asset) {
-        Model_Info *model = AM_GET(cmd->asset_id, model);
-        m4 local_matrix = m4d(1.0); 
-        world = m4_mult(world, local_matrix);
-        r3dc_imm_model(transparent_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
-      } else {
-        r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+  if (gs->rflags & R3D_FLAG_RENDER_MESHES) {
+    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
+    for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
+      Entity_Render_Command *cmd = &gs->world->rcommands[i];
+      m4 world = m4_from_transform(cmd->xform);
+      // FIXME: Currently we are using only entity tint to see whether object is transparent/opaque
+      if (!color_is_opaque(cmd->tint)) {
+        if (cmd->has_asset) {
+          Model_Info *model = AM_GET(cmd->asset_id, model);
+          m4 local_matrix = m4d(1.0); 
+          world = m4_mult(world, local_matrix);
+          r3dc_imm_model(transparent_pass, model, world, gs->time_sec, cmd->anim_idx, cmd->tint);
+        } else {
+          r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cmd->tint, world);
+        }
       }
     }
+    r3dc_end(transparent_pass);
   }
-  r3dc_end(transparent_pass);
 
   if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
     v4 cascade_bounds = r3d_get_cascade_bounds();
 
-    transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
+    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
     for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
       if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
       //m4 view = m4d(1.0);
@@ -325,35 +329,6 @@ void game_render(struct Game_State *gs, float dt) {
     }
     r3dc_end(transparent_pass);
   }
-
-  // FIXME: Add he weighted blended shenanigans here too!
-#if 0
-  /////////////////////////////////////////////
-  // Testing Frustum fitting here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-  /////////////////////////////////////////////
-
-  m4 test_view = m4_look_at(v3m(0,-0.0,0), v3m(0.3,0,-0.3), v3m(0,1,0));
-  {
-    // 0. Render p_0 (the nearer frustum's bbox
-    m4 p_0 = m4_persp(45, 1, 0.1, 5);
-    frustum f = frustum_make_ndc();
-    f = frustum_transform_points(f, m4_inv(m4_mult(p_0, test_view)));
-    bbox box = bbox_from_frustum(f);
-    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-    r3dc_imm_frustum(transparent_pass, v3m(0,0,0), test_view, p_0, OGL_PRIM_TYPE_LINE);
-    r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
-  }
-  {
-    // 1. Render p_1 (the 2nd nearer frustum's bbox
-    m4 p_1 = m4_persp(45, 1, 5, 5 + 5 * (1+sin(gs->time_sec))/2.0);
-    frustum f = frustum_make_ndc();
-    f = frustum_transform_points(f, m4_inv(m4_mult(p_1, test_view)));
-    bbox box = bbox_from_frustum(f);
-    m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-    r3dc_imm_frustum(transparent_pass, v3m(0,0,0), test_view, p_1, OGL_PRIM_TYPE_LINE);
-    r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.9,0.9,0.9,0.2), box_model);
-  }
-#endif
 
 #if 0
   // Draw the lantern (for testing)
@@ -380,38 +355,39 @@ void game_render(struct Game_State *gs, float dt) {
 #endif
 
 
-#if 0
   ///////////////////////
   // BVH PASS 
   ///////////////////////
-  // FIXME: Should be transparent
-  R3D_Ctx* bvh_pass = r3dc_begin_opaque(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
-  // BVH vis
-  BVH_Render_Config bvh_rc = {
-    .colors = {
-      [0] = v4_multf(CLR_GREEN_EVA, 0.5),
-      [1] = v4_multf(CLR_RED_PINK, 0.5),
-      [2] = v4_multf(CLR_PURPLE_C64, 0.5),
-      [3] = v4_multf(CLR_BLUE_HIPPIE, 0.5),
-      [4] = v4_multf(CLR_GREEN_CLASSIC, 0.5),
-      [5] = v4_multf(CLR_BLUE_DAMSELFLY, 0.5),
-      [6] = v4_multf(CLR_RED_RICH, 0.5),
-      [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
-    },
-    .running_time_sec = gs->time_sec,
-    // FIXME: currently the jetpack things confuse the BVH!!! 
-#if 1
-    .kind = BVH_RENDER_OFF,
+
+  if (gs->rflags & R3D_FLAG_BVH_TEST) {
+    R3D_Ctx *bvh_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, 0);
+    // BVH vis
+    BVH_Render_Config bvh_rc = {
+      .colors = {
+        [0] = v4_multf(CLR_GREEN_EVA, 0.5),
+        [1] = v4_multf(CLR_RED_PINK, 0.5),
+        [2] = v4_multf(CLR_PURPLE_C64, 0.5),
+        [3] = v4_multf(CLR_BLUE_HIPPIE, 0.5),
+        [4] = v4_multf(CLR_GREEN_CLASSIC, 0.5),
+        [5] = v4_multf(CLR_BLUE_DAMSELFLY, 0.5),
+        [6] = v4_multf(CLR_RED_RICH, 0.5),
+        [7] = v4_multf(CLR_PURPLE_RAIN, 0.5),
+      },
+      .running_time_sec = gs->time_sec,
+      // FIXME: currently the jetpack things confuse the BVH!!! 
+#if 0
+      .kind = BVH_RENDER_OFF,
+      .kind = BVH_RENDER_ALL,
 #else
-    .seconds_per_level = 0.5,
-    .kind = BVH_RENDER_LEVEL_BY_LEVEL,
+      .seconds_per_level = 0.5,
+      .kind = BVH_RENDER_LEVEL_BY_LEVEL,
 #endif
-  };
-  BVH_Node *root = gs->world->bvh_root;
-  assert(root);
-  world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
-  r3dc_end(bvh_pass);
-#endif
+    };
+    BVH_Node *root = gs->world->bvh_root;
+    assert(root);
+    world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, vp, gs->game_viewport, bvh_rc);
+    r3dc_end(bvh_pass);
+  }
 
   ///////////////////////
   // POSTPROC PASS 
@@ -422,8 +398,12 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // Origin Grid
   ///////////////////////
-  ogl_copy_depth_buffer(opaque_pass->rt, 0, gs->game_viewport);
-  game_draw_origin_grid(gs, 10);
+  if (gs->rflags & R3D_FLAG_RENDER_GRID) {
+    R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, gs->view, gs->proj, gs->cam_pos, light_dir, gs->rflags);
+    ogl_copy_depth_buffer(opaque_pass->rt, 0, gs->game_viewport);
+    game_draw_origin_grid(gs, 10);
+    r3dc_end(opaque_pass);
+  }
 
 
 
@@ -449,7 +429,7 @@ void game_render(struct Game_State *gs, float dt) {
   assert(scroll_list.box);
   gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 400.0, 1.0});
 
-    gui_flag_selection(STR8L("rflags:"), 30, &gs->rflags, 4);
+    gui_flag_selection(STR8L("rflags:"), 30, &gs->rflags, 5);
     gui_flag_selection(STR8L("cascade:"), 30, &gs->enabled_cascades, 4);
 
     // Animation blending factor (for testing currently)

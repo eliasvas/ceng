@@ -218,13 +218,13 @@ void world_build_bvh(World *world) {
   s32 alloc_idx = 0;
   for (s64 idx = 0; idx < world->entities->count; idx+=1) {
     Entity *e = &world->entities->e[idx];
-    if (world->entities->alive[idx]) {
+    if (world->entities->alive[idx] && !e->box.disabled) {
       entities[alloc_idx++] = *(e);
     }
   }
 
   // 2. Calculate the actual BVH structure .. (!!)
-  world_bvh_calc(world, world->bvh_root, entities, ecount, BVH_AXIS_X);
+  world_bvh_calc(world, world->bvh_root, entities, alloc_idx, BVH_AXIS_X);
 }
 
 
