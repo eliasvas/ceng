@@ -78,6 +78,17 @@ void game_init(struct Game_State *gs) {
   }
 #endif
 
+  // Make a building
+  {
+    //transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
+    transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
+    Entity *building = setup_wall(world_add(gs->world), building_xform);
+    building->asset_id = gs->building_a_asset_id;
+    building->has_asset = true;
+    building->tint = v4m(1,1,1,1);
+    //building->tint = CLR_BLUE_DAMSELFLY;
+  }
+
   gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
 #if 0 

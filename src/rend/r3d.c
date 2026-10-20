@@ -281,18 +281,33 @@ float shadow_calc(vec3 frag_pos_ws) {
   // go to [0,1] range (to sample the tex)
   proj_coords = proj_coords*0.5+0.5;
 
-  // If we sample outside the light's projection discard
-  if (any(lessThan(proj_coords, vec3(0.0))) || any(greaterThan(proj_coords, vec3(1.0)))) {
-    return 0.0;
-  }
-
   // sample the tex
   float closest_depth = texture(shadow_map, proj_coords.xy)[layer];
   float current_depth = proj_coords.z;
 
   // This is wrong!
   float bias = 0.005;
-  float shadow = current_depth - bias > closest_depth ? 1.0 : 0.0;
+
+  // calculate bias
+  //vec3 normal = normalize(fs_in.norm);
+  //float bias = max(0.05 * (1.0 - dot(normal, light_dir)), 0.005);
+  //bias *= 1 / (cascade_bounds[layer] * 0.5f);
+
+  // calculate PCF
+  float shadow = 0.0;
+  vec2 texel_size = 1.0 / vec2(textureSize(shadow_map, 0));
+  for(int x = -1; x <= 1; ++x) {
+    for(int y = -1; y <= 1; ++y) {
+      float pcfDepth = texture(shadow_map, vec2(proj_coords.xy + vec2(x, y) * texel_size))[layer];
+      shadow += (current_depth- bias) > pcfDepth ? 1.0 : 0.0;
+    }
+  }
+  shadow /= 9.0;
+
+  if (proj_coords.z > 1.0) {
+    shadow = 0.0;
+  }
+
 
   return shadow;
 }
@@ -547,7 +562,7 @@ void r3d_try_load_shaders(rect viewport) {
 
   if (uber_bundle.sp.impl_state == 0) {
 
-#define SHADOWMAP_DIM 2048
+#define SHADOWMAP_DIM 2048 
     ogl_rt_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_A0, OGL_TEX_FORMAT_RGBA32F, true);
 
     uber_bundle = (Ogl_Render_Bundle){

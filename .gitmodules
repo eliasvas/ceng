@@ -4,3 +4,6 @@
 [submodule "data/StarterKitPlatformer"]
 	path = data/StarterKitPlatformer
 	url = https://github.com/KenneyNL/Starter-Kit-3D-Platformer.git
+[submodule "data/Starter-Kit-City-Builder"]
+	path = data/Starter-Kit-City-Builder
+	url = https://github.com/KenneyNL/Starter-Kit-City-Builder.git

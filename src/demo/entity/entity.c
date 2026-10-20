@@ -422,6 +422,7 @@ void entity_setup_const_data(Entity *e, Entity_Kind kind) {
       //e->draw_fn = draw_bullet;
       //e->kill_fn = kill_bullet;
       //e->collide_fn = collide_bullet;
+      break;
     default:
       break;
   }

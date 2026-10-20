@@ -438,6 +438,7 @@ int main(void) {
   gs.fox_model_asset_id = am_load_from_fullpath(STR8L("data/gltf-sample-models/2.0/Fox/glTF-Binary/Fox.glb"));
   gs.hero_model_asset_id = am_load_from_fullpath(STR8L("data/StarterKitPlatformer/models/character.glb"));
   gs.coin_model_asset_id = am_load_from_fullpath(STR8L("data/StarterKitPlatformer/models/coin.glb"));
+  gs.building_a_asset_id = am_load_from_fullpath(STR8L("data/Starter-Kit-City-Builder/models/building-small-a.glb"));
 
   gs.def_font_id = am_load_from_fullpath(STR8L("data/ProggyClean.ttf"));
 
