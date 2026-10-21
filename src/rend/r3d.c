@@ -298,8 +298,8 @@ float shadow_calc(vec3 frag_pos_ws) {
   vec2 texel_size = 1.0 / vec2(textureSize(shadow_map, 0));
   for(int x = -1; x <= 1; ++x) {
     for(int y = -1; y <= 1; ++y) {
-      float pcfDepth = texture(shadow_map, vec2(proj_coords.xy + vec2(x, y) * texel_size))[layer];
-      shadow += (current_depth- bias) > pcfDepth ? 1.0 : 0.0;
+      float pcf_depth = texture(shadow_map, vec2(proj_coords.xy + vec2(x, y) * texel_size))[layer];
+      shadow += (current_depth- bias) > pcf_depth ? 1.0 : 0.0;
     }
   }
   shadow /= 9.0;
@@ -312,99 +312,72 @@ float shadow_calc(vec3 frag_pos_ws) {
   return shadow;
 }
 
+bool texture_present(sampler2D tex) {
+  return (textureSize(tex, 0).x > 1);
+}
+
+vec3 get_normal() {
+  vec3 norm = fs_in.norm;
+  if (texture_present(normal_tex)) {
+    vec3 bump_map = texture(normal_tex, fs_in.tc[normal_tc_idx]).rgb;
+    bump_map = (bump_map * 2.0f) - 1.0f;
+    norm = (bump_map.x * fs_in.tang) + (bump_map.y * fs_in.binorm) + (bump_map.z * fs_in.norm);
+    norm = normalize(norm);
+  }
+  return norm;
+}
 
 void main() {
-
-#if 1
-  ivec2 texture_size;
-  vec2 tc;
-  out_color = fs_in.color * texture(base_color_tex, fs_in.tc[base_tc_idx]);
-  out_color += 0.1 * emissive_factor * texture(emissive_tex, fs_in.tc[emissive_tc_idx]);
-  out_color += 0.1 * texture(occlusion_tex, fs_in.tc[occlusion_tc_idx]);
-  out_color += 0.01 * texture(normal_tex, fs_in.tc[normal_tc_idx]);
-  out_color += 0.01 * texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]);
-
-  float shadow = shadow_calc(fs_in.frag_pos_ws);
-  ////////////////////////////////
-  // For visualization
-#if 0
-  int layer = get_cascade_layer(fs_in.frag_pos_ws);
-  if (layer == 0) { out_color.r = 1.0; }
-  if (layer == 1) { out_color.g = 1.0; }
-  if (layer == 2) { out_color.b = 1.0; }
-  if (layer == 3) { out_color.rgb = vec3(1.0); }
-#endif
-
-  out_color.xyz = out_color.xyz * 0.7 *(1.0 - shadow) + out_color.xyz * 0.3;
-#else
-
-  vec3 lD;
-  vec3 albedo, metallic_rough, bump_map;
-  vec3 bump_norm;
-  float roughness, metallic;
-  vec3 F0;
-  vec3 halfs_in.dir;
-  float NdotH, NdotV, NdotL, HdotV;
-  float roughness_sqr, rough_sqr2, NdotHSqr, denominator, normal_distribution;
-  float smithL, smithV, geom_shadow;
-  vec3 fresnel;
-  vec3 specularity;
-  vec4 color;
-
-  lD = -light_dir;
+  //vec3 lD = -light_dir;
+  vec3 lD = light_dir;
 
   // Sample the textures needed
-  albedo = texture(base_color_tex, fs_in.tc[base_tc_idx]).rgb;
-  metallic_rough = texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]).rgb;
-  bump_map = texture(normal_tex, fs_in.tc[normal_tc_idx]).rgb;
-
-  // Perform normal mapping
-  bump_map = (bump_map * 2.0f) - 1.0f;
-  bump_norm = (bump_map.x * fs_in.tang) + (bump_map.y * fs_in.binorm) + (bump_map.z * fs_in.norm);
-  bump_norm = normalize(bump_norm);
+  vec3 albedo = texture(base_color_tex, fs_in.tc[base_tc_idx]).rgb * fs_in.color.rgb;
+  vec3 metallic_rough = texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]).rgb*vec3(metallic_factor, roughness_factor, 1);
+  vec3 norm = get_normal();
 
   // Retrieve metallic/roughness
-  roughness = metallic_rough.r;
-  metallic = metallic_rough.b;
+  float roughness = metallic_rough.r;
+  float metallic = metallic_rough.b;
 
   // Calculate fresnel factor
-  F0 = vec3(0.04f, 0.04f, 0.04f);
+  vec3 F0 = vec3(0.04f, 0.04f, 0.04f);
   F0 = mix(F0, albedo, metallic);
 
   // Setup all needed vectors for lighting
-  halfs_in.dir = normalize(fs_in.view_dir + lD);
-  NdotH = max(0.0f, dot(bump_norm, halfs_in.dir));
-  NdotV = max(0.0f, dot(bump_norm, fs_in.view_dir));
-  NdotL = max(0.0f, dot(bump_norm, lD));
-  HdotV = max(0.0f, dot(halfs_in.dir, fs_in.view_dir));
+  vec3 halfdir = normalize(fs_in.view_dir + lD);
+  float NdotH = max(0.0f, dot(norm, halfdir));
+  float NdotV = max(0.0f, dot(norm, fs_in.view_dir));
+  float NdotL = max(0.0f, dot(norm, lD));
+  float HdotV = max(0.0f, dot(halfdir, fs_in.view_dir));
 
   // GGX for normal distribution
-  roughness_sqr = roughness * roughness;
-  rough_sqr2 = roughness_sqr * roughness_sqr;
-  NdotHSqr = NdotH * NdotH;
-  denominator = (NdotHSqr * (rough_sqr2 - 1.0f) + 1.0f);
+  float roughness_sqr = roughness * roughness;
+  float rough_sqr2 = roughness_sqr * roughness_sqr;
+  float NdotHSqr = NdotH * NdotH;
+  float denominator = (NdotHSqr * (rough_sqr2 - 1.0f) + 1.0f);
   denominator = 3.14159265359f * (denominator * denominator);
-  normal_distribution = rough_sqr2 / denominator;
+  float normal_distribution = rough_sqr2 / denominator;
 
   // Schlick GGX for the geometric shadow
-  smithL = NdotL / (NdotL * (1.0f - roughness_sqr) + roughness_sqr);
-  smithV = NdotV / (NdotV * (1.0f - roughness_sqr) + roughness_sqr);
-  geom_shadow = smithL * smithV;
+  float smithL = NdotL / (NdotL * (1.0f - roughness_sqr) + roughness_sqr);
+  float smithV = NdotV / (NdotV * (1.0f - roughness_sqr) + roughness_sqr);
+  float geom_shadow = smithL * smithV;
 
   // Fresnel SChlick for fresnel calculation
-  fresnel = F0 + (1.0f - F0) * pow(1.0f - HdotV, 5.0f);
+  vec3 fresnel = F0 + (1.0f - F0) * pow(1.0f - HdotV, 5.0f);
 
   // Cook-Torrance specular BRDF
-  specularity = (normal_distribution * fresnel * geom_shadow) / ((4.0f * (NdotL * NdotV)) + 0.00001f);
-  color.rgb = albedo + specularity;
-  color.rgb = color.rgb * NdotL;
-  color = vec4(color.rgb, 1.0f);
+  vec3 specularity = (normal_distribution * fresnel * geom_shadow) / ((4.0f * (NdotL * NdotV)) + 0.00001f);
 
   // Emissive color
   vec3 emissive = texture(emissive_tex, fs_in.tc[emissive_tc_idx]).rgb * emissive_factor.rgb;
 
-  out_color = color + vec4(emissive, 1.0);
-#endif
+  vec4 color = vec4(0.0,0.0,0.0,1.0);
+  color.rgb = (albedo + specularity + emissive) * NdotL;
+
+  float shadow = shadow_calc(fs_in.frag_pos_ws);
+  out_color = color * (1.0 - shadow);
 }
 )";
 
@@ -890,6 +863,16 @@ void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
     (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
     (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)}
   };
+  // Just put the fries in the bag bro
+  for (s32 i = 0; i < 36; i += 3) {
+    v3 a = cube_verts[i+0].pos;
+    v3 b = cube_verts[i+1].pos;
+    v3 c = cube_verts[i+2].pos;
+    v3 n = v3_norm(v3_cross(v3_sub(b,a), v3_sub(c,a)));
+    cube_verts[i+0].norm = n; 
+    cube_verts[i+1].norm = n; 
+    cube_verts[i+2].norm = n; 
+  }
 
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
