@@ -81,7 +81,8 @@ void game_init(struct Game_State *gs) {
   // Make a building
   {
     //transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
-    transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
+    //transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
+    transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3m(1,3,1));
     Entity *building = setup_wall(world_add(gs->world), building_xform);
     building->asset_id = gs->building_a_asset_id;
     building->has_asset = true;
@@ -167,16 +168,16 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
     v3 start = v3m(-cell_count/2.0,0, line_x - cell_count/2.0);
     v3 end   = v3m(+cell_count/2.0,0, line_x - cell_count/2.0);
 
-    points[point_idx++] = (Uber_Vertex) {.pos = start, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
-    points[point_idx++] = (Uber_Vertex) {.pos = end, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
+    points[point_idx++] = (Uber_Vertex) {.pos = start, .col_0 = c1, .norm = v3m(0,1,0), .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
+    points[point_idx++] = (Uber_Vertex) {.pos = end, .col_0 = c1, .norm = v3m(0,1,0), .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
   }
 
   for (s32 line_z = 0; line_z < line_count_per_axis; line_z +=1) {
     v3 start = v3m(line_z - cell_count/2.0, 0,-cell_count/2.0);
     v3 end   = v3m(line_z - cell_count/2.0, 0,+cell_count/2.0);
 
-    points[point_idx++] = (Uber_Vertex) {.pos = start, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
-    points[point_idx++] = (Uber_Vertex) {.pos = end, .col_0 = c1, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
+    points[point_idx++] = (Uber_Vertex) {.pos = start, .col_0 = c1, .norm = v3m(0,1,0), .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
+    points[point_idx++] = (Uber_Vertex) {.pos = end, .col_0 = c1, .norm = v3m(0,1,0), .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)};
   }
 
   assert(point_idx == line_count_per_axis*4);

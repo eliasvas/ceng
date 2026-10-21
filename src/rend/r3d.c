@@ -44,6 +44,7 @@ layout(std140) uniform Material {
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
+  int is_unlit;
 
   mat4 model_matrix;
 };
@@ -144,6 +145,7 @@ layout(std140) uniform Material {
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
+  int is_unlit;
 
   mat4 model_matrix;
 };
@@ -228,6 +230,7 @@ layout(std140) uniform Material {
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
+  int is_unlit;
 
   mat4 model_matrix;
 };
@@ -308,7 +311,6 @@ float shadow_calc(vec3 frag_pos_ws) {
     shadow = 0.0;
   }
 
-
   return shadow;
 }
 
@@ -376,8 +378,24 @@ void main() {
   vec4 color = vec4(0.0,0.0,0.0,1.0);
   color.rgb = (albedo + specularity + emissive) * NdotL;
 
+  if (is_unlit == 1) {
+    color.rgb = albedo;
+  }
+
+
+  // For shadow map visualization
+  vec3 modifier = vec3(0.0);
+#if 0
+  int layer = get_cascade_layer(fs_in.frag_pos_ws);
+  if (layer == 0) { modifier = vec3(1.0,0.0,0.0); }
+  if (layer == 1) { modifier = vec3(0.0,1.0,0.0); }
+  if (layer == 2) { modifier = vec3(0.0,0.0,1.0); }
+  if (layer == 3) { modifier = vec3(1.0,1.0,1.0); }
+#endif
+
   float shadow = shadow_calc(fs_in.frag_pos_ws);
-  out_color = color * (1.0 - shadow);
+  out_color.rgb = color.rgb * (1.0 - shadow) + (1.0 - shadow) * modifier;
+  out_color.a = color.a;
 }
 )";
 
@@ -509,7 +527,7 @@ typedef struct {
   int metallic_roughness_tc_idx;
   int emissive_tc_idx;
   int occlusion_tc_idx;
-  int _padding;
+  int is_unlit;
 
   m4 model_matrix;
 } Material_UBO;
@@ -775,7 +793,7 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
 
-void r3d_set_def_material(m4 model) {
+void r3d_set_def_material(m4 model, b32 is_unlit) {
   Ogl_Tex *texture = AM_GET((Asset_Id){}, tex);
   uber_bundle.textures[0] = (Ogl_Tex_Slot){.name = ("base_color_tex"), .tex = *(texture),};
   uber_bundle.textures[1] = (Ogl_Tex_Slot){.name = ("normal_tex"), .tex = *(texture),};
@@ -793,6 +811,7 @@ void r3d_set_def_material(m4 model) {
     .normal_tc_idx = 0,
     .occlusion_tc_idx = 0,
     .model_matrix = model,
+    .is_unlit = (is_unlit),
   };
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 }
@@ -811,7 +830,7 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
   bundle->vbos[0].buffer = vbo;
 
   r3dc_set_per_frame_ubo(rctx, &bundle->ubos[0].buffer);
-  r3d_set_def_material(model);
+  r3d_set_def_material(model, true);
 
   // Set dynamically before drawcall currently
   bundle->dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;

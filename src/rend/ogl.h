@@ -908,6 +908,8 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   if (!blend_enabled) {
     glDisable(GL_BLEND);
   }
+  // For now
+  glDisable(GL_CULL_FACE);
 
 }
 

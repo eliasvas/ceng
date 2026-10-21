@@ -68,6 +68,7 @@ typedef struct {
   Gltf_Material_Tex_Info occlusion_texture;
   v3 emissive_factor;
   str8 name;
+  b32 double_sided;
 } Gltf_Material;
 
 #define GLTF_PROPERTY_NOT_SPECIFIED (-1)
@@ -633,6 +634,9 @@ static Gltf_Info gltf_load(Arena *arena, str8 dir, str8 json_data) {
 
       Json_Element* name = json_lookup(m, STR8L("name"));
       material->name = name->value;
+
+      Json_Element* double_sided = json_lookup(m, STR8L("doubleSided"));
+      if (double_sided) material->double_sided = true;
 
       Json_Element* pbr_mr = json_lookup(m, STR8L("pbrMetallicRoughness"));
       if (pbr_mr) {
