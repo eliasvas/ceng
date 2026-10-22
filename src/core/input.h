@@ -164,7 +164,8 @@ typedef struct {
   u64 transition_count;
 }Input_Key_State;
 
-typedef struct {
+typedef struct Input Input;
+struct Input {
     Input_Key_State keeb_state[KEY_SCANCODE_COUNT];
     Input_Key_State mouse_state[INPUT_MOUSE_COUNT];
 
@@ -175,7 +176,7 @@ typedef struct {
     v2 mouse_pos;
     v2 prev_mouse_pos;
     b32 win_resized;
-} Input;
+};
 
 #ifndef INPUT_IMPLEMENTATION
   void input_process_events(Input *input);

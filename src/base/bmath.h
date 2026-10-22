@@ -980,7 +980,7 @@ static bbox bbox_from_frustum(frustum f) {
 }
 
 
-static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
+static m4 lsm_from_vp(m4 view, m4 proj, v3 ld, f32 zmult) {
   m4 vp = m4_mult(proj, view);
 
   // 0. Calculate the view matrix for the LSM by finding the world frustum center
@@ -992,9 +992,8 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld) {
   frustum fv = frustum_transform_points(f, lsm_view);
   bbox bounds = bbox_from_frustum(fv);
   // 2. Calculate the actual ortho matrix (+zMult)
-  f32 z_mult = 1.0;
-  bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * z_mult) : (bounds.min.z / z_mult);
-  bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / z_mult) : (bounds.max.z * z_mult);
+  bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * zmult) : (bounds.min.z / zmult);
+  bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / zmult) : (bounds.max.z * zmult);
   m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
   m4 lsm = m4_mult(lsm_proj, lsm_view);
 

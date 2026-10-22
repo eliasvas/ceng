@@ -4,6 +4,7 @@
 #include "base/base_inc.h"
 #include "frz/frz.h"
 #include "ogl.h"
+#include "camera.h"
 
 //typedef FRZ_Vertex Tri_Vertex;
 //#define TRI_VERTEX_VARG(vt) vt.pos.x, vt.pos.y, vt.pos.z
@@ -36,6 +37,37 @@ typedef struct {
 
 } Uber_Vertex;
 
+typedef enum {
+  CSM_BOUND_LINEAR,
+  CSM_BOUND_LOGARITHMIC,
+  CSM_BOUND_DYNAMIC, // SDSM
+} CSM_Bound_Policy;
+
+typedef enum {
+  CSM_FIT_APPLY_ZMULT,
+  CSM_FIT_ISECT_BVH,
+} CSM_Fitting_Flags;
+
+typedef struct {
+  f32 zmult;
+  CSM_Bound_Policy bound_policy;
+  CSM_Fitting_Flags fflags;
+  s32 cascade_count;
+  
+  v3 light_dir;
+} CSM_Opt;
+
+static CSM_Opt csm_opt_default() {
+  CSM_Opt default_options = (CSM_Opt) {
+    .zmult = 1.0,
+    .bound_policy = CSM_BOUND_LINEAR,
+    .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
+    .cascade_count = 4,
+    .light_dir = v3_norm(v3m(0.1,1,1)),
+  };
+
+  return default_options;
+}
 
 typedef enum {
   R3D_FLAG_RENDER_GRID   = (0x1 << 0),
@@ -62,10 +94,10 @@ typedef struct {
 
 void r3d_clear();
 
-R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
-R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
-R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags);
-R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
+R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, s32 cascade_idx, R3D_Ctx_Flags flags);
 void r3dc_end(R3D_Ctx *rctx);
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);

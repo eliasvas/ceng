@@ -3,6 +3,7 @@
 
 #include "base/base_inc.h"
 #include "core/core_inc.h"
+#include "rend/camera.h"
 
 typedef struct Game_State Game_State;
 #include "world.h"
@@ -56,9 +57,10 @@ struct Game_State {
   Font_Info font;
 
   // 3D scene stuff should be here or no?
-  m4 view;
-  m4 proj;
-  v3 cam_pos;
+  Camera cam;
+  //m4 view;
+  //m4 proj;
+  //v3 cam_pos;
   R3D_Ctx_Flags rflags;
   u32 enabled_cascades;
 };

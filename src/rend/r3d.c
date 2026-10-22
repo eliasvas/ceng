@@ -685,7 +685,7 @@ m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index) {
   v4 cascade_bounds = r3d_get_cascade_bounds();
   f32 aspect = viewport.w/viewport.h;
   m4 persp_mat = m4_persp(45, aspect, (index == 0) ? 0.1 : cascade_bounds.raw[index-1], cascade_bounds.raw[index]);
-  m4 lsm = lsm_from_vp(view, persp_mat, light_dir);
+  m4 lsm = lsm_from_vp(view, persp_mat, light_dir, 1.0);
 
   return lsm;
 }
@@ -702,27 +702,26 @@ static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
 // Context API! (More compact!)
 ////////////////////////////////////
 
-// @TIP: We use this forward pass as a base for the others as well!
-R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   rctx->viewport = viewport;
-  rctx->view = view;
-  rctx->proj = proj;
+  rctx->view = c->dirty_view;
+  rctx->proj = c->dirty_proj;
   *rctx = (R3D_Ctx) {
     .arena = arena,
     // FIXME: Is this correct?
     .viewport = viewport,
-    .proj = rctx->proj,
-    .view = rctx->view,
+    .proj = c->dirty_proj,
+    .view = c->dirty_view,
     .lsms = {
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 0),
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 1),
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 2),
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, 3),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 0),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 1),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 2),
+      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 3),
     },
     //.cam_pos = (flags & R3D_FLAG_CASCADE_TEST) ? v3m(0,0,0) : cam_pos,
-    .cam_pos = cam_pos,
-    .light_dir = light_dir,
+    .cam_pos = cam_get_pos(c),
+    .light_dir = copt->light_dir,
     .rt = nullptr,
   };
 
@@ -730,22 +729,22 @@ R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, m4 view, m4 proj, v3 ca
 }
 
 
-R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, s32 cascade_idx, R3D_Ctx_Flags flags) {
-  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, view, proj, cam_pos, light_dir, flags);
+R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, s32 cascade_idx, R3D_Ctx_Flags flags) {
+  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
   pass->rt = &shadow_rt;
   pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
   pass->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
 
   //FIXME: Hack, because we only use (proj * view)
   pass->view = m4d(1.0),
-  pass->proj = r3d_calc_lsm_i(r3d_get_shadow_view_matrix(view, flags), viewport, light_dir, cascade_idx),
+  pass->proj = r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, cascade_idx),
 
   pass->cascade_idx = cascade_idx;
   return pass;
 }
 
-R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
-  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, view, proj, cam_pos, light_dir, flags);
+R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
+  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
   pass->rt = &offscreen_rt;
   return pass;
 }
@@ -763,11 +762,11 @@ void r3d_clear() {
   ogl_clear_depth(&shadow_rt);
 }
 
-R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, m4 view, m4 proj, v3 cam_pos, v3 light_dir, R3D_Ctx_Flags flags) {
+R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
   // Copy the offscreen (pass) RT's depth buffer to the transparent RT
   ogl_copy_depth_buffer(&offscreen_rt, &transparent_rt, viewport);
 
-  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, view, proj, cam_pos, light_dir, flags);
+  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
   pass->rt = &transparent_rt;
   return pass;
 }
