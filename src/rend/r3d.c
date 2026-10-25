@@ -651,9 +651,31 @@ void r3d_try_load_shaders(rect viewport) {
 
 }
 
+#define MAX_CASCADES 4
+
 // Fixed bounds for now
-v4 r3d_get_cascade_bounds() {
-  return v4m(20,30,40,100);
+f32 r3d_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
+  f32 bounds[MAX_CASCADES+1] = (f32[]){0.1,20,30,40,100};
+  switch(opt->split_policy) {
+    case CSM_SPLIT_UNIFORM:
+      return (c->near + cascade_idx*((c->far - c->near)/opt->cascade_count));
+    case CSM_SPLIT_LOGARITHMIC:
+      break;
+    case CSM_SPLIT_PRACTICAL:
+      break;
+    case CSM_SPLIT_MANUAL:
+      return bounds[cascade_idx];
+    case CSM_SPLIT_SDSM:
+      break;
+    default:
+      break;
+  }
+  assert(0);
+  return 0;
+}
+
+f32 r3d_get_cascade_split_far(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
+  return r3d_get_cascade_split_near(c, opt, cascade_idx+1);
 }
 
 color r3d_get_cascade_idx_color(s32 cascade_idx) {
@@ -680,23 +702,30 @@ color r3d_get_cascade_idx_color(s32 cascade_idx) {
 }
 
 
+// TODO: do we need to support this now?
+// If R3D_FLAG_CASCADE_TEST is set we just return a default view matrix for visualization purposes
+static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
+  //m4 shadow_view = (rflags & R3D_FLAG_CASCADE_TEST) ? m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0)) : view;
+  m4 shadow_view = view;
+  return shadow_view;
+}
+
 // FIXME: we should use a 'm4 proj' for the angle e.g, don't just do 45 degrees every time!
-m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index) {
-  v4 cascade_bounds = r3d_get_cascade_bounds();
-  f32 aspect = viewport.w/viewport.h;
-  m4 persp_mat = m4_persp(45, aspect, (index == 0) ? 0.1 : cascade_bounds.raw[index-1], cascade_bounds.raw[index]);
-  m4 lsm = lsm_from_vp(view, persp_mat, light_dir, 1.0);
+//m4 r3d_calc_lsm_i(Camera *cam, CSM_Opt *copt, rect viewport, s32 index) {
+m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index) {
+
+  f32 near_bound = r3d_get_cascade_split_near(rctx->cam, rctx->opt, index);
+  f32 far_bound = r3d_get_cascade_split_far(rctx->cam, rctx->opt, index);
+
+  f32 aspect = rctx->viewport.w/(f32)rctx->viewport.h;
+  m4 persp_mat = m4_persp(45, aspect, near_bound, far_bound);
+  m4 view = r3d_get_shadow_view_matrix(rctx->cam->dirty_view, 0);
+  m4 lsm = lsm_from_vp(view, persp_mat, rctx->opt->light_dir, 1.0);
 
   return lsm;
 }
 
 
-// If R3D_FLAG_CASCADE_TEST is set we just return a default view matrix for visualization purposes
-static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
-  //m4 shadow_view = (rflags & R3D_FLAG_CASCADE_TEST) ? m4d(1.0) : view;
-  m4 shadow_view = (rflags & R3D_FLAG_CASCADE_TEST) ? m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0)) : view;
-  return shadow_view;
-}
 
 ////////////////////////////////////
 // Context API! (More compact!)
@@ -704,26 +733,23 @@ static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
 
 R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
-  rctx->viewport = viewport;
-  rctx->view = c->dirty_view;
-  rctx->proj = c->dirty_proj;
   *rctx = (R3D_Ctx) {
     .arena = arena,
     // FIXME: Is this correct?
     .viewport = viewport,
     .proj = c->dirty_proj,
     .view = c->dirty_view,
-    .lsms = {
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 0),
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 1),
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 2),
-      r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, 3),
-    },
-    //.cam_pos = (flags & R3D_FLAG_CASCADE_TEST) ? v3m(0,0,0) : cam_pos,
     .cam_pos = cam_get_pos(c),
     .light_dir = copt->light_dir,
     .rt = nullptr,
+
+    // @CLEANUP CLEANUP CLEANUP
+    .cam = c,
+    .opt = copt,
   };
+  for (s32 cascade_idx = 0; cascade_idx < MAX_CASCADES; cascade_idx+=1) {
+    rctx->lsms[cascade_idx] = r3d_calc_lsm_i(rctx, cascade_idx);
+  }
 
   return rctx;
 }
@@ -733,11 +759,14 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
   R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
   pass->rt = &shadow_rt;
   pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
-  pass->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
 
   //FIXME: Hack, because we only use (proj * view)
-  pass->view = m4d(1.0),
-  pass->proj = r3d_calc_lsm_i(r3d_get_shadow_view_matrix(c->dirty_view, flags), viewport, copt->light_dir, cascade_idx),
+  pass->view = c->dirty_view;
+  pass->proj = r3d_calc_lsm_i(pass, cascade_idx);
+  pass->view = m4d(1.0);
+
+  // We set the viewport later because the original viewport (the real one) is used for calc_lsm_i, maybe pass it as argument instead
+  pass->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
 
   pass->cascade_idx = cascade_idx;
   return pass;
@@ -786,9 +815,11 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
     .proj = rctx->proj,
     .cam_pos = rctx->cam_pos,
     .light_dir = rctx->light_dir,
-    .cascade_bounds = r3d_get_cascade_bounds(),
     .cascade_idx = rctx->cascade_idx,
   };
+  for (s32 cascade_idx = 0; cascade_idx < MAX_CASCADES; cascade_idx+=1) {
+    pf_ubo.cascade_bounds.raw[cascade_idx] = r3d_get_cascade_split_far(rctx->cam, rctx->opt, cascade_idx);
+  }
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
 

@@ -38,29 +38,40 @@ typedef struct {
 } Uber_Vertex;
 
 typedef enum {
-  CSM_BOUND_LINEAR,
-  CSM_BOUND_LOGARITHMIC,
-  CSM_BOUND_DYNAMIC, // SDSM
-} CSM_Bound_Policy;
+  CSM_SPLIT_UNIFORM,
+  CSM_SPLIT_LOGARITHMIC,
+  CSM_SPLIT_PRACTICAL,
+  CSM_SPLIT_MANUAL,
+  CSM_SPLIT_SDSM, // SDSM
+} CSM_Split_Policy;
 
 typedef enum {
+  CSM_FIT_TIGHT,
   CSM_FIT_APPLY_ZMULT,
   CSM_FIT_ISECT_BVH,
 } CSM_Fitting_Flags;
 
 typedef struct {
+
+  // Fitting strategy
   f32 zmult;
-  CSM_Bound_Policy bound_policy;
   CSM_Fitting_Flags fflags;
-  s32 cascade_count;
+
+  // Split strategy
+  CSM_Split_Policy split_policy;
+  union {
+    f32 lambda;
+    v4 bounds;
+  };
   
+  s32 cascade_count;
   v3 light_dir;
 } CSM_Opt;
 
 static CSM_Opt csm_opt_default() {
   CSM_Opt default_options = (CSM_Opt) {
     .zmult = 1.0,
-    .bound_policy = CSM_BOUND_LINEAR,
+    .split_policy = CSM_SPLIT_MANUAL,
     .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
     .cascade_count = 4,
     .light_dir = v3_norm(v3m(0.1,1,1)),
@@ -89,6 +100,10 @@ typedef struct {
   v3 light_dir;
   s32 cascade_idx;
 
+
+  Camera *cam;
+  CSM_Opt *opt;
+
   Ogl_RT *rt;
 } R3D_Ctx;
 
@@ -114,8 +129,8 @@ void r3d_try_load_shaders(rect viewport);
 void r3d_do_postproc(rect viewport);
 
 // Just exposed for testing by game.c
-v4 r3d_get_cascade_bounds();
+v4 r3d_get_cascade_bounds(CSM_Opt *opt);
 color r3d_get_cascade_idx_color(s32 cascade_idx);
-m4 r3d_calc_lsm_i(m4 view, rect viewport, v3 light_dir, s32 index);
+//m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index);
 
 #endif

@@ -234,7 +234,7 @@ void game_render(struct Game_State *gs, float dt) {
   // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
 
   //v3 light_dir = v3_norm(v3m(0.2,1,-1));
-  v3 light_dir = v3_norm(v3m(0.1,1,1));
+  //v3 light_dir = v3_norm(v3m(0.1,1,1));
 
 #if 1
   ///////////////////////
@@ -314,8 +314,9 @@ void game_render(struct Game_State *gs, float dt) {
     r3dc_end(transparent_pass);
   }
 
+#if 0
   if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
-    v4 cascade_bounds = r3d_get_cascade_bounds();
+    v4 cascade_bounds = r3d_get_cascade_bounds(&csm_opt);
 
     R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, gs->rflags);
     for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
@@ -349,6 +350,7 @@ void game_render(struct Game_State *gs, float dt) {
     }
     r3dc_end(transparent_pass);
   }
+#endif
 
 #if 0
   // Draw the lantern (for testing)
