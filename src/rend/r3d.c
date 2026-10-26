@@ -22,9 +22,10 @@ static Ogl_RT transparent_rt;
 const char* transparent_fs= R"(#version 460 core
 layout(location = 0) out vec4 accum;
 layout(location = 1) out float reveal;
+#define MAX_CASCADES 4
 
 layout (std140) uniform PerFrameData { 
-  mat4 lsms[4];
+  mat4 lsms[MAX_CASCADES];
   mat4 view;
   mat4 proj;
   vec3 cam_pos;
@@ -58,7 +59,7 @@ in VS_OUT {
   vec3 binorm;
   vec2 tc[4];
   vec3 frag_pos_ws;
-  vec4 frag_pos_ls[4];
+  vec4 frag_pos_ls[MAX_CASCADES];
 } fs_in;
 
 uniform sampler2D base_color_tex;
@@ -76,6 +77,7 @@ void main() {
 )";
 
 const char* shadow_fs= R"(#version 460 core
+#define MAX_CASCADES 4
 layout(location = 0) out vec4 out_color;
 
 in VS_OUT {
@@ -87,11 +89,11 @@ in VS_OUT {
   vec3 binorm;
   vec2 tc[4];
   vec3 frag_pos_ws;
-  vec4 frag_pos_ls[4];
+  vec4 frag_pos_ls[MAX_CASCADES];
 } fs_in;
 
 layout (std140) uniform PerFrameData { 
-  mat4 lsms[4];
+  mat4 lsms[MAX_CASCADES];
   mat4 view;
   mat4 proj;
   vec3 cam_pos;
@@ -107,6 +109,8 @@ void main() {
 )";
 
 const char* uber_vs = R"(#version 460 core
+#define MAX_CASCADES 4
+
 layout(location=0)  in vec3 pos;
 layout(location=1)  in vec3 norm;
 layout(location=2)  in vec4 tang;
@@ -125,7 +129,7 @@ layout(location=11) in ivec4 joint_0;
 layout(location=12) in vec4 weight_0;
 
 layout (std140) uniform PerFrameData { 
-  mat4 lsms[4];
+  mat4 lsms[MAX_CASCADES];
   mat4 view;
   mat4 proj;
   vec3 cam_pos;
@@ -164,7 +168,7 @@ out VS_OUT {
   vec3 binorm;
   vec2 tc[4];
   vec3 frag_pos_ws;
-  vec4 frag_pos_ls[4];
+  vec4 frag_pos_ls[MAX_CASCADES];
 } vs_out;
 
 void main() { 
@@ -198,7 +202,7 @@ void main() {
   vs_out.view_dir = normalize(cam_pos.xyz - vs_out.wp.xyz);
 
   vs_out.frag_pos_ws = vec3(model_matrix * vec4(pos, 1.0));
-  for (int i = 0; i < 4; i+=1) {
+  for (int i = 0; i < MAX_CASCADES; i+=1) {
     vs_out.frag_pos_ls[i] = lsms[i] * vec4(vs_out.frag_pos_ws, 1.0);
   }
 }
@@ -206,11 +210,12 @@ void main() {
 
 // ref: https://www.rastertek.com/gl4linuxtut52.html
 const char* uber_fs= R"(#version 460 core
+#define MAX_CASCADES 4
 precision highp float;
 layout(location = 0) out vec4 out_color;
 
 layout (std140) uniform PerFrameData { 
-  mat4 lsms[4];
+  mat4 lsms[MAX_CASCADES];
   mat4 view;
   mat4 proj;
   vec3 cam_pos;
@@ -244,7 +249,7 @@ in VS_OUT {
   vec3 binorm;
   vec2 tc[4];
   vec3 frag_pos_ws;
-  vec4 frag_pos_ls[4];
+  vec4 frag_pos_ls[MAX_CASCADES];
 } fs_in;
 
 uniform sampler2D base_color_tex;
@@ -261,7 +266,7 @@ int get_cascade_layer(vec3 frag_pos_ws) {
   float depth_value = abs(frag_pos_vs.z);
   // Find the actual depth value
   int layer = -1;
-  for (int i = 0; i < 4; i+=1) {
+  for (int i = 0; i < MAX_CASCADES; i+=1) {
     if (depth_value < cascade_bounds[i]) {
       layer = i;
       break;
@@ -384,17 +389,17 @@ void main() {
 
 
   // For shadow map visualization
-  vec3 modifier = vec3(0.0);
+  vec3 layer_color = vec3(0.0);
 #if 0
   int layer = get_cascade_layer(fs_in.frag_pos_ws);
-  if (layer == 0) { modifier = vec3(1.0,0.0,0.0); }
-  if (layer == 1) { modifier = vec3(0.0,1.0,0.0); }
-  if (layer == 2) { modifier = vec3(0.0,0.0,1.0); }
-  if (layer == 3) { modifier = vec3(1.0,1.0,1.0); }
+  if (layer == 0) { layer_color = 0.3*vec3(1.0,0.0,0.0); }
+  if (layer == 1) { layer_color = 0.3*vec3(0.0,1.0,0.0); }
+  if (layer == 2) { layer_color = 0.3*vec3(0.0,0.0,1.0); }
+  if (layer == 3) { layer_color = 0.3*vec3(1.0,1.0,1.0); }
 #endif
 
   float shadow = shadow_calc(fs_in.frag_pos_ws);
-  out_color.rgb = color.rgb * (1.0 - shadow) + (1.0 - shadow) * modifier;
+  out_color.rgb = color.rgb * (1.0 - shadow) + (1.0 - shadow) * layer_color;
   out_color.a = color.a;
 }
 )";
@@ -503,7 +508,7 @@ void main() {
 
 
 typedef struct {
-  m4 lsms[4];
+  m4 lsms[MAX_CASCADES];
   m4 view;
   m4 proj;
   v3 cam_pos;
@@ -651,18 +656,21 @@ void r3d_try_load_shaders(rect viewport) {
 
 }
 
-#define MAX_CASCADES 4
-
 // Fixed bounds for now
 f32 r3d_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
   f32 bounds[MAX_CASCADES+1] = (f32[]){0.1,20,30,40,100};
+
+  f32 t = (f32)cascade_idx / opt->cascade_count;
+  f32 uniform_split = c->near + (c->far - c->near)*t;
+  f32 logarithmic_split = c->near * pow_f32(c->far / c->near, t);
+
   switch(opt->split_policy) {
     case CSM_SPLIT_UNIFORM:
-      return (c->near + cascade_idx*((c->far - c->near)/opt->cascade_count));
+      return uniform_split;
     case CSM_SPLIT_LOGARITHMIC:
-      break;
+      return logarithmic_split;
     case CSM_SPLIT_PRACTICAL:
-      break;
+      return opt->lambda * logarithmic_split + (1.0 - opt->lambda) * uniform_split;
     case CSM_SPLIT_MANUAL:
       return bounds[cascade_idx];
     case CSM_SPLIT_SDSM:
@@ -714,18 +722,16 @@ static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
 //m4 r3d_calc_lsm_i(Camera *cam, CSM_Opt *copt, rect viewport, s32 index) {
 m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index) {
 
-  f32 near_bound = r3d_get_cascade_split_near(rctx->cam, rctx->opt, index);
-  f32 far_bound = r3d_get_cascade_split_far(rctx->cam, rctx->opt, index);
+  f32 near_bound = r3d_get_cascade_split_near(&rctx->cam, &rctx->opt, index);
+  f32 far_bound = r3d_get_cascade_split_far(&rctx->cam, &rctx->opt, index);
 
   f32 aspect = rctx->viewport.w/(f32)rctx->viewport.h;
   m4 persp_mat = m4_persp(45, aspect, near_bound, far_bound);
-  m4 view = r3d_get_shadow_view_matrix(rctx->cam->dirty_view, 0);
-  m4 lsm = lsm_from_vp(view, persp_mat, rctx->opt->light_dir, 1.0);
+  m4 view = r3d_get_shadow_view_matrix(rctx->cam.dirty_view, 0);
+  m4 lsm = lsm_from_vp(view, persp_mat, rctx->opt.light_dir, rctx->opt.zmult);
 
   return lsm;
 }
-
-
 
 ////////////////////////////////////
 // Context API! (More compact!)
@@ -735,17 +741,10 @@ R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   *rctx = (R3D_Ctx) {
     .arena = arena,
-    // FIXME: Is this correct?
     .viewport = viewport,
-    .proj = c->dirty_proj,
-    .view = c->dirty_view,
-    .cam_pos = cam_get_pos(c),
-    .light_dir = copt->light_dir,
     .rt = nullptr,
-
-    // @CLEANUP CLEANUP CLEANUP
-    .cam = c,
-    .opt = copt,
+    .cam = *c,
+    .opt = *copt,
   };
   for (s32 cascade_idx = 0; cascade_idx < MAX_CASCADES; cascade_idx+=1) {
     rctx->lsms[cascade_idx] = r3d_calc_lsm_i(rctx, cascade_idx);
@@ -761,9 +760,9 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
   pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
 
   //FIXME: Hack, because we only use (proj * view)
-  pass->view = c->dirty_view;
-  pass->proj = r3d_calc_lsm_i(pass, cascade_idx);
-  pass->view = m4d(1.0);
+  m4 proj = r3d_calc_lsm_i(pass, cascade_idx);
+  pass->cam.dirty_view = m4d(1.0);
+  pass->cam.dirty_proj = proj;
 
   // We set the viewport later because the original viewport (the real one) is used for calc_lsm_i, maybe pass it as argument instead
   pass->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
@@ -811,14 +810,14 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
     .lsms[1] = rctx->lsms[1],
     .lsms[2] = rctx->lsms[2],
     .lsms[3] = rctx->lsms[3],
-    .view = rctx->view,
-    .proj = rctx->proj,
-    .cam_pos = rctx->cam_pos,
-    .light_dir = rctx->light_dir,
+    .view = rctx->cam.dirty_view,
+    .proj = rctx->cam.dirty_proj,
+    .cam_pos = cam_get_pos(&rctx->cam),
+    .light_dir = rctx->opt.light_dir,
     .cascade_idx = rctx->cascade_idx,
   };
   for (s32 cascade_idx = 0; cascade_idx < MAX_CASCADES; cascade_idx+=1) {
-    pf_ubo.cascade_bounds.raw[cascade_idx] = r3d_get_cascade_split_far(rctx->cam, rctx->opt, cascade_idx);
+    pf_ubo.cascade_bounds.raw[cascade_idx] = r3d_get_cascade_split_far(&rctx->cam, &rctx->opt, cascade_idx);
   }
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }

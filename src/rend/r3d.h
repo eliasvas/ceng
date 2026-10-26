@@ -6,6 +6,8 @@
 #include "ogl.h"
 #include "camera.h"
 
+#define MAX_CASCADES 4
+
 //typedef FRZ_Vertex Tri_Vertex;
 //#define TRI_VERTEX_VARG(vt) vt.pos.x, vt.pos.y, vt.pos.z
 
@@ -71,9 +73,13 @@ typedef struct {
 static CSM_Opt csm_opt_default() {
   CSM_Opt default_options = (CSM_Opt) {
     .zmult = 1.0,
-    .split_policy = CSM_SPLIT_MANUAL,
+    //.split_policy = CSM_SPLIT_MANUAL,
+    //.split_policy = CSM_SPLIT_LOGARITHMIC,
+    //.split_policy = CSM_SPLIT_UNIFORM,
+    .split_policy = CSM_SPLIT_PRACTICAL,
+    .lambda = 0.5,
     .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
-    .cascade_count = 4,
+    .cascade_count = MAX_CASCADES,
     .light_dir = v3_norm(v3m(0.1,1,1)),
   };
 
@@ -93,18 +99,15 @@ typedef enum {
 typedef struct {
   Arena *arena;
   rect viewport;
-  m4 view;
-  m4 proj;
-  m4 lsms[4];
-  v3 cam_pos;
-  v3 light_dir;
   s32 cascade_idx;
 
-
-  Camera *cam;
-  CSM_Opt *opt;
+  Camera cam;
+  CSM_Opt opt;
+  // Not really needed right?
+  m4 lsms[MAX_CASCADES];
 
   Ogl_RT *rt;
+
 } R3D_Ctx;
 
 void r3d_clear();
