@@ -136,4 +136,7 @@ v4 r3d_get_cascade_bounds(CSM_Opt *opt);
 color r3d_get_cascade_idx_color(s32 cascade_idx);
 //m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index);
 
+// Trash
+void r3d_test_compute();
+
 #endif

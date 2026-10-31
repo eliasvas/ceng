@@ -1,6 +1,7 @@
 // TODO: Maybe we can make a macro like OGL_SCOPY(..) to shallow copy and be able to use Bundles/RTs as caches!
 // FIXME: The example needs some work ok? maybe it should be a function so it gets compiled every time for checking
 // TODO: Stencil, do we need anything for stencil in the API?
+// TODO: put compute shadrs under a flag..
 
 /* 
 ogl - a minimal OpenGL abstraction layer - eliasvas
@@ -348,6 +349,14 @@ typedef struct {
   Ogl_Blend_State blend_state[OGL_MAX_RENDER_TARGET_ATTACHMENTS];
   Ogl_Dyn_State dyn_state;
 } Ogl_Render_Bundle;
+      
+// This is a great resource on compute: https://antongerdelan.net/opengl/compute.html
+typedef struct {
+  Ogl_Shader sp;
+  Ogl_Uniform_Buffer_Slot ubos[OGL_MAX_UNIFORM_BUFFERS];
+  Ogl_Tex_Slot            textures[OGL_MAX_ACTIVE_TEXTURES];
+} Ogl_Compute_Bundle;
+
 
 #ifndef OGL_IMPLEMENTATION
 
@@ -362,7 +371,6 @@ typedef struct {
   Ogl_Buf ogl_buf_make(Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
   void ogl_buf_deinit(Ogl_Buf *buf);
 
-  bool ogl_shader_init(Ogl_Shader *shader, const char* vertex_source, const char* fragment_source);
   Ogl_Shader ogl_shader_make(const char* vertex_source, const char* fragment_source);
   void ogl_shader_deinit(Ogl_Shader *shader);
 
@@ -372,9 +380,10 @@ typedef struct {
   void ogl_tex_deinit(Ogl_Tex *tex);
 
   void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count);
-void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t index_count);
+  void ogl_render_bundle_draw_indexed(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t index_count);
   void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
 
+  void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int wz);
 
   void ogl_rt_init(Ogl_RT *rt, uint32_t w, uint32_t h, Ogl_RT_Attachment_Flags aflags, Ogl_Tex_Format format, bool add_depth);
   void ogl_rt_deinit(Ogl_RT *rt);
@@ -517,7 +526,8 @@ static GLuint ogl_prim_type_to_gl_type(Ogl_Prim_Type prim) {
 }
 
 static GLuint ogl_create_gl_shader(const char* vertex_source, const char* fragment_source) {
-  GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+  // Yes we hack compute shaders in..
+  GLuint vs = glCreateShader((fragment_source == nullptr) ? GL_COMPUTE_SHADER : GL_VERTEX_SHADER);
   glShaderSource(vs, 1, &vertex_source, NULL);
   glCompileShader(vs);
   int success;
@@ -529,19 +539,22 @@ static GLuint ogl_create_gl_shader(const char* vertex_source, const char* fragme
     return 0;
   }
 
-  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fs, 1, &fragment_source, NULL);
-  glCompileShader(fs);
-  glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
-  if (!success) {
-    glGetShaderInfoLog(fs, 512, NULL, info_log);
-    fprintf(stderr, "Fragment shader compilation failed:\n%s\n", info_log);
-    return 0;
+  GLuint fs = 0;
+  if (fragment_source) {
+    fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fs, 1, &fragment_source, NULL);
+    glCompileShader(fs);
+    glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
+    if (!success) {
+      glGetShaderInfoLog(fs, 512, NULL, info_log);
+      fprintf(stderr, "Fragment shader compilation failed:\n%s\n", info_log);
+      return 0;
+    }
   }
 
   GLuint sp = glCreateProgram();
   glAttachShader(sp, vs);
-  glAttachShader(sp, fs);
+  if (fragment_source) glAttachShader(sp, fs);
   glLinkProgram(sp);
   glGetProgramiv(sp, GL_LINK_STATUS, &success);
   if (!success) {
@@ -551,7 +564,7 @@ static GLuint ogl_create_gl_shader(const char* vertex_source, const char* fragme
   }
 
   glDeleteShader(vs);
-  glDeleteShader(fs);
+  if (fragment_source) glDeleteShader(fs);
 
   return sp;
 }
@@ -582,17 +595,12 @@ static void ogl_shader_detect_vert_attribs(Ogl_Shader *shader) {
 }
 
 
-bool ogl_shader_init(Ogl_Shader *shader, const char* vertex_source, const char* fragment_source) {
-  shader->impl_state = ogl_create_gl_shader(vertex_source, fragment_source);
-  if (shader->impl_state){
-    ogl_shader_detect_vert_attribs(shader);
-  }
-  return (shader->impl_state != 0);
-}
-
 Ogl_Shader ogl_shader_make(const char* vertex_source, const char* fragment_source) {
   Ogl_Shader shader = {0};
-  assert(ogl_shader_init(&shader, vertex_source, fragment_source)); 
+  shader.impl_state = ogl_create_gl_shader(vertex_source, fragment_source);
+  if (shader.impl_state){
+    ogl_shader_detect_vert_attribs(&shader);
+  }
   return shader;
 }
 
@@ -965,6 +973,24 @@ void ogl_clear(Ogl_RT *rt) {
   ogl_clear_color(rt,0, (float[]){0,0,0,0});
   ogl_clear_depth(rt);
 }
+
+  // TODO: Also bind SSBOs and stuff
+  void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int wz) {
+    glUseProgram(bundle->sp.impl_state);
+    // Bind the texture(s)
+    for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+      Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
+      if (tex->tex.impl_state) {
+        glActiveTexture(GL_TEXTURE0+slot_idx);
+        glBindImageTexture(slot_idx, tex->tex.impl_state, 0, 
+            GL_FALSE, 0, GL_READ_WRITE, 
+            ogl_tex_format_to_gl_internal_format(tex->tex.format)
+        );
+      }
+    }
+    glDispatchCompute((GLuint)wx, (GLuint)wy, (GLuint)wz);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+  }
  
 
 #endif

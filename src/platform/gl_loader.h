@@ -148,6 +148,9 @@ typedef void (*glActiveTexturePROC) (GLenum texture);
 typedef void (*glDebugMessageCallbackPROC)(void* callback, const void*);
 typedef void (*glDrawElementsPROC)(GLenum mode, GLsizei count, GLenum type, const void * indices);
 typedef void (*glDrawBuffersPROC)(GLsizei n, const GLenum *bufs);
+typedef void (*glDispatchComputePROC)(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z);
+typedef void (*glMemoryBarrierPROC)(GLbitfield barriers);
+typedef void (*glBindImageTexturePROC)(GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format);
 typedef void (*glClearPROC)(GLbitfield mask);
 typedef void (*glClearColorPROC)(GLfloat, GLfloat, GLfloat, GLfloat);
 typedef void (*glClearBufferfvPROC)(GLenum buffer, GLint drawbuffer, const GLfloat *value);
@@ -205,6 +208,9 @@ glActiveTexturePROC glActiveTextureSRC = NULL;
 glDebugMessageCallbackPROC glDebugMessageCallbackSRC = NULL;
 glDrawElementsPROC glDrawElementsSRC = NULL;
 glDrawBuffersPROC glDrawBuffersSRC = NULL;
+glDispatchComputePROC glDispatchComputeSRC = NULL;
+glMemoryBarrierPROC glMemoryBarrierSRC = NULL;
+glBindImageTexturePROC glBindImageTextureSRC = NULL;
 glClearPROC glClearSRC = NULL;
 glClearColorPROC glClearColorSRC = NULL;
 glClearBufferfvPROC glClearBufferfvSRC = NULL;
@@ -261,6 +267,9 @@ glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 #define glDebugMessageCallback glDebugMessageCallbackSRC
 #define glDrawElements glDrawElementsSRC
 #define glDrawBuffers glDrawBuffersSRC
+#define glDispatchCompute glDispatchComputeSRC
+#define glMemoryBarrier glMemoryBarrierSRC
+#define glBindImageTexture glBindImageTextureSRC
 #define glClear glClearSRC
 #define glClearColor glClearColorSRC
 #define glClearBufferfv glClearBufferfvSRC
@@ -326,6 +335,9 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glDebugMessageCallback);
     GL_PROC_DEF(proc, glDrawElements);
     GL_PROC_DEF(proc, glDrawBuffers);
+    GL_PROC_DEF(proc, glDispatchCompute);
+    GL_PROC_DEF(proc, glMemoryBarrier);
+    GL_PROC_DEF(proc, glBindImageTexture);
     GL_PROC_DEF(proc, glClear);
     GL_PROC_DEF(proc, glClearColor);
     GL_PROC_DEF(proc, glClearBufferfv);

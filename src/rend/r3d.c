@@ -14,6 +14,19 @@ static Ogl_RT shadow_rt;
 static Ogl_Render_Bundle uber_transparent_bundle = {};
 static Ogl_RT transparent_rt;
 
+static Ogl_Compute_Bundle basic_compute_bundle;
+
+
+const char* basic_cs = R"(#version 460 core
+layout(local_size_x = 1, local_size_y = 1) in;
+layout (rgba32f, binding = 0) uniform image2D img;
+
+void main() {
+  ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+  vec4 pixel = vec4(pixel_coords/vec2(512), 0.0, 1.0);
+  imageStore(img, pixel_coords, pixel);
+}
+)";
 
 ////////////////////////////////////////////////
 // 3D Shader
@@ -538,6 +551,14 @@ typedef struct {
 } Material_UBO;
 
 void r3d_try_load_shaders(rect viewport) {
+  if (basic_compute_bundle.sp.impl_state == 0) {
+    basic_compute_bundle = (Ogl_Compute_Bundle) {
+      .sp = ogl_shader_make(basic_cs, nullptr),
+      .textures = {
+        [0] = { .name = "rwtex", .tex = ogl_tex_make(nullptr, 512, 512, OGL_TEX_FORMAT_RGBA32F, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+      },
+    };
+  }
   if (postproc_bundle.sp.impl_state == 0) {
     ogl_rt_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
 
@@ -1164,5 +1185,9 @@ void r3d_do_postproc(rect viewport) {
   postproc_bundle.textures[1] = (Ogl_Tex_Slot){ .name = "accum", .tex = transparent_rt.attachments[0] };
   postproc_bundle.textures[2] = (Ogl_Tex_Slot){ .name = "reveal", .tex = transparent_rt.attachments[1] };
   ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+}
+
+void r3d_test_compute() {
+  ogl_compute_bundle_dispatch(&basic_compute_bundle, 512, 512, 1);
 }
 
