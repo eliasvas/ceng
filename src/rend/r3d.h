@@ -137,6 +137,6 @@ color r3d_get_cascade_idx_color(s32 cascade_idx);
 //m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index);
 
 // Trash
-void r3d_test_compute();
+void r3d_compute_depth_range();
 
 #endif

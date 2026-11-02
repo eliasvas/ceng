@@ -28,6 +28,7 @@
 ## Graphics
     - Shader permutations https://therealmjp.github.io/posts/shader-permutations-part1/
     - we could support immediate trivertices and convert to default ubervertex on demand, for simpler API
+    - in ogl.h we have is_image for binding to compute shaders image2d's its DUMB just have shader introspection here..
 
 ## Assets
     - With current handling textures can't be customized (e.g different magFilter)

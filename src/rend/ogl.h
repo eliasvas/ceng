@@ -2,6 +2,7 @@
 // FIXME: The example needs some work ok? maybe it should be a function so it gets compiled every time for checking
 // TODO: Stencil, do we need anything for stencil in the API?
 // TODO: put compute shadrs under a flag..
+// TODO: SSBO support for render and compute bundles
 
 /* 
 ogl - a minimal OpenGL abstraction layer - eliasvas
@@ -211,6 +212,7 @@ typedef struct {
 
 typedef enum {
   OGL_TEX_FORMAT_R32F,
+  OGL_TEX_FORMAT_R32UI,
   OGL_TEX_FORMAT_R8U,
   OGL_TEX_FORMAT_RGBA8U,
   OGL_TEX_FORMAT_RGBA32F,
@@ -302,6 +304,8 @@ typedef struct {
 typedef struct {
   const char *name;
   Ogl_Tex tex;
+  // Ugly as fuck!
+  b32 is_image;
 } Ogl_Tex_Slot;
 
 //FIXME: Should probably name it oglRT
@@ -376,6 +380,7 @@ typedef struct {
 
   bool ogl_tex_init(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params);
   void ogl_tex_update(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  void ogl_tex_read(Ogl_Tex *tex, u8 *data);
   Ogl_Tex ogl_tex_make(uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params);
   void ogl_tex_deinit(Ogl_Tex *tex);
 
@@ -642,6 +647,7 @@ static GLuint ogl_to_gl_depth_func(Ogl_Depth_Func dfunc) {
 static bool ogl_tex_format_is_floating_point(Ogl_Tex_Format format) {
   switch (format) {
     case OGL_TEX_FORMAT_R32F:    return true;
+    case OGL_TEX_FORMAT_R32UI:   return false;
     case OGL_TEX_FORMAT_R8U:     return false;
     case OGL_TEX_FORMAT_RGBA8U:  return false;
     case OGL_TEX_FORMAT_RGBA32F: return true;
@@ -653,6 +659,7 @@ static GLint ogl_tex_format_to_gl_internal_format(Ogl_Tex_Format format) {
   switch (format) {
     case OGL_TEX_FORMAT_R8U:     return GL_R8;
     case OGL_TEX_FORMAT_R32F:    return GL_R32F;
+    case OGL_TEX_FORMAT_R32UI:   return GL_R32UI;
     case OGL_TEX_FORMAT_RGBA8U:  return GL_RGBA8;
     case OGL_TEX_FORMAT_RGBA32F: return GL_RGBA32F;
     case OGL_TEX_FORMAT_RGBA16F: return GL_RGBA16F;
@@ -663,15 +670,28 @@ static GLint ogl_tex_format_to_gl_format(Ogl_Tex_Format format) {
   switch (format) {
     case OGL_TEX_FORMAT_R8U:     return GL_RED;
     case OGL_TEX_FORMAT_R32F:    return GL_RED;
+    case OGL_TEX_FORMAT_R32UI:   return GL_RED_INTEGER;
     case OGL_TEX_FORMAT_RGBA8U:  return GL_RGBA;
     case OGL_TEX_FORMAT_RGBA32F: return GL_RGBA;
     case OGL_TEX_FORMAT_RGBA16F: return GL_RGBA;
   }
 }
 
+static GLint ogl_tex_format_to_gl_type(Ogl_Tex_Format format) {
+  switch (format) {
+    case OGL_TEX_FORMAT_R8U:     return GL_UNSIGNED_BYTE;
+    case OGL_TEX_FORMAT_R32F:    return GL_FLOAT;
+    case OGL_TEX_FORMAT_R32UI:   return GL_UNSIGNED_INT;
+    case OGL_TEX_FORMAT_RGBA8U:  return GL_UNSIGNED_BYTE;
+    case OGL_TEX_FORMAT_RGBA32F: return GL_FLOAT;
+    case OGL_TEX_FORMAT_RGBA16F: return GL_FLOAT;
+  }
+}
+
 static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
   switch (format) {
     case OGL_TEX_FORMAT_R32F:    return 1;
+    case OGL_TEX_FORMAT_R32UI:   return 1;
     case OGL_TEX_FORMAT_R8U:     return 1;
     case OGL_TEX_FORMAT_RGBA8U:  return 4;
     case OGL_TEX_FORMAT_RGBA32F: return 4;
@@ -679,16 +699,26 @@ static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
   }
 }
 
+void ogl_tex_read(Ogl_Tex *tex, u8 *data) {
+  GLenum type = ogl_tex_format_to_gl_type(tex->format);
+  //GLint internal_format = ogl_tex_format_to_gl_internal_format(tex->format);
+  GLenum image_format = ogl_tex_format_to_gl_format(tex->format);
+
+  glBindTexture(GL_TEXTURE_2D, tex->impl_state);
+  //glTexImage2D(GL_TEXTURE_2D, 0, internal_format, w, h, 0, image_format, type, data);
+  glGetTexImage(GL_TEXTURE_2D, 0, image_format, type, data);
+}
 
 void ogl_tex_update(Ogl_Tex *tex, uint8_t *data, uint32_t w, uint32_t h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   tex->format = format;
   tex->width  = w;
   tex->height = h;
 
-  GLenum type = (ogl_tex_format_is_floating_point(tex->format)) ? GL_FLOAT : GL_UNSIGNED_BYTE;
+  GLenum type = ogl_tex_format_to_gl_type(tex->format);
   GLint internal_format = ogl_tex_format_to_gl_internal_format(tex->format);
   GLenum image_format = ogl_tex_format_to_gl_format(tex->format);
 
+  // FIXME: Is this even needed anymore?????
   // FIXME: This is pretty much a hack to make depth buffers easily w/ this
   if (params.is_depth) {
     type = GL_UNSIGNED_INT_24_8;
@@ -974,23 +1004,32 @@ void ogl_clear(Ogl_RT *rt) {
   ogl_clear_depth(rt);
 }
 
-  // TODO: Also bind SSBOs and stuff
-  void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int wz) {
-    glUseProgram(bundle->sp.impl_state);
-    // Bind the texture(s)
-    for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
-      Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
-      if (tex->tex.impl_state) {
-        glActiveTexture(GL_TEXTURE0+slot_idx);
+void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int wz) { glUseProgram(bundle->sp.impl_state);
+  // Bind the texture(s)
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+    Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
+    if (tex->tex.impl_state) {
+      glActiveTexture(GL_TEXTURE0+slot_idx);
+      if (tex->is_image) {
         glBindImageTexture(slot_idx, tex->tex.impl_state, 0, 
             GL_FALSE, 0, GL_READ_WRITE, 
             ogl_tex_format_to_gl_internal_format(tex->tex.format)
         );
+      } else {
+        // FIXME: is_image is DUMB
+        glActiveTexture(GL_TEXTURE0+slot_idx);
+        glBindTexture(GL_TEXTURE_2D, tex->tex.impl_state);
+        GLuint tex_loc = glGetUniformLocation(bundle->sp.impl_state, tex->name); 
+        // NOTE: If we first bind all the textures to slots we can populate a c-style sampler array via glUniform1iv and passing all slot_idx's
+        GLint *samplers = (GLint[]) {(GLint)slot_idx};
+        glUniform1iv(tex_loc, 1, samplers);
       }
     }
-    glDispatchCompute((GLuint)wx, (GLuint)wy, (GLuint)wz);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   }
+  glDispatchCompute((GLuint)wx, (GLuint)wy, (GLuint)wz);
+  glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+ glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
+}
  
 
 #endif

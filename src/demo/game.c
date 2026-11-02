@@ -236,8 +236,6 @@ void game_render(struct Game_State *gs, float dt) {
   //v3 light_dir = v3_norm(v3m(0.2,1,-1));
   //v3 light_dir = v3_norm(v3m(0.1,1,1));
 
-  r3d_test_compute();
-
 #if 1
   ///////////////////////
   // SHADOW PASS
@@ -378,6 +376,7 @@ void game_render(struct Game_State *gs, float dt) {
   r3d_imm_model(gs->game_viewport, hero_model, vp, hero_model_matrix, cam_pos, gs->time_sec, 1, CLR_WHITE);
 #endif
 
+  r3d_compute_depth_range();
 
   ///////////////////////
   // BVH PASS 

@@ -14,17 +14,24 @@ static Ogl_RT shadow_rt;
 static Ogl_Render_Bundle uber_transparent_bundle = {};
 static Ogl_RT transparent_rt;
 
-static Ogl_Compute_Bundle basic_compute_bundle;
+static Ogl_Compute_Bundle depth_range_compute_bundle;
 
 
-const char* basic_cs = R"(#version 460 core
+const char* depth_range_cs = R"(#version 460 core
 layout(local_size_x = 1, local_size_y = 1) in;
-layout (rgba32f, binding = 0) uniform image2D img;
+layout (r32ui, binding = 0) uniform uimage2D drange;
+layout(binding = 1) uniform sampler2D depth_buffer;
+
+const ivec2 drange_min_tc = ivec2(0,0);
+const ivec2 drange_max_tc = ivec2(1,0);
 
 void main() {
-  ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
-  vec4 pixel = vec4(pixel_coords/vec2(512), 0.0, 1.0);
-  imageStore(img, pixel_coords, pixel);
+    ivec2 pixel_coords = ivec2(gl_WorkGroupID.xy);
+    float depth = texelFetch(depth_buffer, pixel_coords, 0).x;
+    if (depth >= 1.0) return; // We don't handle the glCleared values
+    uint k = floatBitsToUint(depth);
+    imageAtomicMin(drange, drange_min_tc, k);
+    imageAtomicMax(drange, drange_max_tc, k);
 }
 )";
 
@@ -551,11 +558,11 @@ typedef struct {
 } Material_UBO;
 
 void r3d_try_load_shaders(rect viewport) {
-  if (basic_compute_bundle.sp.impl_state == 0) {
-    basic_compute_bundle = (Ogl_Compute_Bundle) {
-      .sp = ogl_shader_make(basic_cs, nullptr),
+  if (depth_range_compute_bundle.sp.impl_state == 0) {
+    depth_range_compute_bundle = (Ogl_Compute_Bundle) {
+      .sp = ogl_shader_make(depth_range_cs, nullptr),
       .textures = {
-        [0] = { .name = "rwtex", .tex = ogl_tex_make(nullptr, 512, 512, OGL_TEX_FORMAT_RGBA32F, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+        [0] = { .name = "drange", .tex = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
       },
     };
   }
@@ -1187,7 +1194,19 @@ void r3d_do_postproc(rect viewport) {
   ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
 }
 
-void r3d_test_compute() {
-  ogl_compute_bundle_dispatch(&basic_compute_bundle, 512, 512, 1);
+void r3d_compute_depth_range() {
+  uint data[2] = { 0xFFFFFFFFu, 0u };
+  ogl_tex_update(&depth_range_compute_bundle.textures[0].tex, (u8*)data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
+  depth_range_compute_bundle.textures[0].is_image = true; 
+  depth_range_compute_bundle.textures[1] = 
+    (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
+  ogl_compute_bundle_dispatch(&depth_range_compute_bundle, 
+      offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
+
+
+  uint data2[2];
+  ogl_tex_read(&depth_range_compute_bundle.textures[0].tex, (u8*)data2);
+  assert(data);
+  printf("%f %f\n", *(f32*)&(data2[0]), *(f32*)&(data2[1]));
 }
 
