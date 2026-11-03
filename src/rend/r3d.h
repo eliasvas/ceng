@@ -65,6 +65,7 @@ typedef struct {
     f32 lambda;
     v4 bounds;
   };
+  v2 drange;
   
   s32 cascade_count;
   v3 light_dir;
@@ -76,7 +77,8 @@ static CSM_Opt csm_opt_default() {
     //.split_policy = CSM_SPLIT_MANUAL,
     //.split_policy = CSM_SPLIT_LOGARITHMIC,
     //.split_policy = CSM_SPLIT_UNIFORM,
-    .split_policy = CSM_SPLIT_PRACTICAL,
+    //.split_policy = CSM_SPLIT_PRACTICAL,
+    .split_policy = CSM_SPLIT_SDSM,
     .lambda = 0.5,
     .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
     .cascade_count = MAX_CASCADES,
@@ -137,6 +139,6 @@ color r3d_get_cascade_idx_color(s32 cascade_idx);
 //m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index);
 
 // Trash
-void r3d_compute_depth_range();
+v2 r3d_compute_depth_range(R3D_Ctx *rctx);
 
 #endif

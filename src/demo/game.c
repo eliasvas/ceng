@@ -15,6 +15,7 @@ extern f32 _blend_factor;
 
 extern void platform_play_sound(const char *sound);
 
+static CSM_Opt csm_opt;
 void game_init(struct Game_State *gs) {
   gs->world = arena_push_array(gs->persistent_arena, World, 1);
   world_init(gs->world);
@@ -125,6 +126,9 @@ void game_init(struct Game_State *gs) {
     gs->cam.aspect = gs->game_viewport.w / gs->game_viewport.h;
   }
 
+  // FIXME: put this inside game state ok???
+  // Initialize CSM_Opt
+  csm_opt = csm_opt_default();
 }
 
 extern void r2d_try_load_shaders();
@@ -167,7 +171,6 @@ void game_update(struct Game_State *gs, float dt) {
 }
 
 void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
-  CSM_Opt csm_opt = csm_opt_default();
 
   s32 line_count_per_axis = cell_count + 1; 
   Uber_Vertex *points = arena_push_array(gs->frame_arena, Uber_Vertex, line_count_per_axis*4);
@@ -204,7 +207,6 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 void game_render(struct Game_State *gs, float dt) {
   r3d_clear();
   cam_update(&gs->cam, &gs->input, dt);
-  CSM_Opt csm_opt = csm_opt_default();
 
   // Do world picking..
   b32 lmb_pressed = input_mkey_pressed(&gs->input, INPUT_MOUSE_LMB);
@@ -291,6 +293,11 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
+  v2 drange = r3d_compute_depth_range(opaque_pass);
+  csm_opt.drange = drange;
+  printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
+
+
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
@@ -376,8 +383,6 @@ void game_render(struct Game_State *gs, float dt) {
   r3d_imm_model(gs->game_viewport, hero_model, vp, hero_model_matrix, cam_pos, gs->time_sec, 1, CLR_WHITE);
 #endif
 
-  r3d_compute_depth_range();
-
   ///////////////////////
   // BVH PASS 
   ///////////////////////
@@ -409,6 +414,18 @@ void game_render(struct Game_State *gs, float dt) {
     BVH_Node *root = gs->world->bvh_root;
     assert(root);
     world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, gs->cam.dirty_vp, gs->game_viewport, bvh_rc);
+
+#if 0
+    // Render the total cascade SDSM is seeing
+    color c = CLR_WHITE;
+    c.a = 0.8;
+    f32 aspect = bvh_pass->viewport.w/(f32)bvh_pass->viewport.h;
+    m4 persp_mat = m4_persp(45, aspect, csm_opt.drange.x, csm_opt.drange.y);
+    //r3dc_imm_frustum(bvh_pass, gs->cam.dirty_view, persp_mat, c, OGL_PRIM_TYPE_LINE);
+    r3dc_imm_frustum(bvh_pass, m4d(1.0), persp_mat, c, OGL_PRIM_TYPE_LINE);
+#endif
+
+
     r3dc_end(bvh_pass);
   }
 

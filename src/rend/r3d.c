@@ -410,7 +410,7 @@ void main() {
 
   // For shadow map visualization
   vec3 layer_color = vec3(0.0);
-#if 0
+#if 1
   int layer = get_cascade_layer(fs_in.frag_pos_ws);
   if (layer == 0) { layer_color = 0.3*vec3(1.0,0.0,0.0); }
   if (layer == 1) { layer_color = 0.3*vec3(0.0,1.0,0.0); }
@@ -691,6 +691,8 @@ f32 r3d_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
   f32 t = (f32)cascade_idx / opt->cascade_count;
   f32 uniform_split = c->near + (c->far - c->near)*t;
   f32 logarithmic_split = c->near * pow_f32(c->far / c->near, t);
+  f32 logarithmic_split_sdsm = opt->drange.x * pow_f32(opt->drange.y / opt->drange.x, t);
+  //f32 linear_split_sdsm = opt->drange.x + (opt->drange.y - opt->drange.x)*t;
 
   switch(opt->split_policy) {
     case CSM_SPLIT_UNIFORM:
@@ -702,6 +704,7 @@ f32 r3d_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
     case CSM_SPLIT_MANUAL:
       return bounds[cascade_idx];
     case CSM_SPLIT_SDSM:
+      return logarithmic_split_sdsm;
       break;
     default:
       break;
@@ -1194,7 +1197,7 @@ void r3d_do_postproc(rect viewport) {
   ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
 }
 
-void r3d_compute_depth_range() {
+v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
   uint data[2] = { 0xFFFFFFFFu, 0u };
   ogl_tex_update(&depth_range_compute_bundle.textures[0].tex, (u8*)data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
   depth_range_compute_bundle.textures[0].is_image = true; 
@@ -1204,9 +1207,23 @@ void r3d_compute_depth_range() {
       offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
 
 
-  uint data2[2];
+  u32 data2[2];
   ogl_tex_read(&depth_range_compute_bundle.textures[0].tex, (u8*)data2);
   assert(data);
-  printf("%f %f\n", *(f32*)&(data2[0]), *(f32*)&(data2[1]));
+  // Converting to view space??
+  f32 min_z = *(f32*)&(data2[0]);
+  f32 max_z = *(f32*)&(data2[1]);
+  //printf("%f %f\n", min_z, max_z);
+
+  v4 ndc_min = v4m(0,0,min_z*2.0 - 1.0, 1);
+  v4 coords_min = unproject(ndc_min, m4_inv(rctx->cam.dirty_proj));
+  //printf("min.z = %f\n", -coords_min.z);
+ 
+  //v4 ndc_max = v4m(0,0,1,1);//max_z*2.0 - 1.0, 1);
+  v4 ndc_max = v4m(0,0,max_z*2.0 - 1.0, 1);
+  v4 coords_max = unproject(ndc_max, m4_inv(rctx->cam.dirty_proj));
+  //printf("max.z = %f\n", -coords_max.z);
+
+  return v2m(-coords_min.z, -coords_max.z);
 }
 
