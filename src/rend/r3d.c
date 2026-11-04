@@ -410,7 +410,7 @@ void main() {
 
   // For shadow map visualization
   vec3 layer_color = vec3(0.0);
-#if 1
+#if 0
   int layer = get_cascade_layer(fs_in.frag_pos_ws);
   if (layer == 0) { layer_color = 0.3*vec3(1.0,0.0,0.0); }
   if (layer == 1) { layer_color = 0.3*vec3(0.0,1.0,0.0); }
@@ -585,8 +585,6 @@ void r3d_try_load_shaders(rect viewport) {
   }
 
   if (uber_bundle.sp.impl_state == 0) {
-
-#define SHADOWMAP_DIM 1024
     ogl_rt_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_A0, OGL_TEX_FORMAT_RGBA32F, true);
 
     uber_bundle = (Ogl_Render_Bundle){

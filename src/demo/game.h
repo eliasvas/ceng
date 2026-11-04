@@ -37,8 +37,11 @@ struct Game_State {
   Asset_Id block_model_asset_id;
   Asset_Id hero_model_asset_id;
   Asset_Id coin_model_asset_id;
-  Asset_Id building_a_asset_id;
 
+  Asset_Id building_a_asset_id;
+  Asset_Id building_b_asset_id;
+  Asset_Id pavement_asset_id;
+  Asset_Id road_asset_id;
 
   // For GLTF testing only
   Asset_Id fox_model_asset_id;

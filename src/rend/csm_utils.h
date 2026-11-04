@@ -4,6 +4,7 @@
 #include "base/base_inc.h"
 #include "camera.h"
 
+#define SHADOWMAP_DIM 4096 
 #define CSM_MAX_CASCADES 4
 
 typedef enum {
@@ -11,7 +12,7 @@ typedef enum {
   CSM_SPLIT_LOGARITHMIC,
   CSM_SPLIT_PRACTICAL,
   CSM_SPLIT_MANUAL,
-  CSM_SPLIT_SDSM, // SDSM
+  CSM_SPLIT_SDSM,
 } CSM_Split_Policy;
 
 typedef enum {
@@ -26,7 +27,7 @@ typedef struct {
   f32 zmult;
   CSM_Fitting_Flags fflags;
 
-  // Split strategy
+  // Split strategy (lambda can be used for practical, bounds idk where..)
   CSM_Split_Policy split_policy;
   union {
     f32 lambda;
@@ -45,12 +46,12 @@ static CSM_Opt csm_opt_default() {
     //.split_policy = CSM_SPLIT_MANUAL,
     //.split_policy = CSM_SPLIT_LOGARITHMIC,
     //.split_policy = CSM_SPLIT_UNIFORM,
-    //.split_policy = CSM_SPLIT_PRACTICAL,
-    .split_policy = CSM_SPLIT_SDSM,
+    .split_policy = CSM_SPLIT_PRACTICAL,
+    //.split_policy = CSM_SPLIT_SDSM,
     .lambda = 0.5,
     .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
     .cascade_count = CSM_MAX_CASCADES,
-    .light_dir = v3_norm(v3m(0.1,1,1)),
+    .light_dir = v3_norm(v3m(0.3,1,1)),
   };
 
   return default_options;

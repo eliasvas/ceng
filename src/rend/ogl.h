@@ -1019,6 +1019,7 @@ void ogl_clear(Ogl_RT *rt) {
 }
 
 void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int wz) { glUseProgram(bundle->sp.impl_state);
+  // FIXME: duplication with pipeline bind
   // Bind the texture(s)
   for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];

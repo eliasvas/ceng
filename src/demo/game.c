@@ -62,33 +62,74 @@ void game_init(struct Game_State *gs) {
   entity_add_child(hero, hero_rgun);
 #endif
 
-#if 1 
-  // Make the ground
-  Entity *ground = setup_wall(world_add(gs->world), transform_make(v3m(0,-1.01,0), QUAT_ONE, v3m(8,2,8)));
-  ground->tint = CLR_BLUE_DAMSELFLY;
+  // Make the terrain
+  v2 dim = v2m(3, 5);
+  for (s32 i = 0; i < dim.x; i+=1) {
+    for (s32 j = 0; j < dim.y; j+=1) {
+      v3 t = v3m(1,0,1);
+      t = v3_sub(t, v3m(2*dim.x*0.5,0,2*dim.y*0.5));
+      t = v3_add(t, v3m(2*i,0,2*j));
+      transform building_xform = transform_make(t, QUAT_ONE, v3m(2,8,2));
 
-  // Make the pillars
-  for (s32 width = -3; width <= 3; width+=6) {
-    for (s32 height = 0; height < 3; height +=1) {
-      transform pillar_xform = transform_make(v3m(width, height+0.5, 1), QUAT_ONE, v3_one);
-      Entity *pillar = setup_wall(world_add(gs->world), pillar_xform);
-      pillar->tint = CLR_BLUE_HIPPIE;
-      pillar->tint.a = 0.5;
+      Entity *building = setup_wall(world_add(gs->world), building_xform);
+      building->asset_id = gs->pavement_asset_id;
+      if (i == (dim.x-1)/2.0 && j != 0 && j != dim.y-1) {
+        building->asset_id = gs->road_asset_id;
+
+        building->box.col_off.y = 0.0;
+        building->box.col_hdim.y = 0.02;
+      } else {
+        building->asset_id = gs->pavement_asset_id;
+        building->box.col_off.y = 0.2;
+        building->box.col_hdim.y = 0.2;
+      }
+      building->has_asset = true;
+      building->tint = v4m(1,1,1,1);
     }
   }
-#endif
 
-  // Make a building
+  // Make some houses
   {
-    //transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.5,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
-    //transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
-    transform building_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3m(1,3,1));
+    quat rot = quat_from_axis_angle((axis_angle){.axis = v3m(0,1,0), .angle = M_PI/2});
+    transform building_xform = transform_make(v3m(-2,0.4,-1), rot, v3m(2,2,2));
+    Entity *building = setup_wall(world_add(gs->world), building_xform);
+    building->asset_id = gs->building_b_asset_id;
+    building->has_asset = true;
+    building->tint = v4m(1,1,1,1);
+    building->box.col_off.y = 1.35;
+    building->box.col_hdim.y *= 1.5;
+  }
+
+  {
+    quat rot = quat_from_axis_angle((axis_angle){.axis = v3m(0,1,0), .angle = M_PI/2});
+    transform building_xform = transform_make(v3m(-2,0.4,2), rot, v3m(2,2,2));
     Entity *building = setup_wall(world_add(gs->world), building_xform);
     building->asset_id = gs->building_a_asset_id;
     building->has_asset = true;
     building->tint = v4m(1,1,1,1);
-    //building->tint = CLR_BLUE_DAMSELFLY;
+    building->box.col_off.y = 1.0;
   }
+
+  {
+    transform building_xform = transform_make(v3m(0,0.4,-4.5), QUAT_ONE, v3m(2,2,2));
+    Entity *building = setup_wall(world_add(gs->world), building_xform);
+    building->asset_id = gs->building_a_asset_id;
+    building->has_asset = true;
+    building->tint = v4m(1,0.3,0.4,0.1);
+    building->box.col_off.y = 1.0;
+  }
+
+#if 0
+  {
+    transform building_xform = transform_make(v3m(0,0,0), QUAT_ONE, v3m(1,4,1));
+    Entity *building = setup_wall(world_add(gs->world), building_xform);
+    building->asset_id = gs->pavement_asset_id;
+    building->has_asset = true;
+    building->tint = v4m(1,1,1,1);
+    building->box.col_off.y = 0.1;
+    building->box.col_hdim.y = 0.1;
+  }
+#endif
 
   gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
@@ -136,7 +177,7 @@ void game_update(struct Game_State *gs, float dt) {
   // Make a test coin if none exists
   if (world_count_entities(gs->world, ENTITY_KIND_COIN) == 0) {
     gs->score += 1;
-    transform coin_xform = transform_make(v3m(4*brand_f01()-2.0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
+    transform coin_xform = transform_make(v3m(0,0.0,4*brand_f01()-2.0), QUAT_ONE, v3_multf(v3_one, 1));
     Entity *test_coin = setup_coin(world_add(gs->world), coin_xform);
 
     test_coin->has_asset = true;
@@ -267,7 +308,7 @@ void game_render(struct Game_State *gs, float dt) {
   // Calculate the depth range (only for opaque pass right now)
   v2 drange = r3d_compute_depth_range(opaque_pass);
   gs->csm_opt.drange = drange;
-  printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
+  //printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
 
 
   ///////////////////////
