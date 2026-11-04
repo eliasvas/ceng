@@ -15,7 +15,6 @@ extern f32 _blend_factor;
 
 extern void platform_play_sound(const char *sound);
 
-static CSM_Opt csm_opt;
 void game_init(struct Game_State *gs) {
   gs->world = arena_push_array(gs->persistent_arena, World, 1);
   world_init(gs->world);
@@ -93,31 +92,8 @@ void game_init(struct Game_State *gs) {
 
   gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
-#if 0 
-  // Base64 test.. no reason
-  base_64_test(gs->frame_arena);
-#endif
-
-#if 0
-  // str8 test..
-  str8_list list = {};
-  str8_list_push_back(gs->persistent_arena, &list, STR8L("One"));
-  str8_list_push_back(gs->persistent_arena, &list, STR8L("Two"));
-  str8_list_push_back(gs->persistent_arena, &list, STR8L("Three"));
-  str8_list_push_back(gs->persistent_arena, &list, STR8L("Four"));
-  str8_list_pop_front(&list);
-  str8_list_pop_back(&list);
-  str8 joined = str8_list_join(gs->persistent_arena, &list);
-  assert(str8_eq(joined, STR8L("TwoThree")));
-  str8_list_print(&list);
-#endif
-
-  // serializer test
-  //wserializer_test(gs->persistent_arena);
-
   gs->rflags = R3D_FLAG_RENDER_GRID | R3D_FLAG_RENDER_MESHES | R3D_FLAG_RENDER_BOXES;
   gs->enabled_cascades= (0x1 | 0x2 | 0x4 | 0x8);
-
 
   // Make the camera
   {
@@ -128,7 +104,7 @@ void game_init(struct Game_State *gs) {
 
   // FIXME: put this inside game state ok???
   // Initialize CSM_Opt
-  csm_opt = csm_opt_default();
+  gs->csm_opt = csm_opt_default();
 }
 
 extern void r2d_try_load_shaders();
@@ -198,7 +174,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
 
   // Render the grid
-  R3D_Ctx* grid_pass = r3dc_begin_forward(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, 0);
+  R3D_Ctx* grid_pass = r3dc_begin_forward(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, 0);
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
   r3dc_end(grid_pass);
 
@@ -233,18 +209,14 @@ void game_render(struct Game_State *gs, float dt) {
 
   // Rest of the frame
   world_update_render(gs, dt);
-  // Draw the entity render commands.. TODO: Add asset_ids to be possible, also make cube default mesh right? or make cube/col explicit
 
-  //v3 light_dir = v3_norm(v3m(0.2,1,-1));
-  //v3 light_dir = v3_norm(v3m(0.1,1,1));
 
-#if 1
   ///////////////////////
   // SHADOW PASS
   ///////////////////////
   for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
     if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
-    R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, cascade_idx, 0);
+    R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx, 0);
 
     ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
@@ -262,13 +234,12 @@ void game_render(struct Game_State *gs, float dt) {
     }
     r3dc_end(shadow_pass);
   } 
-#endif
 
 
   ///////////////////////
   // OPAQUE PASS
   ///////////////////////
-  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, gs->rflags);
+  R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
   for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
     Entity_Render_Command *cmd = &gs->world->rcommands[i];
     m4 world = m4_from_transform(cmd->xform);
@@ -293,16 +264,17 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
+  // Calculate the depth range (only for opaque pass right now)
   v2 drange = r3d_compute_depth_range(opaque_pass);
-  csm_opt.drange = drange;
-  printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
+  gs->csm_opt.drange = drange;
+  //printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
 
 
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
   if (gs->rflags & R3D_FLAG_RENDER_MESHES) {
-    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, gs->rflags);
+    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
       m4 world = m4_from_transform(cmd->xform);
@@ -359,36 +331,12 @@ void game_render(struct Game_State *gs, float dt) {
   }
 #endif
 
-#if 0
-  // Draw the lantern (for testing)
-  m4 lantern_model = m4_mult(m4_translate(v3m(0,0,0)), m4_scale(v3m(0.2,0.2,0.2)));
-  Model_Info *lantern = AM_GET(gs->lantern_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, lantern, vp, lantern_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
-
-  // Draw the fox (for testing)
-  m4 fox_model= m4_mult(
-      m4_translate(v3m(1,0,0)),
-      m4_mult(
-        m4_from_quat(quat_from_axis_angle((axis_angle){v3m(1,0,0), 0})), 
-        m4_scale(v3m(0.05,0.05,0.05))
-      )
-  );
-  Model_Info *fox = AM_GET(gs->fox_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, fox, vp, fox_model, cam_pos, gs->time_sec, 0, CLR_WHITE);
-
-
-
-  m4 hero_model_matrix = m4_scale(v3m(3,3,3));
-  Model_Info *hero_model = AM_GET(gs->hero_model_asset_id, model);
-  r3d_imm_model(gs->game_viewport, hero_model, vp, hero_model_matrix, cam_pos, gs->time_sec, 1, CLR_WHITE);
-#endif
-
   ///////////////////////
   // BVH PASS 
   ///////////////////////
 
   if (gs->rflags & R3D_FLAG_BVH_TEST) {
-    R3D_Ctx *bvh_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, 0);
+    R3D_Ctx *bvh_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, 0);
     // BVH vis
     BVH_Render_Config bvh_rc = {
       .colors = {
@@ -425,7 +373,6 @@ void game_render(struct Game_State *gs, float dt) {
     r3dc_imm_frustum(bvh_pass, m4d(1.0), persp_mat, c, OGL_PRIM_TYPE_LINE);
 #endif
 
-
     r3dc_end(bvh_pass);
   }
 
@@ -434,12 +381,11 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   r3d_do_postproc(gs->game_viewport);
 
-
   ///////////////////////
   // Origin Grid
   ///////////////////////
   if (gs->rflags & R3D_FLAG_RENDER_GRID) {
-    R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, gs->rflags);
+    R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
     ogl_copy_depth_buffer(opaque_pass->rt, 0, gs->game_viewport);
     game_draw_origin_grid(gs, 10);
     r3dc_end(opaque_pass);

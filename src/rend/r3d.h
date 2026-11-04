@@ -5,8 +5,7 @@
 #include "frz/frz.h"
 #include "ogl.h"
 #include "camera.h"
-
-#define MAX_CASCADES 4
+#include "csm_utils.h"
 
 //typedef FRZ_Vertex Tri_Vertex;
 //#define TRI_VERTEX_VARG(vt) vt.pos.x, vt.pos.y, vt.pos.z
@@ -40,55 +39,6 @@ typedef struct {
 } Uber_Vertex;
 
 typedef enum {
-  CSM_SPLIT_UNIFORM,
-  CSM_SPLIT_LOGARITHMIC,
-  CSM_SPLIT_PRACTICAL,
-  CSM_SPLIT_MANUAL,
-  CSM_SPLIT_SDSM, // SDSM
-} CSM_Split_Policy;
-
-typedef enum {
-  CSM_FIT_TIGHT,
-  CSM_FIT_APPLY_ZMULT,
-  CSM_FIT_ISECT_BVH,
-} CSM_Fitting_Flags;
-
-typedef struct {
-
-  // Fitting strategy
-  f32 zmult;
-  CSM_Fitting_Flags fflags;
-
-  // Split strategy
-  CSM_Split_Policy split_policy;
-  union {
-    f32 lambda;
-    v4 bounds;
-  };
-  v2 drange;
-  
-  s32 cascade_count;
-  v3 light_dir;
-} CSM_Opt;
-
-static CSM_Opt csm_opt_default() {
-  CSM_Opt default_options = (CSM_Opt) {
-    .zmult = 1.0,
-    //.split_policy = CSM_SPLIT_MANUAL,
-    //.split_policy = CSM_SPLIT_LOGARITHMIC,
-    //.split_policy = CSM_SPLIT_UNIFORM,
-    //.split_policy = CSM_SPLIT_PRACTICAL,
-    .split_policy = CSM_SPLIT_SDSM,
-    .lambda = 0.5,
-    .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
-    .cascade_count = MAX_CASCADES,
-    .light_dir = v3_norm(v3m(0.1,1,1)),
-  };
-
-  return default_options;
-}
-
-typedef enum {
   R3D_FLAG_RENDER_GRID   = (0x1 << 0),
   R3D_FLAG_RENDER_MESHES = (0x1 << 1),
   R3D_FLAG_RENDER_BOXES  = (0x1 << 2),
@@ -106,7 +56,7 @@ typedef struct {
   Camera cam;
   CSM_Opt opt;
   // Not really needed right?
-  m4 lsms[MAX_CASCADES];
+  m4 lsms[CSM_MAX_CASCADES];
 
   Ogl_RT *rt;
 

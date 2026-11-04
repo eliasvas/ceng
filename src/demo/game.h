@@ -58,9 +58,7 @@ struct Game_State {
 
   // 3D scene stuff should be here or no?
   Camera cam;
-  //m4 view;
-  //m4 proj;
-  //v3 cam_pos;
+  CSM_Opt csm_opt;
   R3D_Ctx_Flags rflags;
   u32 enabled_cascades;
 };

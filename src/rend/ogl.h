@@ -271,6 +271,9 @@ typedef struct {
   // This is kind-of a hack, we use Ogl_Vert_Attrib's and don't fill most fields
   Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
 
+  //FIXME: Have here for each bind index the texture type (image/texture)
+  //FIXME: or maybe have it for the pipelien as well.. uuhhh
+
   uint64_t impl_state;
 } Ogl_Shader;
 

@@ -17,6 +17,7 @@
 ## GLTF
     - Sparse accessors
     - Can't animated multiple characters becaus elocal transforms inside ModelInfo
+    - Make a way to load transparent materials
 
 ## Physics
 
@@ -39,6 +40,8 @@
 ## General
     - When loading fucking 3d models compute the bounded box and make the world matrix transform so that center of aabb is (0,0)
     - We could.. specify this though, some models shouldn't be messed with the offset is important many times (center = true?)
-    - Delete!!!! all the projviewvp bullshido in game_render / game_update
-
+    - Make a way to only statically link everything?
+    - C99?
+## ogl
+    - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]
 ## demo

@@ -528,7 +528,7 @@ void main() {
 
 
 typedef struct {
-  m4 lsms[MAX_CASCADES];
+  m4 lsms[CSM_MAX_CASCADES];
   m4 view;
   m4 proj;
   v3 cam_pos;
@@ -586,7 +586,7 @@ void r3d_try_load_shaders(rect viewport) {
 
   if (uber_bundle.sp.impl_state == 0) {
 
-#define SHADOWMAP_DIM 2048 
+#define SHADOWMAP_DIM 1024
     ogl_rt_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_A0, OGL_TEX_FORMAT_RGBA32F, true);
 
     uber_bundle = (Ogl_Render_Bundle){
@@ -684,62 +684,6 @@ void r3d_try_load_shaders(rect viewport) {
 
 }
 
-// Fixed bounds for now
-f32 r3d_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
-  f32 bounds[MAX_CASCADES+1] = (f32[]){0.1,20,30,40,100};
-
-  f32 t = (f32)cascade_idx / opt->cascade_count;
-  f32 uniform_split = c->near + (c->far - c->near)*t;
-  f32 logarithmic_split = c->near * pow_f32(c->far / c->near, t);
-  f32 logarithmic_split_sdsm = opt->drange.x * pow_f32(opt->drange.y / opt->drange.x, t);
-  //f32 linear_split_sdsm = opt->drange.x + (opt->drange.y - opt->drange.x)*t;
-
-  switch(opt->split_policy) {
-    case CSM_SPLIT_UNIFORM:
-      return uniform_split;
-    case CSM_SPLIT_LOGARITHMIC:
-      return logarithmic_split;
-    case CSM_SPLIT_PRACTICAL:
-      return opt->lambda * logarithmic_split + (1.0 - opt->lambda) * uniform_split;
-    case CSM_SPLIT_MANUAL:
-      return bounds[cascade_idx];
-    case CSM_SPLIT_SDSM:
-      return logarithmic_split_sdsm;
-      break;
-    default:
-      break;
-  }
-  assert(0);
-  return 0;
-}
-
-f32 r3d_get_cascade_split_far(Camera *c, CSM_Opt *opt, s32 cascade_idx) {
-  return r3d_get_cascade_split_near(c, opt, cascade_idx+1);
-}
-
-color r3d_get_cascade_idx_color(s32 cascade_idx) {
-  color c = CLR_WHITE;
-  switch (cascade_idx) {
-    case 0: 
-      c = CLR_BLUE_HIPPIE;
-      break; 
-    case 1: 
-      c = CLR_RED_RICH;
-      break;
-    case 2:
-      c = CLR_GREEN_EVA; 
-      break;
-    case 3:
-      c = CLR_PURPLE_C64; 
-      break;
-    default: 
-      c = CLR_WHITE;
-      break;
-  }
-  c.a = 0.5;
-  return c;
-}
-
 
 // TODO: do we need to support this now?
 // If R3D_FLAG_CASCADE_TEST is set we just return a default view matrix for visualization purposes
@@ -753,8 +697,8 @@ static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
 //m4 r3d_calc_lsm_i(Camera *cam, CSM_Opt *copt, rect viewport, s32 index) {
 m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index) {
 
-  f32 near_bound = r3d_get_cascade_split_near(&rctx->cam, &rctx->opt, index);
-  f32 far_bound = r3d_get_cascade_split_far(&rctx->cam, &rctx->opt, index);
+  f32 near_bound = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, index);
+  f32 far_bound = csm_get_cascade_split_far(&rctx->cam, &rctx->opt, index);
 
   f32 aspect = rctx->viewport.w/(f32)rctx->viewport.h;
   m4 persp_mat = m4_persp(45, aspect, near_bound, far_bound);
@@ -777,7 +721,7 @@ R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
     .cam = *c,
     .opt = *copt,
   };
-  for (s32 cascade_idx = 0; cascade_idx < MAX_CASCADES; cascade_idx+=1) {
+  for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
     rctx->lsms[cascade_idx] = r3d_calc_lsm_i(rctx, cascade_idx);
   }
 
@@ -847,8 +791,8 @@ void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
     .light_dir = rctx->opt.light_dir,
     .cascade_idx = rctx->cascade_idx,
   };
-  for (s32 cascade_idx = 0; cascade_idx < MAX_CASCADES; cascade_idx+=1) {
-    pf_ubo.cascade_bounds.raw[cascade_idx] = r3d_get_cascade_split_far(&rctx->cam, &rctx->opt, cascade_idx);
+  for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
+    pf_ubo.cascade_bounds.raw[cascade_idx] = csm_get_cascade_split_far(&rctx->cam, &rctx->opt, cascade_idx);
   }
   ogl_buf_update(buf, 0, &pf_ubo, 1, sizeof(pf_ubo));
 }
@@ -875,8 +819,6 @@ void r3d_set_def_material(m4 model, b32 is_unlit) {
   };
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 }
-
-
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
   Ogl_Render_Bundle *bundle = &uber_bundle; 
@@ -1198,21 +1140,27 @@ void r3d_do_postproc(rect viewport) {
 }
 
 v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
-  uint data[2] = { 0xFFFFFFFFu, 0u };
-  ogl_tex_update(&depth_range_compute_bundle.textures[0].tex, (u8*)data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
+  // 0. update drange tex to have [-1,0] range
+  uint initial_data[2] = { 0xFFFFFFFFu, 0u };
+  ogl_tex_update(&depth_range_compute_bundle.textures[0].tex, (u8*)initial_data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
+
+  // FIXME: I don't like this
   depth_range_compute_bundle.textures[0].is_image = true; 
+  //-----------------------
+
+  // 1. execute the compute shader to find actual drange(min,max)
   depth_range_compute_bundle.textures[1] = 
     (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
   ogl_compute_bundle_dispatch(&depth_range_compute_bundle, 
       offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
 
 
-  u32 data2[2];
-  ogl_tex_read(&depth_range_compute_bundle.textures[0].tex, (u8*)data2);
-  assert(data);
+  // 2. read back the texture and unproject min/max from ndc to view space
+  u32 drange[2];
+  ogl_tex_read(&depth_range_compute_bundle.textures[0].tex, (u8*)drange);
   // Converting to view space??
-  f32 min_z = *(f32*)&(data2[0]);
-  f32 max_z = *(f32*)&(data2[1]);
+  f32 min_z = *(f32*)&(drange[0]);
+  f32 max_z = *(f32*)&(drange[1]);
   //printf("%f %f\n", min_z, max_z);
 
   v4 ndc_min = v4m(0,0,min_z*2.0 - 1.0, 1);
