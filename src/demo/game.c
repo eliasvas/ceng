@@ -267,7 +267,7 @@ void game_render(struct Game_State *gs, float dt) {
   // Calculate the depth range (only for opaque pass right now)
   v2 drange = r3d_compute_depth_range(opaque_pass);
   gs->csm_opt.drange = drange;
-  //printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
+  printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
 
 
   ///////////////////////

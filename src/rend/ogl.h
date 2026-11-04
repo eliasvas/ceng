@@ -186,6 +186,12 @@ typedef struct {
   bool instanced;
 } Ogl_Vert_Attrib;
 
+typedef struct {
+  // This is kind-of a hack, we use Ogl_Vert_Attrib's and don't fill most fields
+  Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
+  uint64_t impl_state;
+} Ogl_Shader;
+
 typedef enum {
   OGL_TEX_FILTER_NEAREST,
   OGL_TEX_FILTER_LINEAR,
@@ -267,16 +273,6 @@ typedef struct {
   Ogl_Blend_Factor dfactor;
 } Ogl_Blend_State;
 
-typedef struct {
-  // This is kind-of a hack, we use Ogl_Vert_Attrib's and don't fill most fields
-  Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
-
-  //FIXME: Have here for each bind index the texture type (image/texture)
-  //FIXME: or maybe have it for the pipelien as well.. uuhhh
-
-  uint64_t impl_state;
-} Ogl_Shader;
-
 typedef enum { 
   OGL_DYN_STATE_FLAG_SCISSOR    = (0x1 << 0),
 } Ogl_Dyn_State_Flags;
@@ -307,9 +303,12 @@ typedef struct {
 typedef struct {
   const char *name;
   Ogl_Tex tex;
-  // Ugly as fuck!
-  b32 is_image;
 } Ogl_Tex_Slot;
+
+typedef struct {
+  const char *name;
+  Ogl_Tex img;
+} Ogl_Img_Slot;
 
 //FIXME: Should probably name it oglRT
 
@@ -349,6 +348,7 @@ typedef struct {
   Ogl_Vertex_Buffer_Slot  vbos[OGL_MAX_VERTEX_BUFFERS];
   Ogl_Uniform_Buffer_Slot ubos[OGL_MAX_UNIFORM_BUFFERS];
   Ogl_Tex_Slot            textures[OGL_MAX_ACTIVE_TEXTURES];
+  Ogl_Img_Slot            images[OGL_MAX_ACTIVE_TEXTURES];
 
   Ogl_RT rt;
 
@@ -362,6 +362,7 @@ typedef struct {
   Ogl_Shader sp;
   Ogl_Uniform_Buffer_Slot ubos[OGL_MAX_UNIFORM_BUFFERS];
   Ogl_Tex_Slot            textures[OGL_MAX_ACTIVE_TEXTURES];
+  Ogl_Img_Slot            images[OGL_MAX_ACTIVE_TEXTURES];
 } Ogl_Compute_Bundle;
 
 
@@ -601,7 +602,6 @@ static void ogl_shader_detect_vert_attribs(Ogl_Shader *shader) {
     };
   }
 }
-
 
 Ogl_Shader ogl_shader_make(const char* vertex_source, const char* fragment_source) {
   Ogl_Shader shader = {0};
@@ -902,6 +902,17 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
       glUniform1iv(tex_loc, 1, samplers);
     }
   }
+  // Bind the image(s)
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+    Ogl_Img_Slot *img = &bundle->images[slot_idx];
+    if (img->img.impl_state) {
+      glBindImageTexture(slot_idx, img->img.impl_state, 0, 
+          GL_FALSE, 0, GL_READ_WRITE, 
+          ogl_tex_format_to_gl_internal_format(img->img.format)
+      );
+    }
+  }
+
 
   // Bind the render target 
   if (bundle->rt.width * bundle->rt.height > 0) {
@@ -1013,20 +1024,21 @@ void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
     if (tex->tex.impl_state) {
       glActiveTexture(GL_TEXTURE0+slot_idx);
-      if (tex->is_image) {
-        glBindImageTexture(slot_idx, tex->tex.impl_state, 0, 
-            GL_FALSE, 0, GL_READ_WRITE, 
-            ogl_tex_format_to_gl_internal_format(tex->tex.format)
-        );
-      } else {
-        // FIXME: is_image is DUMB
-        glActiveTexture(GL_TEXTURE0+slot_idx);
-        glBindTexture(GL_TEXTURE_2D, tex->tex.impl_state);
-        GLuint tex_loc = glGetUniformLocation(bundle->sp.impl_state, tex->name); 
-        // NOTE: If we first bind all the textures to slots we can populate a c-style sampler array via glUniform1iv and passing all slot_idx's
-        GLint *samplers = (GLint[]) {(GLint)slot_idx};
-        glUniform1iv(tex_loc, 1, samplers);
-      }
+      glBindTexture(GL_TEXTURE_2D, tex->tex.impl_state);
+      GLuint tex_loc = glGetUniformLocation(bundle->sp.impl_state, tex->name); 
+      // NOTE: If we first bind all the textures to slots we can populate a c-style sampler array via glUniform1iv and passing all slot_idx's
+      GLint *samplers = (GLint[]) {(GLint)slot_idx};
+      glUniform1iv(tex_loc, 1, samplers);
+    }
+  }
+  // Bind the image(s)
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+    Ogl_Img_Slot *img = &bundle->images[slot_idx];
+    if (img->img.impl_state) {
+      glBindImageTexture(slot_idx, img->img.impl_state, 0, 
+          GL_FALSE, 0, GL_READ_WRITE, 
+          ogl_tex_format_to_gl_internal_format(img->img.format)
+      );
     }
   }
   glDispatchCompute((GLuint)wx, (GLuint)wy, (GLuint)wz);

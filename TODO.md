@@ -41,7 +41,9 @@
     - When loading fucking 3d models compute the bounded box and make the world matrix transform so that center of aabb is (0,0)
     - We could.. specify this though, some models shouldn't be messed with the offset is important many times (center = true?)
     - Make a way to only statically link everything?
-    - C99?
+    - I don't think its correct to have r3d exposed in game.c so much?
+
 ## ogl
     - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]
+
 ## demo

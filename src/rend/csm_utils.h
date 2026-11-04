@@ -112,4 +112,17 @@ static color csm_get_cascade_idx_color(s32 cascade_idx) {
   return c;
 }
 
+static m4 csm_calc_lsm_i(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 index) {
+  f32 near_bound = csm_get_cascade_split_near(camera, csm_opt, index);
+  f32 far_bound = csm_get_cascade_split_far(camera, csm_opt, index);
+
+  f32 aspect = viewport.w/(f32)viewport.h;
+  m4 persp_mat = m4_persp(camera->fovx, aspect, near_bound, far_bound);
+  m4 view = camera->dirty_view;
+  m4 lsm = lsm_from_vp(view, persp_mat, csm_opt->light_dir, csm_opt->zmult);
+
+  return lsm;
+}
+
+
 #endif

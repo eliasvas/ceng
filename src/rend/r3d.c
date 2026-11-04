@@ -19,8 +19,8 @@ static Ogl_Compute_Bundle depth_range_compute_bundle;
 
 const char* depth_range_cs = R"(#version 460 core
 layout(local_size_x = 1, local_size_y = 1) in;
-layout (r32ui, binding = 0) uniform uimage2D drange;
-layout(binding = 1) uniform sampler2D depth_buffer;
+layout (binding = 0, r32ui) uniform uimage2D drange;
+layout (binding = 0)uniform sampler2D depth_buffer;
 
 const ivec2 drange_min_tc = ivec2(0,0);
 const ivec2 drange_max_tc = ivec2(1,0);
@@ -561,8 +561,8 @@ void r3d_try_load_shaders(rect viewport) {
   if (depth_range_compute_bundle.sp.impl_state == 0) {
     depth_range_compute_bundle = (Ogl_Compute_Bundle) {
       .sp = ogl_shader_make(depth_range_cs, nullptr),
-      .textures = {
-        [0] = { .name = "drange", .tex = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+      .images = {
+        [0] = { .name = "drange", .img = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
       },
     };
   }
@@ -684,30 +684,6 @@ void r3d_try_load_shaders(rect viewport) {
 
 }
 
-
-// TODO: do we need to support this now?
-// If R3D_FLAG_CASCADE_TEST is set we just return a default view matrix for visualization purposes
-static m4 r3d_get_shadow_view_matrix(m4 view, R3D_Ctx_Flags rflags) {
-  //m4 shadow_view = (rflags & R3D_FLAG_CASCADE_TEST) ? m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0)) : view;
-  m4 shadow_view = view;
-  return shadow_view;
-}
-
-// FIXME: we should use a 'm4 proj' for the angle e.g, don't just do 45 degrees every time!
-//m4 r3d_calc_lsm_i(Camera *cam, CSM_Opt *copt, rect viewport, s32 index) {
-m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index) {
-
-  f32 near_bound = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, index);
-  f32 far_bound = csm_get_cascade_split_far(&rctx->cam, &rctx->opt, index);
-
-  f32 aspect = rctx->viewport.w/(f32)rctx->viewport.h;
-  m4 persp_mat = m4_persp(45, aspect, near_bound, far_bound);
-  m4 view = r3d_get_shadow_view_matrix(rctx->cam.dirty_view, 0);
-  m4 lsm = lsm_from_vp(view, persp_mat, rctx->opt.light_dir, rctx->opt.zmult);
-
-  return lsm;
-}
-
 ////////////////////////////////////
 // Context API! (More compact!)
 ////////////////////////////////////
@@ -722,7 +698,7 @@ R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
     .opt = *copt,
   };
   for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
-    rctx->lsms[cascade_idx] = r3d_calc_lsm_i(rctx, cascade_idx);
+    rctx->lsms[cascade_idx] = csm_calc_lsm_i(rctx->viewport, &rctx->cam, &rctx->opt, cascade_idx);
   }
 
   return rctx;
@@ -735,7 +711,7 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
   pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
 
   //FIXME: Hack, because we only use (proj * view)
-  m4 proj = r3d_calc_lsm_i(pass, cascade_idx);
+  m4 proj = csm_calc_lsm_i(pass->viewport, &pass->cam, &pass->opt, cascade_idx);
   pass->cam.dirty_view = m4d(1.0);
   pass->cam.dirty_proj = proj;
 
@@ -1142,14 +1118,10 @@ void r3d_do_postproc(rect viewport) {
 v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
   // 0. update drange tex to have [-1,0] range
   uint initial_data[2] = { 0xFFFFFFFFu, 0u };
-  ogl_tex_update(&depth_range_compute_bundle.textures[0].tex, (u8*)initial_data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
-
-  // FIXME: I don't like this
-  depth_range_compute_bundle.textures[0].is_image = true; 
-  //-----------------------
+  ogl_tex_update(&depth_range_compute_bundle.images[0].img, (u8*)initial_data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
 
   // 1. execute the compute shader to find actual drange(min,max)
-  depth_range_compute_bundle.textures[1] = 
+  depth_range_compute_bundle.textures[0] = 
     (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
   ogl_compute_bundle_dispatch(&depth_range_compute_bundle, 
       offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
@@ -1157,7 +1129,7 @@ v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
 
   // 2. read back the texture and unproject min/max from ndc to view space
   u32 drange[2];
-  ogl_tex_read(&depth_range_compute_bundle.textures[0].tex, (u8*)drange);
+  ogl_tex_read(&depth_range_compute_bundle.images[0].img, (u8*)drange);
   // Converting to view space??
   f32 min_z = *(f32*)&(drange[0]);
   f32 max_z = *(f32*)&(drange[1]);
