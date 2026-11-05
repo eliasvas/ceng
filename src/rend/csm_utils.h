@@ -4,7 +4,7 @@
 #include "base/base_inc.h"
 #include "camera.h"
 
-#define SHADOWMAP_DIM 4096 
+#define SHADOWMAP_DIM 1024
 #define CSM_MAX_CASCADES 4
 
 typedef enum {
@@ -19,13 +19,13 @@ typedef enum {
   CSM_FIT_TIGHT,
   CSM_FIT_APPLY_ZMULT,
   CSM_FIT_ISECT_BVH,
-} CSM_Fitting_Flags;
+} CSM_Fitting_Policy;
 
 typedef struct {
 
   // Fitting strategy
   f32 zmult;
-  CSM_Fitting_Flags fflags;
+  CSM_Fitting_Policy fpolicy;
 
   // Split strategy (lambda can be used for practical, bounds idk where..)
   CSM_Split_Policy split_policy;
@@ -42,14 +42,15 @@ typedef struct {
 // TODO: Make this configurable
 static CSM_Opt csm_opt_default() {
   CSM_Opt default_options = (CSM_Opt) {
-    .zmult = 1.0,
+    .zmult = 2.0,
     //.split_policy = CSM_SPLIT_MANUAL,
     //.split_policy = CSM_SPLIT_LOGARITHMIC,
     //.split_policy = CSM_SPLIT_UNIFORM,
-    .split_policy = CSM_SPLIT_PRACTICAL,
-    //.split_policy = CSM_SPLIT_SDSM,
+    //.split_policy = CSM_SPLIT_PRACTICAL,
+    .split_policy = CSM_SPLIT_SDSM,
     .lambda = 0.5,
-    .fflags = CSM_FIT_APPLY_ZMULT | CSM_FIT_ISECT_BVH,
+    .fpolicy = CSM_FIT_APPLY_ZMULT,
+    //.fpolicy = CSM_FIT_TIGHT,
     .cascade_count = CSM_MAX_CASCADES,
     .light_dir = v3_norm(v3m(0.3,1,1)),
   };
@@ -120,7 +121,7 @@ static m4 csm_calc_lsm_i(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 in
   f32 aspect = viewport.w/(f32)viewport.h;
   m4 persp_mat = m4_persp(camera->fovx, aspect, near_bound, far_bound);
   m4 view = camera->dirty_view;
-  m4 lsm = lsm_from_vp(view, persp_mat, csm_opt->light_dir, csm_opt->zmult);
+  m4 lsm = lsm_from_vp(view, persp_mat, csm_opt->light_dir, (csm_opt->fpolicy == CSM_FIT_APPLY_ZMULT) ? csm_opt->zmult : 1.0);
 
   return lsm;
 }

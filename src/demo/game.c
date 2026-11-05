@@ -443,7 +443,7 @@ void game_render(struct Game_State *gs, float dt) {
 
   static Gui_Scroll_Data sdata = {
     .item_px = 30, // FIXME change this to 60 to see some weird stuff..
-    .item_count = 9,
+    .item_count = 11,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
     .scroll_button_color = clr(0.5,1,0.4,1),
@@ -458,6 +458,8 @@ void game_render(struct Game_State *gs, float dt) {
 
     gui_flag_selection(STR8L("rflags:"), 30, &gs->rflags, 5);
     gui_flag_selection(STR8L("cascade:"), 30, &gs->enabled_cascades, 4);
+    gui_single_selection(STR8L("fit:"), 30, &gs->csm_opt.fpolicy, 3);
+    gui_single_selection(STR8L("split algo:"), 30, &gs->csm_opt.split_policy, 5);
 
     // Animation blending factor (for testing currently)
     gui_slider01(STR8L("blendFactor"), &_blend_factor, sdata.item_px, GUI_AXIS_X);
