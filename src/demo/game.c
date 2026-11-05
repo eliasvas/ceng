@@ -139,7 +139,6 @@ void game_init(struct Game_State *gs) {
   // Make the camera
   {
     gs->cam = cam_make_default();
-    gs->cam.xform.t = v3m(0,15,8);
     gs->cam.aspect = gs->game_viewport.w / gs->game_viewport.h;
   }
 
