@@ -4,6 +4,7 @@
 // FIXME: these globals should be in a shared place, maybe asset system ok?
 
 // Maybe asset management should happen somewhere..
+static Ogl_Render_Bundle fullscreen_bundle = {};
 static Ogl_Render_Bundle postproc_bundle = {};
 static Ogl_Render_Bundle uber_bundle = {};
 static Ogl_RT offscreen_rt;
@@ -409,7 +410,7 @@ void main() {
 
   // For shadow map visualization
   vec3 layer_color = vec3(0.0);
-#if 1
+#if 0
   int layer = get_cascade_layer(fs_in.frag_pos_ws);
   if (layer == 0) { layer_color = 0.3*vec3(1.0,0.0,0.0); }
   if (layer == 1) { layer_color = 0.3*vec3(0.0,1.0,0.0); }
@@ -426,33 +427,6 @@ void main() {
 ////////////////////////////////////////////////
 // FXAA Shader
 ////////////////////////////////////////////////
-
-const char* postproc_vs= R"(#version 460 core
-vec2 vertices[4] = vec2[](
-  vec2(-1,+1),
-  vec2(-1,-1),
-  vec2(+1,-1),
-  vec2(+1,+1)
-);
-
-vec2 tex_coords[4] = vec2[](
-  vec2(0.0,1.0),
-  vec2(0.0,0.0),
-  vec2(1.0,0.0),
-  vec2(1.0,1.0)
-);
-
-out VS_OUT {
-  vec2 tc;
-} vs_out;
-
-void main() { 
-  vs_out.tc = tex_coords[gl_VertexID];
-
-  vec2 pos = vertices[gl_VertexID];
-	gl_Position = vec4(pos, 0.0, 1.0);
-}
-)";
 
 const char* postproc_fs= R"(#version 460 core
 layout(location = 0) out vec4 out_color;
@@ -528,6 +502,53 @@ void main() {
 )";
 
 
+////////////////////////////////////////////////
+// Fullscreen Shader
+////////////////////////////////////////////////
+
+const char* fullscreen_vs = R"(#version 460 core
+vec2 vertices[4] = vec2[](
+  vec2(-1,+1),
+  vec2(-1,-1),
+  vec2(+1,-1),
+  vec2(+1,+1)
+);
+
+vec2 tex_coords[4] = vec2[](
+  vec2(0.0,1.0),
+  vec2(0.0,0.0),
+  vec2(1.0,0.0),
+  vec2(1.0,1.0)
+);
+
+out VS_OUT {
+  vec2 tc;
+} vs_out;
+
+void main() { 
+  vs_out.tc = tex_coords[gl_VertexID];
+
+  vec2 pos = vertices[gl_VertexID];
+	gl_Position = vec4(pos, 0.0, 1.0);
+}
+)";
+
+const char* fullscreen_fs= R"(#version 460 core
+layout(location = 0) out vec4 out_color;
+
+in VS_OUT {
+  vec2 tc;
+} fs_in;
+
+uniform sampler2D u_tex;
+
+vec3 sample_tex(vec2 p) { return texture(u_tex, p).xyz; }
+
+void main() {
+  out_color = vec4(sample_tex(fs_in.tc), 1.0);
+}
+)";
+
 typedef struct {
   m4 lsms[CSM_MAX_CASCADES];
   m4 view;
@@ -571,7 +592,23 @@ void r3d_try_load_shaders(rect viewport) {
     ogl_rt_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
 
     postproc_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(postproc_vs, postproc_fs),
+      .sp = ogl_shader_make(fullscreen_vs, postproc_fs),
+      .depth_state = (Ogl_Depth_State) {
+        .dwrite = OGL_DEPTH_WRITE_DISABLED,
+        .dfunc  = OGL_DFUNC_ALWAYS,
+      },
+      .dyn_state = (Ogl_Dyn_State){
+        //.viewport = viewport,
+        //.scissor  = scissor,
+        .flags    = OGL_DYN_STATE_FLAG_SCISSOR,
+        //.flags    = OGL_DYN_STATE_FLAG_BLEND | OGL_DYN_STATE_FLAG_SCISSOR, 
+      },
+    };
+  }
+
+  if (fullscreen_bundle.sp.impl_state == 0) {
+    fullscreen_bundle = (Ogl_Render_Bundle){
+      .sp = ogl_shader_make(fullscreen_vs, fullscreen_fs),
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_DISABLED,
         .dfunc  = OGL_DFUNC_ALWAYS,
@@ -1105,6 +1142,13 @@ void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, color c, Ogl_Prim_Type pr
   r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
 }
 
+void r3d_do_fullscreen(rect viewport, Ogl_Tex *tex) {
+  fullscreen_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
+  fullscreen_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
+  fullscreen_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = *tex };
+  ogl_render_bundle_draw(&fullscreen_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+}
+
 void r3d_do_postproc(rect viewport) {
   postproc_bundle.dyn_state.viewport = *(Ogl_rect *)&viewport;
   postproc_bundle.dyn_state.scissor = *(Ogl_rect *)&viewport;
@@ -1113,15 +1157,12 @@ void r3d_do_postproc(rect viewport) {
   postproc_bundle.textures[2] = (Ogl_Tex_Slot){ .name = "reveal", .tex = transparent_rt.attachments[1] };
   ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
 
-  // Render in the bottom the shadow texture
-
-  rect r = rec(1000,100,300,300);
-  postproc_bundle.dyn_state.viewport = *(Ogl_rect *)&r;
-  postproc_bundle.dyn_state.scissor = *(Ogl_rect *)&r;
-  postproc_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = shadow_rt.depth_attachment};
-  ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+  rect r = rec(1300,0,300,300);
+  r3d_do_fullscreen(r, &shadow_rt.depth_attachment);
 }
 
+// TODO: Shouldn't this be inside csm_utils or no?
+// Maybe we just refactor
 v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
   // 0. update drange tex to have [-1,0] range
   uint initial_data[2] = { 0xFFFFFFFFu, 0u };

@@ -1003,40 +1003,4 @@ static bbox bbox_from_frustum(frustum f) {
   return bounds;
 }
 
-// TODO: Fit within cascade's bvh stuff!
-static m4 lsm_from_vp(m4 view, m4 proj, bbox scene, v3 ld, f32 zmult) {
-  m4 vp = m4_mult(proj, view);
-
-  // 0. Calculate the view matrix for the LSM by finding the world frustum center
-  frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
-  v3 f_center = frustum_calc_center(&f);
-  m4 lsm_view = m4_look_at(v3_add(f_center, ld), f_center, v3m(0,1,0));
-
-  // 1. Calculate the ortho matrix by finding the view-space bounds of the frustum  
-  frustum fv = frustum_transform_points(f, lsm_view);
-  bbox bounds = bbox_from_frustum(fv);
-
-  // 2. Calculate the actual ortho matrix (+zMult)
-  //bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * zmult) : (bounds.min.z / zmult);
-  //bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / zmult) : (bounds.max.z * zmult);
-
-  if (zmult > 1.0) {
-    f32 z_padding = 10.0f;
-    bounds.min.z -= z_padding;
-    bounds.max.z += z_padding;
-  }
-
-  bbox s = bbox_transform(scene, lsm_view);
-  bounds.min.x = MAX(bounds.min.x, s.min.x);
-  bounds.max.x = MIN(bounds.max.x, s.max.x);
-
-  bounds.min.y = MAX(bounds.min.y, s.min.y);
-  bounds.max.y = MIN(bounds.max.y, s.max.y);
-
-  m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
-  m4 lsm = m4_mult(lsm_proj, lsm_view);
-
-  return lsm;
-}
-
 #endif
