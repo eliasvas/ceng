@@ -39,7 +39,6 @@ void cam_update(Camera *c, struct Input *input, f32 dt) {
   if (input_key_down(input, KEY_SCANCODE_Q)) { dist += dt*c->speed;}
   if (input_key_down(input, KEY_SCANCODE_E)) { dist -= dt*c->speed;}
 
-
   quat r_x = QUAT_ONE;
   {
     f32 dangle = 0;
@@ -50,8 +49,8 @@ void cam_update(Camera *c, struct Input *input, f32 dt) {
   quat r_y = QUAT_ONE;
   {
     f32 dangle = 0;
-    if (input_key_down(input, KEY_SCANCODE_W)) { dangle += dt * c->speed; }
-    if (input_key_down(input, KEY_SCANCODE_S)) { dangle -= dt * c->speed; }
+    if (input_key_down(input, KEY_SCANCODE_W)) { dangle -= dt * c->speed; }
+    if (input_key_down(input, KEY_SCANCODE_S)) { dangle += dt * c->speed; }
     r_y = quat_from_axis_angle((axis_angle){v3m(1,0,0), dangle});
   }
   quat rot = quat_mult(quat_mult(r_x, c->xform.r), r_y);

@@ -119,18 +119,6 @@ void game_init(struct Game_State *gs) {
     building->box.col_off.y = 1.0;
   }
 
-#if 0
-  {
-    transform building_xform = transform_make(v3m(0,0,0), QUAT_ONE, v3m(1,4,1));
-    Entity *building = setup_wall(world_add(gs->world), building_xform);
-    building->asset_id = gs->pavement_asset_id;
-    building->has_asset = true;
-    building->tint = v4m(1,1,1,1);
-    building->box.col_off.y = 0.1;
-    building->box.col_hdim.y = 0.1;
-  }
-#endif
-
   gui_init(gs->frame_arena, gs->def_font_id, &gs->input);
 
   gs->rflags = R3D_FLAG_RENDER_GRID | R3D_FLAG_RENDER_MESHES | R3D_FLAG_RENDER_BOXES;
@@ -153,6 +141,7 @@ void game_update(struct Game_State *gs, float dt) {
   // FIXME: game_viewport shouldn't be used anywhere right? except camera for update of aspect.. e- eventually..
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   gs->cam.aspect = gs->game_viewport.w/gs->game_viewport.h;
+
 
 
   // This is happening every frame.. maybe.. IDK
@@ -333,39 +322,20 @@ void game_render(struct Game_State *gs, float dt) {
     r3dc_end(transparent_pass);
   }
 
-#if 0
-  if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
-    v4 cascade_bounds = r3d_get_cascade_bounds(&csm_opt);
-
-    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &csm_opt, gs->rflags);
-    for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
-      if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
-      //m4 view = m4d(1.0);
-
-      // This visualizes the cascade AABB
-#if 0
-      frustum f = frustum_make_ndc();
-      f = frustum_transform_points(f, m4_inv(m4_mult(persp_mat, view)));
-      bbox box = bbox_from_frustum(f);
-      m4 box_model = m4_mult(m4_translate(bbox_get_center(box)), m4_scale(v3_multf(bbox_get_hdim(box),2)));
-      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, box_model);
-#endif
-
-      // This visualizes the actual oriented (via lD) volume of the cascade
-      color cc =  r3d_get_cascade_idx_color(cascade_idx);
-
-      m4 view = m4_look_at(v3m(0,0,0), v3m(0,0,-1), v3m(0,1,0));
-
 #if 1
-      f32 aspect = gs->game_viewport.w/gs->game_viewport.h;
-      m4 persp_mat = m4_persp(45, aspect, (cascade_idx == 0) ? 0.1 : cascade_bounds.raw[cascade_idx-1], cascade_bounds.raw[cascade_idx]);
-      m4 lsm = lsm_from_vp(view, persp_mat, light_dir, 1.0);
-#endif
+  if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
+    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
+    for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
+      if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
 
-      //m4 lsm = r3d_calc_lsm_i(view, gs->game_viewport, light_dir, cascade_idx, 1.0);
-      r3dc_imm_frustum(transparent_pass, view, persp_mat, CLR_RED_JAM, OGL_PRIM_TYPE_LINE);
+      color cc =  csm_get_cascade_idx_color(cascade_idx);
+      cc.a = 0.3;
+      
+      m4 lsm = csm_calc_lsm_i(gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx);
+      m4 model = m4_mult(m4_inv(lsm), m4_scale(v3m(2,2,2)));
+      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, model);
+      r3dc_imm_frustum(transparent_pass, m4d(1.0), lsm, cc, OGL_PRIM_TYPE_LINE_STRIP);
 
-      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, m4_mult(m4_inv(lsm),m4_scale(v3m(2,2,2))));
     }
     r3dc_end(transparent_pass);
   }
@@ -402,6 +372,7 @@ void game_render(struct Game_State *gs, float dt) {
     BVH_Node *root = gs->world->bvh_root;
     assert(root);
     world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, gs->cam.dirty_vp, gs->game_viewport, bvh_rc);
+
 
 #if 0
     // Render the total cascade SDSM is seeing
@@ -455,9 +426,11 @@ void game_render(struct Game_State *gs, float dt) {
   assert(scroll_list.box);
   gui_push_pref_width((Gui_Size){.kind = GUI_SIZEKIND_PIXELS, 400.0, 1.0});
 
+    // TODO: CHANGE LIGHTDIR VIA SLIDER
+    // TODO: ON/OFF the cascade visualization!!
     gui_flag_selection(STR8L("rflags:"), 30, &gs->rflags, 5);
     gui_flag_selection(STR8L("cascade:"), 30, &gs->enabled_cascades, 4);
-    gui_single_selection(STR8L("fit:"), 30, &gs->csm_opt.fpolicy, 3);
+    gui_flag_selection(STR8L("fit:"), 30, &gs->csm_opt.fit_flags, 2);
     gui_single_selection(STR8L("split algo:"), 30, &gs->csm_opt.split_policy, 5);
 
     // Animation blending factor (for testing currently)
@@ -491,6 +464,8 @@ void game_render(struct Game_State *gs, float dt) {
     gui_scroll_list_end(STR8L("MyScrollTest"));
   gui_end();
 #endif
+
+  gs->csm_opt.scene_bbox = bbox_normalize(gs->world->bvh_root->box);
 
 }
 

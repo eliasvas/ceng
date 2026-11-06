@@ -42,6 +42,7 @@
     - We could.. specify this though, some models shouldn't be messed with the offset is important many times (center = true?)
     - Make a way to only statically link everything?
     - I don't think its correct to have r3d exposed in game.c so much?
+    - Make a UI slider, simple just a label of the value + logic to go up down with hot +/- delta on mousex
 
 ## ogl
     - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]

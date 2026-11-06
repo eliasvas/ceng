@@ -16,7 +16,6 @@ static Ogl_RT transparent_rt;
 
 static Ogl_Compute_Bundle depth_range_compute_bundle;
 
-
 const char* depth_range_cs = R"(#version 460 core
 layout(local_size_x = 1, local_size_y = 1) in;
 layout (binding = 0, r32ui) uniform uimage2D drange;
@@ -330,7 +329,7 @@ float shadow_calc(vec3 frag_pos_ws) {
       shadow += (current_depth- bias) > pcf_depth ? 1.0 : 0.0;
     }
   }
-  shadow /= 9.0;
+  shadow /= 9.0*1.5; // should be 9 i just want soft shadows
 
   if (proj_coords.z > 1.0) {
     shadow = 0.0;
@@ -510,6 +509,8 @@ void main() {
   ivec2 size = textureSize(u_tex, 0);
   // Calculate opaque color
   vec3 opaque_color = fxaa(fs_in.tc, size);
+  // FIXME: enable fxaa
+  //vec3 opaque_color = texture(u_tex, fs_in.tc).rgb;
   // Calculate transparent color
   ivec2 coords = ivec2(gl_FragCoord.xy);
   float revealage = texelFetch(reveal, coords, 0).r;
@@ -1110,6 +1111,14 @@ void r3d_do_postproc(rect viewport) {
   postproc_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = offscreen_rt.attachments[0] };
   postproc_bundle.textures[1] = (Ogl_Tex_Slot){ .name = "accum", .tex = transparent_rt.attachments[0] };
   postproc_bundle.textures[2] = (Ogl_Tex_Slot){ .name = "reveal", .tex = transparent_rt.attachments[1] };
+  ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
+
+  // Render in the bottom the shadow texture
+
+  rect r = rec(1000,100,300,300);
+  postproc_bundle.dyn_state.viewport = *(Ogl_rect *)&r;
+  postproc_bundle.dyn_state.scissor = *(Ogl_rect *)&r;
+  postproc_bundle.textures[0] = (Ogl_Tex_Slot){ .name = "u_tex", .tex = shadow_rt.depth_attachment};
   ogl_render_bundle_draw(&postproc_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, 1);
 }
 

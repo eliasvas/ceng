@@ -16,16 +16,15 @@ typedef enum {
 } CSM_Split_Policy;
 
 typedef enum {
-  CSM_FIT_TIGHT,
-  CSM_FIT_APPLY_ZMULT,
-  CSM_FIT_ISECT_BVH,
-} CSM_Fitting_Policy;
+  CSM_FIT_FLAG_ZMULT = 0x1,
+  CSM_FIT_FLAG_ISECT_BVH = 0x2,
+} CSM_Fit_Flags;
 
 typedef struct {
 
   // Fitting strategy
   f32 zmult;
-  CSM_Fitting_Policy fpolicy;
+  CSM_Fit_Flags fit_flags;
 
   // Split strategy (lambda can be used for practical, bounds idk where..)
   CSM_Split_Policy split_policy;
@@ -34,6 +33,8 @@ typedef struct {
     v4 bounds;
   };
   v2 drange;
+
+  bbox scene_bbox;
   
   s32 cascade_count;
   v3 light_dir;
@@ -49,10 +50,10 @@ static CSM_Opt csm_opt_default() {
     //.split_policy = CSM_SPLIT_PRACTICAL,
     .split_policy = CSM_SPLIT_SDSM,
     .lambda = 0.5,
-    .fpolicy = CSM_FIT_APPLY_ZMULT,
-    //.fpolicy = CSM_FIT_TIGHT,
+    //.fit_flags = CSM_FIT_FLAG_ZMULT,
     .cascade_count = CSM_MAX_CASCADES,
-    .light_dir = v3_norm(v3m(0.3,1,1)),
+    .light_dir = v3_norm(v3m(0.2,1,1)),
+    .scene_bbox = (bbox){},
   };
 
   return default_options;
@@ -121,7 +122,11 @@ static m4 csm_calc_lsm_i(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 in
   f32 aspect = viewport.w/(f32)viewport.h;
   m4 persp_mat = m4_persp(camera->fovx, aspect, near_bound, far_bound);
   m4 view = camera->dirty_view;
-  m4 lsm = lsm_from_vp(view, persp_mat, csm_opt->light_dir, (csm_opt->fpolicy == CSM_FIT_APPLY_ZMULT) ? csm_opt->zmult : 1.0);
+  m4 lsm = lsm_from_vp(view, persp_mat, 
+      (csm_opt->fit_flags & CSM_FIT_FLAG_ISECT_BVH) ? csm_opt->scene_bbox : bbox_inf(), 
+      csm_opt->light_dir, 
+      (csm_opt->fit_flags == CSM_FIT_FLAG_ZMULT) ? csm_opt->zmult : 1.0
+);
 
   return lsm;
 }

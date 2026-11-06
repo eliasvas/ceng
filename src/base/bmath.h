@@ -806,6 +806,14 @@ typedef struct {
   };
 } bbox;
 
+static bbox bbox_inf() {
+  bbox r = (bbox) {
+    .min = v3m(F32_MAX, F32_MAX, F32_MAX),
+    .max = v3m(-F32_MAX, -F32_MAX, -F32_MAX),
+  };
+  return r;
+}
+
 static bbox bbox_normalize(bbox box) {
   v3 max = v3m(
       MAX(box.min.x, box.max.x),
@@ -885,6 +893,22 @@ static v3 bbox_calc_overlap(bbox a, bbox b) {
 static b32 bbox_isect(bbox a, bbox b) {
   v3 overlap = bbox_calc_overlap(a, b);
   return (overlap.x > 0) && (overlap.y > 0) && (overlap.z > 0);
+}
+
+static bbox bbox_transform(bbox b, m4 m) {
+  bbox r = bbox_inf();
+  for (s32 i = 0; i < 8; i+=1) {
+    v3 corner = v3m(b.bounds[(i>>0)&1].x, b.bounds[(i>>1)&1].y, b.bounds[(i>>2)&1].z); 
+    v3 p = v3_from_v4(m4_multv(m, v4_from_v3(corner, 1)));
+
+    r.min.x = MIN(r.min.x, p.x);
+    r.max.x = MAX(r.max.x, p.x);
+    r.min.y = MIN(r.min.y, p.y);
+    r.max.y = MAX(r.max.y, p.y);
+    r.min.z = MIN(r.min.z, p.z);
+    r.max.z = MAX(r.max.z, p.z);
+  }
+  return r;
 }
 
 /////////////////////////////////////////////
@@ -979,8 +1003,8 @@ static bbox bbox_from_frustum(frustum f) {
   return bounds;
 }
 
-
-static m4 lsm_from_vp(m4 view, m4 proj, v3 ld, f32 zmult) {
+// TODO: Fit within cascade's bvh stuff!
+static m4 lsm_from_vp(m4 view, m4 proj, bbox scene, v3 ld, f32 zmult) {
   m4 vp = m4_mult(proj, view);
 
   // 0. Calculate the view matrix for the LSM by finding the world frustum center
@@ -991,8 +1015,8 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld, f32 zmult) {
   // 1. Calculate the ortho matrix by finding the view-space bounds of the frustum  
   frustum fv = frustum_transform_points(f, lsm_view);
   bbox bounds = bbox_from_frustum(fv);
-  // 2. Calculate the actual ortho matrix (+zMult)
 
+  // 2. Calculate the actual ortho matrix (+zMult)
   //bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * zmult) : (bounds.min.z / zmult);
   //bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / zmult) : (bounds.max.z * zmult);
 
@@ -1001,6 +1025,13 @@ static m4 lsm_from_vp(m4 view, m4 proj, v3 ld, f32 zmult) {
     bounds.min.z -= z_padding;
     bounds.max.z += z_padding;
   }
+
+  bbox s = bbox_transform(scene, lsm_view);
+  bounds.min.x = MAX(bounds.min.x, s.min.x);
+  bounds.max.x = MIN(bounds.max.x, s.max.x);
+
+  bounds.min.y = MAX(bounds.min.y, s.min.y);
+  bounds.max.y = MIN(bounds.max.y, s.max.y);
 
   m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
   m4 lsm = m4_mult(lsm_proj, lsm_view);
