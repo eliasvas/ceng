@@ -1044,7 +1044,7 @@ void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int
   }
   glDispatchCompute((GLuint)wx, (GLuint)wy, (GLuint)wz);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
- glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
+  glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
 }
  
 

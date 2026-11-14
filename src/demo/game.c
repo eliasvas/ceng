@@ -298,6 +298,8 @@ void game_render(struct Game_State *gs, float dt) {
   gs->csm_opt.drange = drange;
   //printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
 
+  // TEST TEST TEST TEST
+  r3d_compute_bbox(opaque_pass, drange);
 
   ///////////////////////
   // TRANSPARENT PASS
@@ -337,9 +339,45 @@ void game_render(struct Game_State *gs, float dt) {
       r3dc_imm_frustum(transparent_pass, m4d(1.0), lsm, cc, OGL_PRIM_TYPE_LINE_STRIP);
 
     }
+
+
     r3dc_end(transparent_pass);
   }
 #endif
+
+
+    /////////////////////////////////////
+    // Render the scene bounding box.. from.. world-space bbox..
+    /////////////////////////////////////
+    // TEST TEST TEST TEST
+    // TEST TEST TEST TEST
+    // TEST TEST TEST TEST
+    // TEST TEST TEST TEST
+    // Why is the scene_box2 calculated only inside rctx of opaque, FUCK htis
+    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
+    {
+      bbox sb = opaque_pass->opt.scene_bbox;
+      v3 hdim = bbox_get_hdim(sb);
+      hdim = v3_multf(hdim, 2.0); // this is because the default cube is [-0.5, 0.5]
+      v3 trans = bbox_get_center(sb);
+      m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
+      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.6,0.6,0.6,0.2), worldmat);
+    }
+    {
+      bbox sb = opaque_pass->opt.scene_bbox2;
+      v3 hdim = bbox_get_hdim(sb);
+      hdim = v3_multf(hdim, 2.0); // this is because the default cube is [-0.5, 0.5]
+      v3 trans = bbox_get_center(sb);
+      m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
+      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.7,0.3,0.2,0.4), worldmat);
+    }
+
+    r3dc_imm_frustum(transparent_pass, m4d(1.0), m4d(1.0), v4m(1,1,1,1), OGL_PRIM_TYPE_LINE_STRIP);
+    r3dc_end(transparent_pass);
+
+
+
+
 
   ///////////////////////
   // BVH PASS 

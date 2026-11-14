@@ -954,7 +954,26 @@ typedef struct {
   v3 points[FRUSTUM_CORNERS];
 } frustum;
 
+static frustum frustum_from_ndc_points(v3 min, v3 max) {
+  frustum f = {};
+  for (s32 x = 0; x <= 1; x+=1) {
+    for (s32 y = 0; y <= 1; y+=1) {
+      for (s32 z = 0; z <= 1; z+=1) {
+        f.points[((x&1)<<2)|((y&1)<<1)|(z&1)] = v3m(
+            x*min.x + (1-x)*max.x,
+            y*min.y + (1-y)*max.y,
+            z*min.z + (1-z)*max.z
+        );
+      }
+    }
+  }
+  return f;
+}
+
 static frustum frustum_make_ndc() {
+#if 1
+  return frustum_from_ndc_points(v3m(-1,-1,-1), v3m(1,1,1));
+#else
   frustum f = {};
   f.points[0] = v3m(-1,-1,-1);
   f.points[1] = v3m(-1,+1,-1);
@@ -965,6 +984,7 @@ static frustum frustum_make_ndc() {
   f.points[6] = v3m(+1,+1,+1);
   f.points[7] = v3m(+1,-1,+1);
   return f;
+#endif
 }
 
 static frustum frustum_transform_points(frustum ndc, m4 m) {

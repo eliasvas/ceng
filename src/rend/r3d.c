@@ -16,6 +16,7 @@ static Ogl_Render_Bundle uber_transparent_bundle = {};
 static Ogl_RT transparent_rt;
 
 static Ogl_Compute_Bundle depth_range_compute_bundle;
+static Ogl_Compute_Bundle bounds_compute_bundle;
 
 const char* depth_range_cs = R"(#version 460 core
 layout(local_size_x = 1, local_size_y = 1) in;
@@ -32,6 +33,44 @@ void main() {
     uint k = floatBitsToUint(depth);
     imageAtomicMin(drange, drange_min_tc, k);
     imageAtomicMax(drange, drange_max_tc, k);
+}
+)";
+
+const char* cascade_bounds_cs = R"(#version 460 core
+layout(local_size_x = 1, local_size_y = 1) in;
+layout (binding = 0, r32ui) uniform uimage2D bounds;
+layout (binding = 0) uniform sampler2D depth_buffer;
+
+// Are these really correct, I guess because in screen space the tc's are in [0,1]?
+
+const ivec2 bounds_min_x_tc = ivec2(0,0);
+const ivec2 bounds_max_x_tc = ivec2(1,0);
+
+const ivec2 bounds_min_y_tc = ivec2(2,0);
+const ivec2 bounds_max_y_tc = ivec2(3,0);
+
+const ivec2 bounds_min_z_tc = ivec2(4,0);
+const ivec2 bounds_max_z_tc = ivec2(5,0);
+
+void main() {
+    ivec2 pixel_coords = ivec2(gl_WorkGroupID.xy);
+    float depth = texelFetch(depth_buffer, pixel_coords, 0).x;
+    vec2 tc = vec2(pixel_coords) / vec2(textureSize(depth_buffer, 0));
+    if (depth >= 1.0) return; // We don't handle the glCleared values
+    uint d = floatBitsToUint(depth);
+    uint x = floatBitsToUint(tc.x);
+    uint y = floatBitsToUint(tc.y);
+
+    //if (depth > 0 && depth < dist) {}
+
+    imageAtomicMin(bounds, bounds_min_x_tc, x);
+    imageAtomicMax(bounds, bounds_max_x_tc, x);
+
+    imageAtomicMin(bounds, bounds_min_y_tc, y);
+    imageAtomicMax(bounds, bounds_max_y_tc, y);
+
+    imageAtomicMin(bounds, bounds_min_z_tc, d);
+    imageAtomicMax(bounds, bounds_max_z_tc, d);
 }
 )";
 
@@ -410,7 +449,7 @@ void main() {
 
   // For shadow map visualization
   vec3 layer_color = vec3(0.0);
-#if 0
+#if 1
   int layer = get_cascade_layer(fs_in.frag_pos_ws);
   if (layer == 0) { layer_color = 0.3*vec3(1.0,0.0,0.0); }
   if (layer == 1) { layer_color = 0.3*vec3(0.0,1.0,0.0); }
@@ -585,6 +624,14 @@ void r3d_try_load_shaders(rect viewport) {
       .sp = ogl_shader_make(depth_range_cs, nullptr),
       .images = {
         [0] = { .name = "drange", .img = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+      },
+    };
+  }
+  if (bounds_compute_bundle.sp.impl_state == 0) {
+    bounds_compute_bundle = (Ogl_Compute_Bundle) {
+      .sp = ogl_shader_make(cascade_bounds_cs, nullptr),
+      .images = {
+        [0] = { .name = "bounds", .img = ogl_tex_make(nullptr, 6, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
       },
     };
   }
@@ -1195,3 +1242,51 @@ v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
   return v2m(-coords_min.z, -coords_max.z);
 }
 
+// Pretty sure we must do the calculations in the light's view space (!!!!!!)
+// For now just takes min/max and computes a bounded box
+void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange) {
+  // 0. update tex to have [-1,0] range for xy and drange for z
+  u32 near_as_u32 = *((u32*)&drange.x);
+  u32 far_as_u32 = *((u32*)&drange.y);
+  //uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, near_as_u32, far_as_u32};
+  uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u};
+  ogl_tex_update(&bounds_compute_bundle.images[0].img, (u8*)initial_data, 6, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
+
+  // 1. execute the compute shader to find actual drange(min,max)
+  bounds_compute_bundle.textures[0] = 
+    (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
+  ogl_compute_bundle_dispatch(&bounds_compute_bundle, 
+      offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
+
+
+  // 2. read back the texture and produce NDC frustum
+  u32 bounds[6];
+  ogl_tex_read(&bounds_compute_bundle.images[0].img, (u8*)bounds);
+  f32 bounds_min_x = *(f32*)&(bounds[0]);
+  f32 bounds_max_x = *(f32*)&(bounds[1]);
+
+  f32 bounds_min_y = *(f32*)&(bounds[2]);
+  f32 bounds_max_y = *(f32*)&(bounds[3]);
+
+  f32 bounds_min_z = *(f32*)&(bounds[4]);
+  f32 bounds_max_z = *(f32*)&(bounds[5]);
+
+  v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
+  v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
+
+  // Get the scene frustum in NDC
+  frustum scene = frustum_from_ndc_points(ndc_min, ndc_max);
+  // Go to world space????
+  scene = frustum_transform_points(scene, m4_inv(rctx->cam.dirty_vp)); 
+  // Compute world-space bbox for debug drawing
+  bbox bbox_bounds = bbox_from_frustum(scene);
+
+  rctx->opt.scene_bbox2 = bbox_normalize(bbox_bounds);
+  rctx->opt.scene_bbox2_frustum = scene;
+
+
+  printf("coords: [%f][%f][%f][%f][%f][%f]\n",
+    bounds_min_x, bounds_max_x, bounds_min_y,
+    bounds_max_y, bounds_min_z, bounds_max_z
+  );
+}

@@ -34,7 +34,10 @@ typedef struct {
   };
   v2 drange;
 
+  // :| :| :| :| | :|
   bbox scene_bbox;
+  bbox scene_bbox2;
+  frustum scene_bbox2_frustum;
   
   s32 cascade_count;
   v3 light_dir;

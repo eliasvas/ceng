@@ -90,5 +90,6 @@ color r3d_get_cascade_idx_color(s32 cascade_idx);
 
 // Trash
 v2 r3d_compute_depth_range(R3D_Ctx *rctx);
+void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange);
 
 #endif
