@@ -46,5 +46,7 @@
 
 ## ogl
     - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]
+    - ogl_tex_read should be possible, why why why why
+    - project and unproject do the same fucking thing ..
 
 ## demo

@@ -293,13 +293,24 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
-  // Calculate the depth range (only for opaque pass right now)
+  // 0. We get the depth from the shader (in viewport [0,1] space)
   v2 drange = r3d_compute_depth_range(opaque_pass);
-  gs->csm_opt.drange = drange;
-  //printf("drange = (%.2f, %.2f)\n", drange.x, drange.y);
+  // 1. conver to view space depth (needed for actual rendering)
+  v4 ndc_min = v4m(0,0,drange.x*2.0 - 1.0, 1);
+  v4 coords_min = unproject(ndc_min, m4_inv(gs->cam.dirty_proj));
+  v4 ndc_max = v4m(0,0,drange.y*2.0 - 1.0, 1);
+  v4 coords_max = unproject(ndc_max, m4_inv(gs->cam.dirty_proj));
+  v2 drange_viewspace = v2m(-coords_min.z, -coords_max.z);
+  // 3. Store in CSM_Opt struct for use by the next render passes
+  gs->csm_opt.drange = drange_viewspace;
+  //printf("drange = (%.2f, %.2f)\n", drange_viewspace.x, drange_viewspace.y);
+
 
   // TEST TEST TEST TEST
-  r3d_compute_bbox(opaque_pass, drange);
+  for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
+    // FIXME: pass instead of drange / viewspace pass the actual range now whole
+    gs->csm_opt.cascade_frustum[cascade_idx] = r3d_compute_cascade_frustum(opaque_pass, drange, drange_viewspace, cascade_idx);
+  }
 
   ///////////////////////
   // TRANSPARENT PASS
@@ -336,7 +347,9 @@ void game_render(struct Game_State *gs, float dt) {
       m4 lsm = csm_calc_lsm_i(gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx);
       m4 model = m4_mult(m4_inv(lsm), m4_scale(v3m(2,2,2)));
       r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, model);
-      r3dc_imm_frustum(transparent_pass, m4d(1.0), lsm, cc, OGL_PRIM_TYPE_LINE_STRIP);
+
+      // FIXME: Make an actual frustum here from NDC ok?
+      //r3dc_imm_frustum(transparent_pass, m4d(1.0), lsm, cc, OGL_PRIM_TYPE_LINE_STRIP);
 
     }
 
@@ -363,6 +376,7 @@ void game_render(struct Game_State *gs, float dt) {
       m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
       r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.6,0.6,0.6,0.2), worldmat);
     }
+    /*
     {
       bbox sb = opaque_pass->opt.scene_bbox2;
       v3 hdim = bbox_get_hdim(sb);
@@ -371,8 +385,14 @@ void game_render(struct Game_State *gs, float dt) {
       m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
       r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.7,0.3,0.2,0.4), worldmat);
     }
+    */
 
-    r3dc_imm_frustum(transparent_pass, m4d(1.0), m4d(1.0), v4m(1,1,1,1), OGL_PRIM_TYPE_LINE_STRIP);
+    for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
+
+      color cc = csm_get_cascade_idx_color(cascade_idx);
+      r3dc_imm_frustum(transparent_pass, opaque_pass->opt.cascade_frustum[cascade_idx], cc, OGL_PRIM_TYPE_LINE_STRIP);
+    }
+
     r3dc_end(transparent_pass);
 
 

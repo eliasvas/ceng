@@ -74,7 +74,7 @@ void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
-void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, color c, Ogl_Prim_Type prim);
+void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim);
 
 struct Model_Info;
 m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
@@ -90,6 +90,6 @@ color r3d_get_cascade_idx_color(s32 cascade_idx);
 
 // Trash
 v2 r3d_compute_depth_range(R3D_Ctx *rctx);
-void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange);
+frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspace, s32 cascade_idx);
 
 #endif

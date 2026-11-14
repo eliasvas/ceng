@@ -55,22 +55,25 @@ const ivec2 bounds_max_z_tc = ivec2(5,0);
 void main() {
     ivec2 pixel_coords = ivec2(gl_WorkGroupID.xy);
     float depth = texelFetch(depth_buffer, pixel_coords, 0).x;
-    vec2 tc = vec2(pixel_coords) / vec2(textureSize(depth_buffer, 0));
-    if (depth >= 1.0) return; // We don't handle the glCleared values
     uint d = floatBitsToUint(depth);
-    uint x = floatBitsToUint(tc.x);
-    uint y = floatBitsToUint(tc.y);
+    vec2 tc = vec2(pixel_coords) / vec2(textureSize(depth_buffer, 0));
+    
+    float min_depth = uintBitsToFloat(imageLoad(bounds, bounds_min_z_tc).x);
+    float max_depth = uintBitsToFloat(imageLoad(bounds, bounds_max_z_tc).x);
+    // Whywhywhy is this || and nor &&??
+    if (depth >= min_depth && depth <= max_depth) {
+      uint x = floatBitsToUint(tc.x);
+      uint y = floatBitsToUint(tc.y);
 
-    //if (depth > 0 && depth < dist) {}
+      imageAtomicMin(bounds, bounds_min_x_tc, x);
+      imageAtomicMax(bounds, bounds_max_x_tc, x);
 
-    imageAtomicMin(bounds, bounds_min_x_tc, x);
-    imageAtomicMax(bounds, bounds_max_x_tc, x);
+      imageAtomicMin(bounds, bounds_min_y_tc, y);
+      imageAtomicMax(bounds, bounds_max_y_tc, y);
 
-    imageAtomicMin(bounds, bounds_min_y_tc, y);
-    imageAtomicMax(bounds, bounds_max_y_tc, y);
-
-    imageAtomicMin(bounds, bounds_min_z_tc, d);
-    imageAtomicMax(bounds, bounds_max_z_tc, d);
+      //imageAtomicMin(bounds, bounds_min_z_tc, d);
+      //imageAtomicMax(bounds, bounds_max_z_tc, d);
+    }
 }
 )";
 
@@ -1160,11 +1163,7 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
 
-void r3dc_imm_frustum(R3D_Ctx *rctx, m4 view, m4 proj, color c, Ogl_Prim_Type prim) {
-  m4 vp = m4_mult(proj, view);
-
-  frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
-
+void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim) {
   Uber_Vertex frustum[8] = {
     (Uber_Vertex) {.pos = f.points[0], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
     (Uber_Vertex) {.pos = f.points[1], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
@@ -1228,28 +1227,32 @@ v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
   // Converting to view space??
   f32 min_z = *(f32*)&(drange[0]);
   f32 max_z = *(f32*)&(drange[1]);
-  //printf("%f %f\n", min_z, max_z);
 
-  v4 ndc_min = v4m(0,0,min_z*2.0 - 1.0, 1);
-  v4 coords_min = unproject(ndc_min, m4_inv(rctx->cam.dirty_proj));
-  //printf("min.z = %f\n", -coords_min.z);
- 
-  //v4 ndc_max = v4m(0,0,1,1);//max_z*2.0 - 1.0, 1);
-  v4 ndc_max = v4m(0,0,max_z*2.0 - 1.0, 1);
-  v4 coords_max = unproject(ndc_max, m4_inv(rctx->cam.dirty_proj));
-  //printf("max.z = %f\n", -coords_max.z);
-
-  return v2m(-coords_min.z, -coords_max.z);
+  return v2m(min_z, max_z);
 }
 
-// Pretty sure we must do the calculations in the light's view space (!!!!!!)
-// For now just takes min/max and computes a bounded box
-void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange) {
+// For each of the cascades we compute a tight frustum for all the fragments 
+frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspace, s32 cascade_idx) {
+  // -1. find the ndc space needed near far for the cascade_idx
+  //f32 cascade_near = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, 0);
+  //cascade_near = project(v3m(0,0,cascade_near), rctx->cam.dirty_proj).z;
+  //f32 cascade_far = csm_get_cascade_split_far(&rctx->cam, &rctx->opt, CSM_MAX_CASCADES-1);
+  //cascade_far = project(v3m(0,0,cascade_far), rctx->cam.dirty_proj).z;
+
+  f64 step = (drange.y - drange.x) / (f64)CSM_MAX_CASCADES;
+  f32 cascade_near = drange.x - step * (cascade_idx);
+  //cascade_near = project(v3m(0,0,cascade_near), rctx->cam.dirty_proj).z;
+  f32 cascade_far = drange.y - step * (cascade_idx+1);
+  //cascade_far = project(v3m(0,0,cascade_far), rctx->cam.dirty_proj).z;
+  //printf("%f %f\n", cascade_near, cascade_far);
+
+
   // 0. update tex to have [-1,0] range for xy and drange for z
-  u32 near_as_u32 = *((u32*)&drange.x);
-  u32 far_as_u32 = *((u32*)&drange.y);
-  //uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, near_as_u32, far_as_u32};
-  uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u};
+  u32 near_as_u32 = *((u32*)&cascade_near);
+  u32 far_as_u32 = *((u32*)&cascade_far);
+
+  uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, near_as_u32, far_as_u32};
+  //uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u};
   ogl_tex_update(&bounds_compute_bundle.images[0].img, (u8*)initial_data, 6, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
 
   // 1. execute the compute shader to find actual drange(min,max)
@@ -1257,7 +1260,6 @@ void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange) {
     (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
   ogl_compute_bundle_dispatch(&bounds_compute_bundle, 
       offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
-
 
   // 2. read back the texture and produce NDC frustum
   u32 bounds[6];
@@ -1274,10 +1276,15 @@ void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange) {
   v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
   v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
 
+  // 3. Compute the tight frustum
+
   // Get the scene frustum in NDC
   frustum scene = frustum_from_ndc_points(ndc_min, ndc_max);
   // Go to world space????
   scene = frustum_transform_points(scene, m4_inv(rctx->cam.dirty_vp)); 
+
+  // Optional bullshit
+#if 0
   // Compute world-space bbox for debug drawing
   bbox bbox_bounds = bbox_from_frustum(scene);
 
@@ -1285,8 +1292,16 @@ void r3d_compute_bbox(R3D_Ctx *rctx, v2 drange) {
   rctx->opt.scene_bbox2_frustum = scene;
 
 
+  /*
   printf("coords: [%f][%f][%f][%f][%f][%f]\n",
     bounds_min_x, bounds_max_x, bounds_min_y,
     bounds_max_y, bounds_min_z, bounds_max_z
   );
+  */
+#endif
+
+  return scene;
+
+
 }
+

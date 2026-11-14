@@ -36,8 +36,9 @@ typedef struct {
 
   // :| :| :| :| | :|
   bbox scene_bbox;
-  bbox scene_bbox2;
-  frustum scene_bbox2_frustum;
+
+  f32 splits[CSM_MAX_CASCADES];
+  frustum cascade_frustum[CSM_MAX_CASCADES];
   
   s32 cascade_count;
   v3 light_dir;
