@@ -1,4 +1,3 @@
-#include "rend/rend_inc.h"
 #include "asset/asset_mgr.h"
 // FIXME: Too much code duplication here..
 // FIXME: these globals should be in a shared place, maybe asset system ok?
@@ -17,6 +16,28 @@ static Ogl_RT transparent_rt;
 
 static Ogl_Compute_Bundle depth_range_compute_bundle;
 static Ogl_Compute_Bundle bounds_compute_bundle;
+
+Ogl_Render_Bundle* r3d_bundle_from_render_mode(R3D_Render_Mode rmode) {
+  switch (rmode) {
+    case R3D_FWD: return &uber_bundle;
+    case R3D_OPQ: return &uber_bundle;
+    case R3D_TRN: return &uber_transparent_bundle;
+    case R3D_SHD: return &uber_shadow_bundle;
+    default: return &uber_bundle;
+  }
+}
+
+Ogl_RT* r3d_rt_from_render_mode(R3D_Render_Mode rmode) {
+  switch (rmode) {
+    case R3D_FWD: return nullptr;
+    case R3D_OPQ: return &offscreen_rt;
+    case R3D_TRN: return &transparent_rt;
+    case R3D_SHD: return &shadow_rt;
+    default: return nullptr;
+  }
+}
+
+
 
   static const u8 DEPTH_RANGE_CS[] = {
 #embed "shaders/common.glsl" suffix(, '\n',)
@@ -251,7 +272,6 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_R
   *rctx = (R3D_Ctx) {
     .arena = arena,
     .viewport = viewport,
-    .rt = nullptr,
     .cam = *c,
     .opt = *copt,
     .rmode = rmode,
@@ -264,23 +284,23 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_R
 }
 
 R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
-  return r3dc_begin(arena, viewport, c, copt, R3D_OPQ, flags);
+  return r3dc_begin(arena, viewport, c, copt, R3D_FWD, flags);
 }
 
 
 R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, s32 cascade_idx, R3D_Ctx_Flags flags) {
 
-  R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_SHD, flags);
+  // HACK: we change the cmask of the global rt to write to correct component
+  r3d_rt_from_render_mode(R3D_SHD)->cmask = (OGL_RT_CMASK_R << cascade_idx);
 
-  pass->rt = &shadow_rt;
-  pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
+  R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_SHD, flags);
 
   //FIXME: Hack, because we only use (proj * view)
   m4 proj = csm_calc_lsm_i(pass->viewport, &pass->cam, &pass->opt, cascade_idx);
   pass->cam.dirty_view = m4d(1.0);
   pass->cam.dirty_proj = proj;
 
-  // We set the viewport later because the original viewport (the real one) is used for calc_lsm_i, maybe pass it as argument instead
+  // FIXME: HACK, We set the viewport later because the original viewport (the real one) is used for calc_lsm_i, maybe pass it as argument instead
   pass->viewport = rec(0,0,SHADOWMAP_DIM,SHADOWMAP_DIM);
 
   pass->cascade_idx = cascade_idx;
@@ -289,7 +309,6 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
 
 R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
   R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_OPQ, flags);
-  pass->rt = &offscreen_rt;
   return pass;
 }
 
@@ -311,13 +330,14 @@ R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt 
   ogl_copy_depth_buffer(&offscreen_rt, &transparent_rt, viewport);
 
   R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_TRN, flags);
-  pass->rt = &transparent_rt;
   return pass;
 }
 
 void r3dc_end(R3D_Ctx *rctx) {
-  if (rctx->rt) rctx->rt->cmask = OGL_RT_CMASK_ALL;
-  // TBA
+#if 1
+  Ogl_RT* rt = r3d_rt_from_render_mode(rctx->rmode);
+  if (rt) rt->cmask = OGL_RT_CMASK_ALL;
+#endif
 }
 
 void r3dc_set_per_frame_ubo(R3D_Ctx *rctx, Ogl_Buf *buf) {
@@ -361,83 +381,6 @@ void r3d_set_def_material(m4 model, b32 is_unlit) {
   ogl_buf_update(&uber_bundle.ubos[1].buffer, 0, &material_ubo, 1, sizeof(Material_UBO));
 }
 
-void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
-  Ogl_Render_Bundle *bundle = &uber_bundle; 
-  if (rctx->rt == &shadow_rt) bundle = &uber_shadow_bundle;
-  if (rctx->rt == &transparent_rt) bundle = &uber_transparent_bundle;
-
-  if (rctx->rt) bundle->rt = *rctx->rt;
-  else bundle->rt = (Ogl_RT){};
-
-  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
-  bundle->vbos[0].buffer = vbo;
-
-  r3dc_set_per_frame_ubo(rctx, &bundle->ubos[0].buffer);
-  r3d_set_def_material(model, true);
-
-  // Set dynamically before drawcall currently
-  bundle->dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
-  bundle->dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
-
-  ogl_render_bundle_draw(bundle, prim, vert_count, 1);
-
-  // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
-  ogl_buf_deinit(&vbo);
-}
-
-
-void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
-  Uber_Vertex cube_verts[36] = {
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)}
-  };
-  // Just put the fries in the bag bro
-  for (s32 i = 0; i < 36; i += 3) {
-    v3 a = cube_verts[i+0].pos;
-    v3 b = cube_verts[i+1].pos;
-    v3 c = cube_verts[i+2].pos;
-    v3 n = v3_norm(v3_cross(v3_sub(b,a), v3_sub(c,a)));
-    cube_verts[i+0].norm = n; 
-    cube_verts[i+1].norm = n; 
-    cube_verts[i+2].norm = n; 
-  }
-
-  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
-}
 
 
 void r3d_set_material(Mesh_Primitive_Info *info, m4 model, color tint) {
@@ -570,10 +513,9 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 
 f32 _blend_factor = 0.0;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint) {
-  Ogl_Render_Bundle *bundle = &uber_bundle; 
-  if (rctx->rt == &shadow_rt) bundle = &uber_shadow_bundle;
-  if (rctx->rt== &transparent_rt) bundle = &uber_transparent_bundle;
-  if (rctx->rt) bundle->rt = *rctx->rt;
+  Ogl_Render_Bundle *bundle = r3d_bundle_from_render_mode(rctx->rmode);
+  Ogl_RT *rt = r3d_rt_from_render_mode(rctx->rmode);
+  if (rt) bundle->rt = *rt;
 
   for (s64 mesh_idx = 0; mesh_idx < info->mesh_count; mesh_idx+=1) {
     Mesh_Info *mesh = &info->meshes[mesh_idx];
@@ -628,43 +570,6 @@ void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_s
     }
   }
 
-}
-
-void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
-  Uber_Vertex cube_verts[6] = {
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-  };
-  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
-}
-
-void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim) {
-  Uber_Vertex frustum[8] = {
-    (Uber_Vertex) {.pos = f.points[0], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[1], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[2], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[3], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-
-    (Uber_Vertex) {.pos = f.points[4], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[5], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[6], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[7], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-  };
-
-  Uber_Vertex verts[] = {
-    frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
-    frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
-    frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
-    frustum[3], frustum[7], frustum[4], frustum[0], frustum[3],
-    frustum[0], frustum[4], frustum[5], frustum[1], frustum[0],
-    frustum[4], frustum[7], frustum[6], frustum[5], frustum[4],
-  };
-
-  r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
 }
 
 void r3d_do_fullscreen(rect viewport, Ogl_Tex *tex) {
@@ -802,5 +707,117 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
   return scene;
 
 
+}
+
+void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
+  Ogl_Render_Bundle *bundle = r3d_bundle_from_render_mode(rctx->rmode);
+  Ogl_RT *rt = r3d_rt_from_render_mode(rctx->rmode);
+  if (rt) bundle->rt = *rt;
+
+  Ogl_Buf vbo = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC, verts, 1, sizeof(Uber_Vertex)*vert_count);
+  bundle->vbos[0].buffer = vbo;
+
+  r3dc_set_per_frame_ubo(rctx, &bundle->ubos[0].buffer);
+  r3d_set_def_material(model, true);
+
+  // Set dynamically before drawcall currently
+  bundle->dyn_state.viewport = *(Ogl_rect *)&rctx->viewport;
+  bundle->dyn_state.scissor = *(Ogl_rect *)&rctx->viewport;
+
+  ogl_render_bundle_draw(bundle, prim, vert_count, 1);
+
+  // FIXME: This is retarded.. doing cleanup each invocation.. uhm.. what
+  ogl_buf_deinit(&vbo);
+}
+
+
+void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
+  Uber_Vertex cube_verts[36] = {
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f,-0.5f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)}
+  };
+  // Just put the fries in the bag bro
+  for (s32 i = 0; i < 36; i += 3) {
+    v3 a = cube_verts[i+0].pos;
+    v3 b = cube_verts[i+1].pos;
+    v3 c = cube_verts[i+2].pos;
+    v3 n = v3_norm(v3_cross(v3_sub(b,a), v3_sub(c,a)));
+    cube_verts[i+0].norm = n; 
+    cube_verts[i+1].norm = n; 
+    cube_verts[i+2].norm = n; 
+  }
+
+  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
+}
+
+void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
+  Uber_Vertex cube_verts[6] = {
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f,-0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m( 0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = v3m(-0.5f, 0.5f, 0.0f), .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+  };
+  r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
+}
+
+void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim) {
+  Uber_Vertex frustum[8] = {
+    (Uber_Vertex) {.pos = f.points[0], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[1], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[2], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[3], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+
+    (Uber_Vertex) {.pos = f.points[4], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[5], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[6], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+    (Uber_Vertex) {.pos = f.points[7], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
+  };
+
+  Uber_Vertex verts[] = {
+    frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
+    frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
+    frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
+    frustum[3], frustum[7], frustum[4], frustum[0], frustum[3],
+    frustum[0], frustum[4], frustum[5], frustum[1], frustum[0],
+    frustum[4], frustum[7], frustum[6], frustum[5], frustum[4],
+  };
+
+  r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
 }
 

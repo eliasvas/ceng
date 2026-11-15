@@ -203,7 +203,8 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
   assert(point_idx == line_count_per_axis*4);
 
   // Render the grid
-  R3D_Ctx* grid_pass = r3dc_begin_forward(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, 0);
+  R3D_Ctx* grid_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, 0);
+  //ogl_copy_depth_buffer(grid_pass->rt, 0, gs->game_viewport);
   r3dc_imm_verts(grid_pass, points, line_count_per_axis * 4, OGL_PRIM_TYPE_LINE, model);
   r3dc_end(grid_pass);
 
@@ -246,8 +247,6 @@ void game_render(struct Game_State *gs, float dt) {
   for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
     if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
     R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx, 0);
-
-    ogl_clear_depth(shadow_pass->rt);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
       m4 world = m4_from_transform(cmd->xform);
@@ -388,7 +387,6 @@ void game_render(struct Game_State *gs, float dt) {
     */
 
     for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
-
       color cc = csm_get_cascade_idx_color(cascade_idx);
       r3dc_imm_frustum(transparent_pass, opaque_pass->opt.cascade_frustum[cascade_idx], cc, OGL_PRIM_TYPE_LINE_STRIP);
     }
@@ -445,20 +443,18 @@ void game_render(struct Game_State *gs, float dt) {
     r3dc_end(bvh_pass);
   }
 
-  ///////////////////////
-  // POSTPROC PASS 
-  ///////////////////////
-  r3d_do_postproc(gs->game_viewport);
 
   ///////////////////////
   // Origin Grid
   ///////////////////////
   if (gs->rflags & R3D_FLAG_RENDER_GRID) {
-    R3D_Ctx* opaque_pass = r3dc_begin_offscreen(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
-    ogl_copy_depth_buffer(opaque_pass->rt, 0, gs->game_viewport);
     game_draw_origin_grid(gs, 10);
-    r3dc_end(opaque_pass);
   }
+
+  ///////////////////////
+  // POSTPROC PASS 
+  ///////////////////////
+  r3d_do_postproc(gs->game_viewport);
 
 
 

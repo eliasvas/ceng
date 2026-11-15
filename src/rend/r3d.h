@@ -9,14 +9,14 @@
 
 /*
 This renderer works in 4 modes:
-  0. Debug mode: Anywhere after the ogl_clear(..) you can issue immediate commands that will draw immediately, used for debug purposes
+  0. Forward mode: Anywhere after the ogl_clear(..) you can issue immediate commands that will draw immediately, used for debug purposes
   1. Opaque mode: opaque objects can be drawn and they will go to the 'offscreen_rt' 
   2. Transparent mode: transparent objects will be drawn to 'transparent_rt'
   3. Shadow mode: Scene can be rendered in shadow mode, results go to 'shadow_rt'
 */
 
 typedef enum {
-  R3D_DBG, // Debug
+  R3D_FWD, // forward
   R3D_OPQ, // Opaque
   R3D_TRN, // Transparent
   R3D_SHD, // Shadow
@@ -70,12 +70,14 @@ typedef struct {
   m4 lsms[CSM_MAX_CASCADES];
 
   R3D_Render_Mode rmode;
-
-  Ogl_RT *rt;
-
 } R3D_Ctx;
 
+void r3d_try_load_shaders(rect viewport);
 void r3d_clear();
+
+///////////////////////
+// Drawing API
+///////////////////////
 
 R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Render_Mode rmode, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
@@ -84,23 +86,21 @@ R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt 
 R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, s32 cascade_idx, R3D_Ctx_Flags flags);
 void r3dc_end(R3D_Ctx *rctx);
 
+
+////////////////////////
+// Immediate where?
+////////////////////////
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
-
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim);
-
 struct Model_Info;
-m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mesh_idx, s32 anim_idx, f32 time_sec);
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint);
 
-void r3d_try_load_shaders(rect viewport);
 
 // Just exposed for testing by game.c
 void r3d_do_postproc(rect viewport);
 v4 r3d_get_cascade_bounds(CSM_Opt *opt);
-color r3d_get_cascade_idx_color(s32 cascade_idx);
-//m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index);
 
 // Trash
 v2 r3d_compute_depth_range(R3D_Ctx *rctx);
