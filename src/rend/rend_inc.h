@@ -5,5 +5,6 @@
 #include "ogl.h"
 #include "r2d.h"
 #include "r3d.h"
+#include "r3dbg.h"
 
 #endif

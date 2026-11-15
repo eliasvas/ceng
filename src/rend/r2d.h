@@ -72,6 +72,7 @@ typedef struct {
   s64 quad_count;
 } R_Quad_Chunk_List;
 
+ // DELETEME
 typedef enum {
   R2D_PASS_KIND_2D,
   R2D_PASS_KIND_3D, // TBA

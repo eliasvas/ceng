@@ -328,6 +328,7 @@ void r3d_clear() {
 R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
   // Copy the offscreen (pass) RT's depth buffer to the transparent RT
   ogl_copy_depth_buffer(&offscreen_rt, &transparent_rt, viewport);
+  //transparent_rt.depth_attachment = offscreen_rt.depth_attachment;
 
   R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_TRN, flags);
   return pass;

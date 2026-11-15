@@ -142,6 +142,18 @@ void game_update(struct Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->wdim.x, gs->wdim.y);
   gs->cam.aspect = gs->game_viewport.w/gs->game_viewport.h;
 
+  // Initialize debug drawing API
+  r3dbg_setup(gs->frame_arena);
+
+  r3dbg_tri(
+      v3m(0,0,0),
+      v3m(0,8,0),
+      v3m(8,0,0),
+      v4_multf(CLR_GREEN_EVA, 0.7),
+      v4_multf(CLR_RED_PINK, 0.7),
+      v4_multf(CLR_YELLOW, 0.7)
+  );
+
 
 
   // This is happening every frame.. maybe.. IDK
@@ -314,8 +326,8 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
+  R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
   if (gs->rflags & R3D_FLAG_RENDER_MESHES) {
-    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
       m4 world = m4_from_transform(cmd->xform);
@@ -331,12 +343,10 @@ void game_render(struct Game_State *gs, float dt) {
         }
       }
     }
-    r3dc_end(transparent_pass);
   }
 
 #if 1
   if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
-    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
     for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
       if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
 
@@ -351,9 +361,6 @@ void game_render(struct Game_State *gs, float dt) {
       //r3dc_imm_frustum(transparent_pass, m4d(1.0), lsm, cc, OGL_PRIM_TYPE_LINE_STRIP);
 
     }
-
-
-    r3dc_end(transparent_pass);
   }
 #endif
 
@@ -366,7 +373,6 @@ void game_render(struct Game_State *gs, float dt) {
     // TEST TEST TEST TEST
     // TEST TEST TEST TEST
     // Why is the scene_box2 calculated only inside rctx of opaque, FUCK htis
-    R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
     {
       bbox sb = opaque_pass->opt.scene_bbox;
       v3 hdim = bbox_get_hdim(sb);
@@ -390,6 +396,27 @@ void game_render(struct Game_State *gs, float dt) {
       color cc = csm_get_cascade_idx_color(cascade_idx);
       r3dc_imm_frustum(transparent_pass, opaque_pass->opt.cascade_frustum[cascade_idx], cc, OGL_PRIM_TYPE_LINE_STRIP);
     }
+
+
+    // FINALLY, render the debug stuff.....
+    R3DBG_Ctx* dbg_ctx = r3dbg_end();
+    assert(dbg_ctx);
+    Uber_Vertex *verts = arena_push_array_nz(gs->frame_arena, Uber_Vertex, dbg_ctx->tri_list.vertex_count);
+    s64 vcount = 0;
+    for (Vertex_Chunk_Node *node = dbg_ctx->tri_list.first; node != nullptr; node=node->next) {
+      for (s32 vidx = 0; vidx < node->count; vidx+=1) {
+        D_Vertex v = node->verts[vidx];
+        Uber_Vertex newvert = (Uber_Vertex) {
+          .pos = v.p,
+          .col_0 = v.c,
+          .joint_0 = iv4m(1,0,0,0),
+          .weight_0 = v4m(1,0,0,0)
+        };
+        verts[vcount++] = newvert;
+      }
+      r3dc_imm_verts(transparent_pass, verts, vcount, OGL_PRIM_TYPE_TRIANGLE, m4d(1.0));
+    }
+
 
     r3dc_end(transparent_pass);
 

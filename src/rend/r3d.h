@@ -2,7 +2,6 @@
 #define _R3D_H__
 
 #include "base/base_inc.h"
-#include "frz/frz.h"
 #include "ogl.h"
 #include "camera.h"
 #include "csm_utils.h"

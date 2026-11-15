@@ -46,6 +46,13 @@
 
     - Immediate dbg API should be contextless !!!!!!!!!!
     - Some kind of shader include system
+    - Maybe there should be R3D_Ctx and R3D_Pass, we calc the camera too many times right?
+
+    - TODO TODO TODO NOT clearing each depth cascade is bad
+    - TODO TODO TODO NOT clearing each depth cascade is bad
+    - TODO TODO TODO NOT clearing each depth cascade is bad
+    - TODO TODO TODO NOT clearing each depth cascade is bad
+    - Red vis is broken now
 
 ## ogl
     - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]
