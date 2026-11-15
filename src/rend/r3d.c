@@ -18,578 +18,50 @@ static Ogl_RT transparent_rt;
 static Ogl_Compute_Bundle depth_range_compute_bundle;
 static Ogl_Compute_Bundle bounds_compute_bundle;
 
-const char* depth_range_cs = R"(#version 460 core
-layout(local_size_x = 1, local_size_y = 1) in;
-layout (binding = 0, r32ui) uniform uimage2D drange;
-layout (binding = 0)uniform sampler2D depth_buffer;
-
-const ivec2 drange_min_tc = ivec2(0,0);
-const ivec2 drange_max_tc = ivec2(1,0);
-
-void main() {
-    ivec2 pixel_coords = ivec2(gl_WorkGroupID.xy);
-    float depth = texelFetch(depth_buffer, pixel_coords, 0).x;
-    if (depth >= 1.0) return; // We don't handle the glCleared values
-    uint k = floatBitsToUint(depth);
-    imageAtomicMin(drange, drange_min_tc, k);
-    imageAtomicMax(drange, drange_max_tc, k);
-}
-)";
-
-const char* cascade_bounds_cs = R"(#version 460 core
-layout(local_size_x = 1, local_size_y = 1) in;
-layout (binding = 0, r32ui) uniform uimage2D bounds;
-layout (binding = 0) uniform sampler2D depth_buffer;
-
-// Are these really correct, I guess because in screen space the tc's are in [0,1]?
-
-const ivec2 bounds_min_x_tc = ivec2(0,0);
-const ivec2 bounds_max_x_tc = ivec2(1,0);
-
-const ivec2 bounds_min_y_tc = ivec2(2,0);
-const ivec2 bounds_max_y_tc = ivec2(3,0);
-
-const ivec2 bounds_min_z_tc = ivec2(4,0);
-const ivec2 bounds_max_z_tc = ivec2(5,0);
-
-void main() {
-    ivec2 pixel_coords = ivec2(gl_WorkGroupID.xy);
-    float depth = texelFetch(depth_buffer, pixel_coords, 0).x;
-    uint d = floatBitsToUint(depth);
-    vec2 tc = vec2(pixel_coords) / vec2(textureSize(depth_buffer, 0));
-    
-    float min_depth = uintBitsToFloat(imageLoad(bounds, bounds_min_z_tc).x);
-    float max_depth = uintBitsToFloat(imageLoad(bounds, bounds_max_z_tc).x);
-    // Whywhywhy is this || and nor &&??
-    if (depth >= min_depth && depth <= max_depth) {
-      uint x = floatBitsToUint(tc.x);
-      uint y = floatBitsToUint(tc.y);
-
-      imageAtomicMin(bounds, bounds_min_x_tc, x);
-      imageAtomicMax(bounds, bounds_max_x_tc, x);
-
-      imageAtomicMin(bounds, bounds_min_y_tc, y);
-      imageAtomicMax(bounds, bounds_max_y_tc, y);
-
-      //imageAtomicMin(bounds, bounds_min_z_tc, d);
-      //imageAtomicMax(bounds, bounds_max_z_tc, d);
-    }
-}
-)";
-
-////////////////////////////////////////////////
-// 3D Shader
-////////////////////////////////////////////////
-
-const char* transparent_fs= R"(#version 460 core
-layout(location = 0) out vec4 accum;
-layout(location = 1) out float reveal;
-#define MAX_CASCADES 4
-
-layout (std140) uniform PerFrameData { 
-  mat4 lsms[MAX_CASCADES];
-  mat4 view;
-  mat4 proj;
-  vec3 cam_pos;
-  vec3 light_dir;
-  vec4 cascade_bounds;
-  int cascade_idx;
-};
-
-layout(std140) uniform Material {
-  vec4 base_color_factor;
-  vec4 emissive_factor;
-  float metallic_factor;
-  float roughness_factor;
-
-  int base_tc_idx;
-  int normal_tc_idx;
-  int metallic_roughness_tc_idx;
-  int emissive_tc_idx;
-  int occlusion_tc_idx;
-  int is_unlit;
-
-  mat4 model_matrix;
-};
-
-in VS_OUT {
-  vec4 color;
-  vec4 wp;
-  vec3 view_dir;
-  vec3 norm;
-  vec3 tang;
-  vec3 binorm;
-  vec2 tc[4];
-  vec3 frag_pos_ws;
-  vec4 frag_pos_ls[MAX_CASCADES];
-} fs_in;
-
-uniform sampler2D base_color_tex;
-
-void main() {
-  // Calculate the color like in regular VS
-  vec4 fs_color = fs_in.color * texture(base_color_tex, fs_in.tc[base_tc_idx]);
-
-  // the weight function
-  float weight = clamp(pow(min(1.0, fs_color.a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
-  // accum is for color accumulation
-  accum = vec4(fs_color.rgb * fs_color.a, fs_color.a) * weight;
-  reveal = fs_color.a;
-}
-)";
-
-const char* shadow_fs= R"(#version 460 core
-#define MAX_CASCADES 4
-layout(location = 0) out vec4 out_color;
-
-in VS_OUT {
-  vec4 color;
-  vec4 wp;
-  vec3 view_dir;
-  vec3 norm;
-  vec3 tang;
-  vec3 binorm;
-  vec2 tc[4];
-  vec3 frag_pos_ws;
-  vec4 frag_pos_ls[MAX_CASCADES];
-} fs_in;
-
-layout (std140) uniform PerFrameData { 
-  mat4 lsms[MAX_CASCADES];
-  mat4 view;
-  mat4 proj;
-  vec3 cam_pos;
-  vec3 light_dir;
-  vec4 cascade_bounds;
-  int cascade_idx;
-};
-
-void main() {
-  float depth = gl_FragCoord.z;
-  out_color[cascade_idx] = depth;
-}
-)";
-
-const char* uber_vs = R"(#version 460 core
-#define MAX_CASCADES 4
-
-layout(location=0)  in vec3 pos;
-layout(location=1)  in vec3 norm;
-layout(location=2)  in vec4 tang;
-layout(location=3)  in vec2 tc_0;
-layout(location=4)  in vec2 tc_1;
-layout(location=5)  in vec2 tc_2;
-layout(location=6)  in vec2 tc_3;
-layout(location=7)  in vec4 col_0;
-layout(location=8)  in vec4 col_1;
-layout(location=9)  in vec4 col_2;
-layout(location=10) in vec4 col_3;
-layout(location=11) in ivec4 joint_0;
-//layout(location=12) in vec4 joint_1;
-//layout(location=13) in vec4 joint_2;
-//layout(location=14) in vec4 joint_3;
-layout(location=12) in vec4 weight_0;
-
-layout (std140) uniform PerFrameData { 
-  mat4 lsms[MAX_CASCADES];
-  mat4 view;
-  mat4 proj;
-  vec3 cam_pos;
-  vec3 light_dir;
-  vec4 cascade_bounds;
-  int cascade_idx;
-};
-
-layout(std140) uniform Material {
-  vec4 base_color_factor;
-  vec4 emissive_factor;
-  float metallic_factor;
-  float roughness_factor;
-
-  int base_tc_idx;
-  int normal_tc_idx;
-  int metallic_roughness_tc_idx;
-  int emissive_tc_idx;
-  int occlusion_tc_idx;
-  int is_unlit;
-
-  mat4 model_matrix;
-};
-
-// FIXME: Why is max number of bones 32???? fix this
-layout(std140) uniform JointMatrices {
-  mat4 joint_mat[32];
-};
-
-out VS_OUT {
-  vec4 color;
-  vec4 wp;
-  vec3 view_dir;
-  vec3 norm;
-  vec3 tang;
-  vec3 binorm;
-  vec2 tc[4];
-  vec3 frag_pos_ws;
-  vec4 frag_pos_ls[MAX_CASCADES];
-} vs_out;
-
-void main() { 
-  vs_out.color = col_0*base_color_factor;
-
-  mat4 skinMat =
-    weight_0.x * joint_mat[joint_0.x] +
-    weight_0.y * joint_mat[joint_0.y] +
-    weight_0.z * joint_mat[joint_0.z] +
-    weight_0.w * joint_mat[joint_0.w];
-
-	gl_Position = proj * view * model_matrix * skinMat * vec4(pos, 1.0);
-
-  vs_out.tc[0] = tc_0;
-  vs_out.tc[1] = tc_1;
-  vs_out.tc[2] = tc_2;
-  vs_out.tc[3] = tc_3;
-
-  // Normal mapping bullshido
-  mat3 M = mat3(model_matrix);
-  mat3 normal_matrix = transpose(inverse(M));
-  vs_out.norm = normalize(normal_matrix * norm);
-  vec3 T = normalize(M * tang.xyz);
-  vec3 N = normalize(normal_matrix * norm);
-  T = normalize(T - N * dot(N, T));
-  vec3 B = normalize(cross(N, T)) * tang.w;
-  vs_out.tang = T;
-  vs_out.binorm = B;
-
-  vs_out.wp = model_matrix * vec4(pos, 1.0f);
-  vs_out.view_dir = normalize(cam_pos.xyz - vs_out.wp.xyz);
-
-  vs_out.frag_pos_ws = vec3(model_matrix * vec4(pos, 1.0));
-  for (int i = 0; i < MAX_CASCADES; i+=1) {
-    vs_out.frag_pos_ls[i] = lsms[i] * vec4(vs_out.frag_pos_ws, 1.0);
-  }
-}
-)";
-
-// ref: https://www.rastertek.com/gl4linuxtut52.html
-const char* uber_fs= R"(#version 460 core
-#define MAX_CASCADES 4
-precision highp float;
-layout(location = 0) out vec4 out_color;
-
-layout (std140) uniform PerFrameData { 
-  mat4 lsms[MAX_CASCADES];
-  mat4 view;
-  mat4 proj;
-  vec3 cam_pos;
-  vec3 light_dir;
-  vec4 cascade_bounds;
-  int cascade_idx;
-};
-
-layout(std140) uniform Material {
-  vec4 base_color_factor;
-  vec4 emissive_factor;
-  float metallic_factor;
-  float roughness_factor;
-
-  int base_tc_idx;
-  int normal_tc_idx;
-  int metallic_roughness_tc_idx;
-  int emissive_tc_idx;
-  int occlusion_tc_idx;
-  int is_unlit;
-
-  mat4 model_matrix;
-};
-
-in VS_OUT {
-  vec4 color;
-  vec4 wp;
-  vec3 view_dir;
-  vec3 norm;
-  vec3 tang;
-  vec3 binorm;
-  vec2 tc[4];
-  vec3 frag_pos_ws;
-  vec4 frag_pos_ls[MAX_CASCADES];
-} fs_in;
-
-uniform sampler2D base_color_tex;
-uniform sampler2D normal_tex;
-uniform sampler2D metallic_roughness_tex;
-uniform sampler2D emissive_tex;
-uniform sampler2D occlusion_tex;
-
-uniform sampler2D shadow_map;
-
-int get_cascade_layer(vec3 frag_pos_ws) {
-  // Find the depth of the fragment from camera POV
-  vec4 frag_pos_vs = view * vec4(frag_pos_ws, 1);
-  float depth_value = abs(frag_pos_vs.z);
-  // Find the actual depth value
-  int layer = -1;
-  for (int i = 0; i < MAX_CASCADES; i+=1) {
-    if (depth_value < cascade_bounds[i]) {
-      layer = i;
-      break;
-    }
-  }
-  if (layer == -1) {
-    layer = 3;
-  }
-
-  return layer;
-}
-
-float shadow_calc(vec3 frag_pos_ws) {
-  int layer = get_cascade_layer(frag_pos_ws);
-
-  vec4 frag_pos_lightspace = fs_in.frag_pos_ls[layer];
-
-  // project to get actual NDC (not needed for ortho but still)
-  vec3 proj_coords = frag_pos_lightspace.xyz / frag_pos_lightspace.w;
-  // go to [0,1] range (to sample the tex)
-  proj_coords = proj_coords*0.5+0.5;
-
-  // sample the tex
-  float closest_depth = texture(shadow_map, proj_coords.xy)[layer];
-  float current_depth = proj_coords.z;
-
-  // This is wrong!
-  float bias = 0.005;
-
-  // calculate bias
-  //vec3 normal = normalize(fs_in.norm);
-  //float bias = max(0.05 * (1.0 - dot(normal, light_dir)), 0.005);
-  //bias *= 1 / (cascade_bounds[layer] * 0.5f);
-
-  // calculate PCF
-  float shadow = 0.0;
-  vec2 texel_size = 1.0 / vec2(textureSize(shadow_map, 0));
-  for(int x = -1; x <= 1; ++x) {
-    for(int y = -1; y <= 1; ++y) {
-      float pcf_depth = texture(shadow_map, vec2(proj_coords.xy + vec2(x, y) * texel_size))[layer];
-      shadow += (current_depth- bias) > pcf_depth ? 1.0 : 0.0;
-    }
-  }
-  shadow /= 9.0*1.5; // should be 9 i just want soft shadows
-
-  if (proj_coords.z > 1.0) {
-    shadow = 0.0;
-  }
-
-  return shadow;
-}
-
-bool texture_present(sampler2D tex) {
-  return (textureSize(tex, 0).x > 1);
-}
-
-vec3 get_normal() {
-  vec3 norm = fs_in.norm;
-  if (texture_present(normal_tex)) {
-    vec3 bump_map = texture(normal_tex, fs_in.tc[normal_tc_idx]).rgb;
-    bump_map = (bump_map * 2.0f) - 1.0f;
-    norm = (bump_map.x * fs_in.tang) + (bump_map.y * fs_in.binorm) + (bump_map.z * fs_in.norm);
-    norm = normalize(norm);
-  }
-  return norm;
-}
-
-void main() {
-  //vec3 lD = -light_dir;
-  vec3 lD = light_dir;
-
-  // Sample the textures needed
-  vec3 albedo = texture(base_color_tex, fs_in.tc[base_tc_idx]).rgb * fs_in.color.rgb;
-  vec3 metallic_rough = texture(metallic_roughness_tex, fs_in.tc[metallic_roughness_tc_idx]).rgb*vec3(metallic_factor, roughness_factor, 1);
-  vec3 norm = get_normal();
-
-  // Retrieve metallic/roughness
-  float roughness = metallic_rough.r;
-  float metallic = metallic_rough.b;
-
-  // Calculate fresnel factor
-  vec3 F0 = vec3(0.04f, 0.04f, 0.04f);
-  F0 = mix(F0, albedo, metallic);
-
-  // Setup all needed vectors for lighting
-  vec3 halfdir = normalize(fs_in.view_dir + lD);
-  float NdotH = max(0.0f, dot(norm, halfdir));
-  float NdotV = max(0.0f, dot(norm, fs_in.view_dir));
-  float NdotL = max(0.0f, dot(norm, lD));
-  float HdotV = max(0.0f, dot(halfdir, fs_in.view_dir));
-
-  // GGX for normal distribution
-  float roughness_sqr = roughness * roughness;
-  float rough_sqr2 = roughness_sqr * roughness_sqr;
-  float NdotHSqr = NdotH * NdotH;
-  float denominator = (NdotHSqr * (rough_sqr2 - 1.0f) + 1.0f);
-  denominator = 3.14159265359f * (denominator * denominator);
-  float normal_distribution = rough_sqr2 / denominator;
-
-  // Schlick GGX for the geometric shadow
-  float smithL = NdotL / (NdotL * (1.0f - roughness_sqr) + roughness_sqr);
-  float smithV = NdotV / (NdotV * (1.0f - roughness_sqr) + roughness_sqr);
-  float geom_shadow = smithL * smithV;
-
-  // Fresnel SChlick for fresnel calculation
-  vec3 fresnel = F0 + (1.0f - F0) * pow(1.0f - HdotV, 5.0f);
-
-  // Cook-Torrance specular BRDF
-  vec3 specularity = (normal_distribution * fresnel * geom_shadow) / ((4.0f * (NdotL * NdotV)) + 0.00001f);
-
-  // Emissive color
-  vec3 emissive = texture(emissive_tex, fs_in.tc[emissive_tc_idx]).rgb * emissive_factor.rgb;
-
-  vec4 color = vec4(0.0,0.0,0.0,1.0);
-  color.rgb = (albedo + specularity + emissive) * NdotL;
-
-  if (is_unlit == 1) {
-    color.rgb = albedo;
-  }
-
-
-  // For shadow map visualization
-  vec3 layer_color = vec3(0.0);
-#if 1
-  int layer = get_cascade_layer(fs_in.frag_pos_ws);
-  if (layer == 0) { layer_color = 0.3*vec3(1.0,0.0,0.0); }
-  if (layer == 1) { layer_color = 0.3*vec3(0.0,1.0,0.0); }
-  if (layer == 2) { layer_color = 0.3*vec3(0.0,0.0,1.0); }
-  if (layer == 3) { layer_color = 0.3*vec3(1.0,1.0,1.0); }
-#endif
-
-  float shadow = shadow_calc(fs_in.frag_pos_ws);
-  out_color.rgb = color.rgb * (1.0 - shadow) + (1.0 - shadow) * layer_color;
-  out_color.a = color.a;
-}
-)";
-
-////////////////////////////////////////////////
-// FXAA Shader
-////////////////////////////////////////////////
-
-const char* postproc_fs= R"(#version 460 core
-layout(location = 0) out vec4 out_color;
-
-const float EPSILON = 0.00001f;
-bool eqf(float a, float b) { return abs(a - b) <= (abs(a) < abs(b) ? abs(b) : abs(a)) * EPSILON; }
-float max3(vec3 v) { return max(max(v.x, v.y), v.z); }
-
-in VS_OUT {
-  vec2 tc;
-} fs_in;
-
-uniform sampler2D u_tex;
-uniform sampler2D accum;
-uniform sampler2D reveal;
-
-// Ref: https://www.4rknova.com/blog/2015/02/15/fxaa
-vec3 sample_tex(vec2 p) { return texture(u_tex, p).xyz; }
-vec3 fxaa(vec2 p, ivec2 size) {
-	float FXAA_SPAN_MAX	= 8.0;
-	float FXAA_REDUCE_MUL = 1.0 / 8.0;
-	float FXAA_REDUCE_MIN = 1.0 / 128.0;
-
-	// 1st stage - Find edge
-	vec3 rgbNW = sample_tex(p + (vec2(-1.,-1.) / size));
-	vec3 rgbNE = sample_tex(p + (vec2( 1.,-1.) / size));
-	vec3 rgbSW = sample_tex(p + (vec2(-1., 1.) / size));
-	vec3 rgbSE = sample_tex(p + (vec2( 1., 1.) / size));
-	vec3 rgbM = sample_tex(p);
-	vec3 luma = vec3(0.299, 0.587, 0.114);
-	float lumaNW = dot(rgbNW, luma);
-	float lumaNE = dot(rgbNE, luma);
-	float lumaSW = dot(rgbSW, luma);
-	float lumaSE = dot(rgbSE, luma);
-	float lumaM = dot(rgbM, luma);
-	vec2 dir;
-	dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
-	dir.y = ((lumaNW + lumaSW) - (lumaNE + lumaSE));
-	float lumaSum = lumaNW + lumaNE + lumaSW + lumaSE;
-	float dirReduce = max(lumaSum * (0.25 * FXAA_REDUCE_MUL) , FXAA_REDUCE_MIN);
-	float rcpDirMin = 1. / (min(abs(dir.x), abs(dir.y)) + dirReduce);
-	dir = min(vec2(FXAA_SPAN_MAX), max(vec2(-FXAA_SPAN_MAX), dir * rcpDirMin)) / size;
-
-	// 2nd stage - Blur
-	vec3 rgbA = .5 * (sample_tex(p + dir * (1./3. - .5)) + sample_tex(p + dir * (2./3. - .5)));
-	vec3 rgbB = rgbA * .5 + .25 * ( sample_tex(p + dir * (0./3. - .5)) + sample_tex(p + dir * (3./3. - .5)));
-	float lumaB = dot(rgbB, luma);
-	float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
-	float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
-	return ((lumaB < lumaMin) || (lumaB > lumaMax)) ? rgbA : rgbB;
-}
-
-void main() {
-  ivec2 size = textureSize(u_tex, 0);
-  // Calculate opaque color
-  vec3 opaque_color = fxaa(fs_in.tc, size);
-  // FIXME: enable fxaa
-  //vec3 opaque_color = texture(u_tex, fs_in.tc).rgb;
-  // Calculate transparent color
-  ivec2 coords = ivec2(gl_FragCoord.xy);
-  float revealage = texelFetch(reveal, coords, 0).r;
-
-  vec3 transparent_color = vec3(0);
-  if (!eqf(revealage, 1.0f)) {
-    vec4 accumulation = texelFetch(accum, coords, 0);
-    if (isinf(max3(abs(accumulation.rgb)))) accumulation.rgb = vec3(accumulation.a);
-    vec3 average_color = accumulation.rgb / max(accumulation.a, EPSILON);
-    transparent_color = average_color.xyz;
-  }
-  float alpha = 1.0 - revealage;
-  out_color = vec4(transparent_color * alpha + opaque_color * revealage, 1.0);
-}
-)";
-
-
-////////////////////////////////////////////////
-// Fullscreen Shader
-////////////////////////////////////////////////
-
-const char* fullscreen_vs = R"(#version 460 core
-vec2 vertices[4] = vec2[](
-  vec2(-1,+1),
-  vec2(-1,-1),
-  vec2(+1,-1),
-  vec2(+1,+1)
-);
-
-vec2 tex_coords[4] = vec2[](
-  vec2(0.0,1.0),
-  vec2(0.0,0.0),
-  vec2(1.0,0.0),
-  vec2(1.0,1.0)
-);
-
-out VS_OUT {
-  vec2 tc;
-} vs_out;
-
-void main() { 
-  vs_out.tc = tex_coords[gl_VertexID];
-
-  vec2 pos = vertices[gl_VertexID];
-	gl_Position = vec4(pos, 0.0, 1.0);
-}
-)";
-
-const char* fullscreen_fs= R"(#version 460 core
-layout(location = 0) out vec4 out_color;
-
-in VS_OUT {
-  vec2 tc;
-} fs_in;
-
-uniform sampler2D u_tex;
-
-vec3 sample_tex(vec2 p) { return texture(u_tex, p).xyz; }
-
-void main() {
-  out_color = vec4(sample_tex(fs_in.tc), 1.0);
-}
-)";
+  static const u8 DEPTH_RANGE_CS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/depth_range.comp.glsl"
+  };
+
+  static const u8 CASCADE_BOUNDS_CS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/cascade_bounds.comp.glsl"
+  };
+
+  static const u8 TRANSPARENT_FS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/transparent.frag.glsl"
+  };
+
+  static const u8 SHADOW_FS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/shadow.frag.glsl"
+  };
+
+  static const u8 UBER_VS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/uber.vert.glsl"
+  };
+
+  static const u8 UBER_FS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/uber.frag.glsl"
+  };
+
+  static const u8 FULLSCREEN_VS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/fullscreen.vert.glsl"
+  };
+
+  static const u8 FULLSCREEN_FS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/fullscreen.frag.glsl"
+  };
+
+  static const u8 POSTPROC_FS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/postproc.frag.glsl"
+  };
 
 typedef struct {
   m4 lsms[CSM_MAX_CASCADES];
@@ -624,7 +96,7 @@ typedef struct {
 void r3d_try_load_shaders(rect viewport) {
   if (depth_range_compute_bundle.sp.impl_state == 0) {
     depth_range_compute_bundle = (Ogl_Compute_Bundle) {
-      .sp = ogl_shader_make(depth_range_cs, nullptr),
+      .sp = ogl_shader_make((char*)DEPTH_RANGE_CS, nullptr),
       .images = {
         [0] = { .name = "drange", .img = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
       },
@@ -632,7 +104,7 @@ void r3d_try_load_shaders(rect viewport) {
   }
   if (bounds_compute_bundle.sp.impl_state == 0) {
     bounds_compute_bundle = (Ogl_Compute_Bundle) {
-      .sp = ogl_shader_make(cascade_bounds_cs, nullptr),
+      .sp = ogl_shader_make((char*)CASCADE_BOUNDS_CS, nullptr),
       .images = {
         [0] = { .name = "bounds", .img = ogl_tex_make(nullptr, 6, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
       },
@@ -642,7 +114,7 @@ void r3d_try_load_shaders(rect viewport) {
     ogl_rt_init(&offscreen_rt, viewport.w, viewport.h, OGL_RT_A0, OGL_TEX_FORMAT_RGBA8U, 1);
 
     postproc_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(fullscreen_vs, postproc_fs),
+      .sp = ogl_shader_make((char*)FULLSCREEN_VS, (char*)POSTPROC_FS),
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_DISABLED,
         .dfunc  = OGL_DFUNC_ALWAYS,
@@ -658,7 +130,7 @@ void r3d_try_load_shaders(rect viewport) {
 
   if (fullscreen_bundle.sp.impl_state == 0) {
     fullscreen_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(fullscreen_vs, fullscreen_fs),
+      .sp = ogl_shader_make((char*)FULLSCREEN_VS, (char*)FULLSCREEN_FS),
       .depth_state = (Ogl_Depth_State) {
         .dwrite = OGL_DEPTH_WRITE_DISABLED,
         .dfunc  = OGL_DFUNC_ALWAYS,
@@ -676,7 +148,7 @@ void r3d_try_load_shaders(rect viewport) {
     ogl_rt_init(&shadow_rt, SHADOWMAP_DIM, SHADOWMAP_DIM, OGL_RT_A0, OGL_TEX_FORMAT_RGBA32F, true);
 
     uber_bundle = (Ogl_Render_Bundle){
-      .sp = ogl_shader_make(uber_vs, uber_fs),
+      .sp = ogl_shader_make((char*)UBER_VS, (char*)UBER_FS),
 
       .textures[0] = (Ogl_Tex_Slot){ .name = "base_color_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
       .textures[1] = (Ogl_Tex_Slot){ .name = "normal_tex", .tex = *AM_GET(asset_id_from_path(STR8L("white.png")), tex)},
@@ -739,7 +211,7 @@ void r3d_try_load_shaders(rect viewport) {
     };
 
     uber_shadow_bundle = uber_bundle;
-    uber_shadow_bundle.sp = ogl_shader_make(uber_vs, shadow_fs);
+    uber_shadow_bundle.sp = ogl_shader_make((char*)UBER_VS, (char*)SHADOW_FS);
     uber_shadow_bundle.rt = shadow_rt;
     uber_shadow_bundle.dyn_state.flags = OGL_DYN_STATE_FLAG_SCISSOR; 
     M_ZERO_ARRAY(uber_shadow_bundle.blend_state);
@@ -748,7 +220,7 @@ void r3d_try_load_shaders(rect viewport) {
   if (uber_transparent_bundle.sp.impl_state == 0) {
     ogl_rt_init(&transparent_rt, viewport.w, viewport.h, OGL_RT_A0 | OGL_RT_A1, OGL_TEX_FORMAT_RGBA16F, true);
     uber_transparent_bundle = uber_bundle;
-    uber_transparent_bundle.sp = ogl_shader_make(uber_vs, transparent_fs);
+    uber_transparent_bundle.sp = ogl_shader_make((char*)UBER_VS, (char*)TRANSPARENT_FS);
     uber_transparent_bundle.rt = transparent_rt;
     uber_transparent_bundle.dyn_state.flags = OGL_DYN_STATE_FLAG_SCISSOR; 
 
@@ -774,7 +246,7 @@ void r3d_try_load_shaders(rect viewport) {
 // Context API! (More compact!)
 ////////////////////////////////////
 
-R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
+R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Render_Mode rmode, R3D_Ctx_Flags flags) {
   R3D_Ctx *rctx = arena_push_array(arena, R3D_Ctx, 1);
   *rctx = (R3D_Ctx) {
     .arena = arena,
@@ -782,17 +254,24 @@ R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
     .rt = nullptr,
     .cam = *c,
     .opt = *copt,
+    .rmode = rmode,
   };
   for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
-    rctx->lsms[cascade_idx] = csm_calc_lsm_i(rctx->viewport, &rctx->cam, &rctx->opt, cascade_idx);
+    rctx->lsms[cascade_idx] = csm_calc_lsm_i_sdsm(rctx->viewport, &rctx->cam, &rctx->opt, cascade_idx);
   }
 
   return rctx;
 }
 
+R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
+  return r3dc_begin(arena, viewport, c, copt, R3D_OPQ, flags);
+}
+
 
 R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, s32 cascade_idx, R3D_Ctx_Flags flags) {
-  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
+
+  R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_SHD, flags);
+
   pass->rt = &shadow_rt;
   pass->rt->cmask = (OGL_RT_CMASK_R << cascade_idx);
 
@@ -809,7 +288,7 @@ R3D_Ctx* r3dc_begin_depth_i(Arena *arena, rect viewport, Camera *c, CSM_Opt *cop
 }
 
 R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags) {
-  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
+  R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_OPQ, flags);
   pass->rt = &offscreen_rt;
   return pass;
 }
@@ -822,7 +301,7 @@ void r3d_clear() {
   ogl_clear_color(&transparent_rt, 0, (float[]){0, 0, 0, 0});
   ogl_clear_color(&transparent_rt, 1, (float[]){1, 1, 1, 1});
 
-  // 2. Clear cascaded shadow map
+  // 2. Clear cascaded shadow map RT
   ogl_clear_color(&shadow_rt, 0, (float[]){1,1,1,1});
   ogl_clear_depth(&shadow_rt);
 }
@@ -831,7 +310,7 @@ R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt 
   // Copy the offscreen (pass) RT's depth buffer to the transparent RT
   ogl_copy_depth_buffer(&offscreen_rt, &transparent_rt, viewport);
 
-  R3D_Ctx *pass = r3dc_begin_forward(arena, viewport, c, copt, flags);
+  R3D_Ctx *pass = r3dc_begin(arena, viewport, c, copt, R3D_TRN, flags);
   pass->rt = &transparent_rt;
   return pass;
 }
@@ -1239,15 +718,28 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
   //f32 cascade_far = csm_get_cascade_split_far(&rctx->cam, &rctx->opt, CSM_MAX_CASCADES-1);
   //cascade_far = project(v3m(0,0,cascade_far), rctx->cam.dirty_proj).z;
 
+#if 0
   f64 step = (drange.y - drange.x) / (f64)CSM_MAX_CASCADES;
   f32 cascade_near = drange.x - step * (cascade_idx);
   //cascade_near = project(v3m(0,0,cascade_near), rctx->cam.dirty_proj).z;
   f32 cascade_far = drange.y - step * (cascade_idx+1);
   //cascade_far = project(v3m(0,0,cascade_far), rctx->cam.dirty_proj).z;
   //printf("%f %f\n", cascade_near, cascade_far);
+#endif
+
+  //static f32 n[CSM_MAX_CASCADES],f[CSM_MAX_CASCADES];
+
+  f64 step = ((f64)drange.y - (f64)drange.x) / (f64)CSM_MAX_CASCADES;
+  f32 cascade_near = drange.x + step * cascade_idx;
+  f32 cascade_far  = drange.x + step * (cascade_idx + 1);
 
 
   // 0. update tex to have [-1,0] range for xy and drange for z
+#if 0
+  u32 near_as_u32 = *((u32*)&n[cascade_idx]);
+  u32 far_as_u32 = *((u32*)&f[cascade_idx]);
+#endif
+
   u32 near_as_u32 = *((u32*)&cascade_near);
   u32 far_as_u32 = *((u32*)&cascade_far);
 
@@ -1275,6 +767,13 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
 
   v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
   v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
+
+#if 0
+  printf("(viewport) bounds z: [%f:%f]\n", bounds_min_z, bounds_max_z);
+  n[cascade_idx] = -project(ndc_min, m4_inv(rctx->cam.dirty_proj)).z;
+  f[cascade_idx] = -project(ndc_max, m4_inv(rctx->cam.dirty_proj)).z;
+  printf("(view) bounds z: [%f:%f]\n", n, f);
+#endif
 
   // 3. Compute the tight frustum
 

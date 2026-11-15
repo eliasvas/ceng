@@ -44,6 +44,9 @@
     - I don't think its correct to have r3d exposed in game.c so much?
     - Make a UI slider, simple just a label of the value + logic to go up down with hot +/- delta on mousex
 
+    - Immediate dbg API should be contextless !!!!!!!!!!
+    - Some kind of shader include system
+
 ## ogl
     - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]
     - ogl_tex_read should be possible, why why why why

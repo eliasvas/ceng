@@ -7,9 +7,20 @@
 #include "camera.h"
 #include "csm_utils.h"
 
-//typedef FRZ_Vertex Tri_Vertex;
-//#define TRI_VERTEX_VARG(vt) vt.pos.x, vt.pos.y, vt.pos.z
+/*
+This renderer works in 4 modes:
+  0. Debug mode: Anywhere after the ogl_clear(..) you can issue immediate commands that will draw immediately, used for debug purposes
+  1. Opaque mode: opaque objects can be drawn and they will go to the 'offscreen_rt' 
+  2. Transparent mode: transparent objects will be drawn to 'transparent_rt'
+  3. Shadow mode: Scene can be rendered in shadow mode, results go to 'shadow_rt'
+*/
 
+typedef enum {
+  R3D_DBG, // Debug
+  R3D_OPQ, // Opaque
+  R3D_TRN, // Transparent
+  R3D_SHD, // Shadow
+} R3D_Render_Mode ;
 
 typedef struct {
   v3 pos;
@@ -58,12 +69,15 @@ typedef struct {
   // Not really needed right?
   m4 lsms[CSM_MAX_CASCADES];
 
+  R3D_Render_Mode rmode;
+
   Ogl_RT *rt;
 
 } R3D_Ctx;
 
 void r3d_clear();
 
+R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Render_Mode rmode, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_forward(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_offscreen(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
 R3D_Ctx* r3dc_begin_transparent(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_Ctx_Flags flags);
@@ -81,9 +95,9 @@ m4 *calc_joint_mats_for_animation(Arena *arena, struct Model_Info *info, s32 mes
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint);
 
 void r3d_try_load_shaders(rect viewport);
-void r3d_do_postproc(rect viewport);
 
 // Just exposed for testing by game.c
+void r3d_do_postproc(rect viewport);
 v4 r3d_get_cascade_bounds(CSM_Opt *opt);
 color r3d_get_cascade_idx_color(s32 cascade_idx);
 //m4 r3d_calc_lsm_i(R3D_Ctx *rctx, s32 index);
