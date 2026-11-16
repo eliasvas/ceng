@@ -28,6 +28,8 @@ typedef v4 color;
 #define CLR_PURPLE_C64     (clr_hex(0x6F75D3))
 #define CLR_PURPLE_RAIN    (clr_hex(0x7844C7))
 
+#define CLR_ALPHA(c, a) clr(c.x, c.y, c.z, a)
+
 // TODO: Color Spaces
 
 static u32 u32_from_color(color c) {

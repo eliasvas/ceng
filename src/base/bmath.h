@@ -991,8 +991,8 @@ static frustum frustum_transform_points(frustum ndc, m4 m) {
   frustum f = {};
 
   for (s32 p = 0; p < FRUSTUM_CORNERS; p+=1) {
-    v3 ndc_p = ndc.points[p];
-    f.points[p] = v3_from_v4(unproject(v4m(ndc_p.x, ndc_p.y, ndc_p.z, 1), m));
+    v4 ndc_p = v4_from_v3(ndc.points[p], 1);
+    f.points[p] = v3_from_v4(unproject(ndc_p, m));
   }
   return f;
 }

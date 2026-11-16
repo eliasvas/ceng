@@ -92,7 +92,6 @@ void r3dc_end(R3D_Ctx *rctx);
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model);
 void r3dc_imm_cube(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
 void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model);
-void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim);
 struct Model_Info;
 void r3dc_imm_model(R3D_Ctx *rctx, struct Model_Info *info, m4 model, f32 time_sec, s32 anim_idx, color tint);
 

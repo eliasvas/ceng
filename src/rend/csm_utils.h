@@ -4,6 +4,8 @@
 #include "base/base_inc.h"
 #include "camera.h"
 
+#include "rend/r3dbg.h"
+
 #define SHADOWMAP_DIM 1024
 #define CSM_MAX_CASCADES 4
 
@@ -119,7 +121,6 @@ static color csm_get_cascade_idx_color(s32 cascade_idx) {
   return c;
 }
 
-// TODO: Fit within cascade's bvh stuff!
 static m4 lsm_from_vp(m4 view, m4 proj, bbox scene, v3 ld, f32 zmult) {
   m4 vp = m4_mult(proj, view);
 
@@ -171,6 +172,41 @@ static m4 csm_calc_lsm_i(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 in
   return lsm;
 }
 
+static m4 lsm_from_vp2(m4 view, m4 proj, bbox scene, v3 ld, f32 zmult, frustum fw) {
+  //m4 vp = m4_mult(proj, view);
+
+  // 0. Calculate the view matrix for the LSM by finding the world frustum center
+  //frustum f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
+  v3 f_center = frustum_calc_center(&fw);
+  m4 lsm_view = m4_look_at(v3_add(f_center, ld), f_center, v3m(0,1,0));
+
+  // 1. Calculate the ortho matrix by finding the view-space bounds of the frustum  
+  frustum fv = frustum_transform_points(fw, lsm_view);
+  bbox bounds = bbox_from_frustum(fv);
+
+  // 2. Calculate the actual ortho matrix (+zMult)
+  //bounds.min.z = (bounds.min.z <= 0) ? (bounds.min.z * zmult) : (bounds.min.z / zmult);
+  //bounds.max.z = (bounds.max.z <= 0) ? (bounds.max.z / zmult) : (bounds.max.z * zmult);
+
+  if (zmult > 1.0) {
+    f32 z_padding = 10.0f;
+    bounds.min.z -= z_padding;
+    bounds.max.z += z_padding;
+  }
+
+  bbox s = bbox_transform(scene, lsm_view);
+  bounds.min.x = MAX(bounds.min.x, s.min.x);
+  bounds.max.x = MIN(bounds.max.x, s.max.x);
+
+  bounds.min.y = MAX(bounds.min.y, s.min.y);
+  bounds.max.y = MIN(bounds.max.y, s.max.y);
+
+  m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
+  m4 lsm = m4_mult(lsm_proj, lsm_view);
+
+  return lsm;
+}
+
 static m4 csm_calc_lsm_i_sdsm(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 index) {
   f32 near_bound = csm_get_cascade_split_near(camera, csm_opt, index);
   f32 far_bound = csm_get_cascade_split_far(camera, csm_opt, index);
@@ -178,15 +214,25 @@ static m4 csm_calc_lsm_i_sdsm(rect viewport, Camera *camera, CSM_Opt *csm_opt, s
   f32 aspect = viewport.w/(f32)viewport.h;
   m4 persp_mat = m4_persp(camera->fovx, aspect, near_bound, far_bound);
   m4 view = camera->dirty_view;
-  m4 lsm = lsm_from_vp(view, persp_mat, 
+  m4 lsm = lsm_from_vp2(view, persp_mat, 
       (csm_opt->fit_flags & CSM_FIT_FLAG_ISECT_BVH) ? csm_opt->scene_bbox : bbox_inf(), 
       csm_opt->light_dir, 
       (csm_opt->fit_flags == CSM_FIT_FLAG_ZMULT) ? csm_opt->zmult : 1.0
-      //,csm_opt->cascade_frustum[index]
+      ,csm_opt->cascade_frustum[index]
   );
 
 
 
   return lsm;
 }
+
+static v2 csm_convert_drange_to_viewspace(Camera *cam, v2 drange) {
+  v4 ndc_min = v4m(0,0,drange.x*2.0 - 1.0, 1);
+  v4 coords_min = unproject(ndc_min, m4_inv(cam->dirty_proj));
+  v4 ndc_max = v4m(0,0,drange.y*2.0 - 1.0, 1);
+  v4 coords_max = unproject(ndc_max, m4_inv(cam->dirty_proj));
+  v2 drange_viewspace = v2m(-coords_min.z, -coords_max.z);
+  return drange_viewspace;
+}
+
 #endif

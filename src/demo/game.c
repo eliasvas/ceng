@@ -145,15 +145,16 @@ void game_update(struct Game_State *gs, float dt) {
   // Initialize debug drawing API
   r3dbg_setup(gs->frame_arena);
 
+#if 0
   r3dbg_tri(
-      v3m(0,0,0),
-      v3m(0,8,0),
-      v3m(8,0,0),
-      v4_multf(CLR_GREEN_EVA, 0.7),
-      v4_multf(CLR_RED_PINK, 0.7),
-      v4_multf(CLR_YELLOW, 0.7)
+    (D_Vertex){v3m(0,0,0), v4_multf(CLR_GREEN_EVA, 0.7)},
+    (D_Vertex){v3m(0,8,0), v4_multf(CLR_RED_PINK, 0.7)},
+    (D_Vertex){v3m(8,0,0), v4_multf(CLR_YELLOW, 0.7)}
   );
 
+  r3dbg_frustum(frustum_make_ndc(), CLR_BLUE);
+  r3dbg_cube(m4_translate(v3m(0,10,0)), CLR_YELLOW);
+#endif
 
 
   // This is happening every frame.. maybe.. IDK
@@ -304,20 +305,13 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
-  // 0. We get the depth from the shader (in viewport [0,1] space)
-  v2 drange = r3d_compute_depth_range(opaque_pass);
-  // 1. conver to view space depth (needed for actual rendering)
-  v4 ndc_min = v4m(0,0,drange.x*2.0 - 1.0, 1);
-  v4 coords_min = unproject(ndc_min, m4_inv(gs->cam.dirty_proj));
-  v4 ndc_max = v4m(0,0,drange.y*2.0 - 1.0, 1);
-  v4 coords_max = unproject(ndc_max, m4_inv(gs->cam.dirty_proj));
-  v2 drange_viewspace = v2m(-coords_min.z, -coords_max.z);
-  // 3. Store in CSM_Opt struct for use by the next render passes
-  gs->csm_opt.drange = drange_viewspace;
-  //printf("drange = (%.2f, %.2f)\n", drange_viewspace.x, drange_viewspace.y);
-
-
   // TEST TEST TEST TEST
+
+  // 0. We get the depth from the shader (in viewport [0,1] space) and convert to viespace
+  v2 drange = r3d_compute_depth_range(opaque_pass);
+  v2 drange_viewspace = csm_convert_drange_to_viewspace(&opaque_pass->cam, drange);
+  gs->csm_opt.drange = drange_viewspace;
+
   for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
     // FIXME: pass instead of drange / viewspace pass the actual range now whole
     gs->csm_opt.cascade_frustum[cascade_idx] = r3d_compute_cascade_frustum(opaque_pass, drange, drange_viewspace, cascade_idx);
@@ -373,6 +367,7 @@ void game_render(struct Game_State *gs, float dt) {
     // TEST TEST TEST TEST
     // TEST TEST TEST TEST
     // Why is the scene_box2 calculated only inside rctx of opaque, FUCK htis
+#if 0
     {
       bbox sb = opaque_pass->opt.scene_bbox;
       v3 hdim = bbox_get_hdim(sb);
@@ -381,6 +376,7 @@ void game_render(struct Game_State *gs, float dt) {
       m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
       r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.6,0.6,0.6,0.2), worldmat);
     }
+#endif
     /*
     {
       bbox sb = opaque_pass->opt.scene_bbox2;
@@ -392,10 +388,12 @@ void game_render(struct Game_State *gs, float dt) {
     }
     */
 
+#if 1
     for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
-      color cc = csm_get_cascade_idx_color(cascade_idx);
-      r3dc_imm_frustum(transparent_pass, opaque_pass->opt.cascade_frustum[cascade_idx], cc, OGL_PRIM_TYPE_LINE_STRIP);
+      color cc = CLR_ALPHA(csm_get_cascade_idx_color(cascade_idx), 0.2);
+      r3dbg_frustum(opaque_pass->opt.cascade_frustum[cascade_idx], cc);
     }
+#endif
 
 
     // FINALLY, render the debug stuff.....

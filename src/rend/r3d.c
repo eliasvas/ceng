@@ -277,7 +277,7 @@ R3D_Ctx* r3dc_begin(Arena *arena, rect viewport, Camera *c, CSM_Opt *copt, R3D_R
     .rmode = rmode,
   };
   for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
-    rctx->lsms[cascade_idx] = csm_calc_lsm_i_sdsm(rctx->viewport, &rctx->cam, &rctx->opt, cascade_idx);
+    rctx->lsms[cascade_idx] = csm_calc_lsm_i(rctx->viewport, &rctx->cam, &rctx->opt, cascade_idx);
   }
 
   return rctx;
@@ -618,33 +618,11 @@ v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
 
 // For each of the cascades we compute a tight frustum for all the fragments 
 frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspace, s32 cascade_idx) {
-  // -1. find the ndc space needed near far for the cascade_idx
-  //f32 cascade_near = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, 0);
-  //cascade_near = project(v3m(0,0,cascade_near), rctx->cam.dirty_proj).z;
-  //f32 cascade_far = csm_get_cascade_split_far(&rctx->cam, &rctx->opt, CSM_MAX_CASCADES-1);
-  //cascade_far = project(v3m(0,0,cascade_far), rctx->cam.dirty_proj).z;
-
-#if 0
-  f64 step = (drange.y - drange.x) / (f64)CSM_MAX_CASCADES;
-  f32 cascade_near = drange.x - step * (cascade_idx);
-  //cascade_near = project(v3m(0,0,cascade_near), rctx->cam.dirty_proj).z;
-  f32 cascade_far = drange.y - step * (cascade_idx+1);
-  //cascade_far = project(v3m(0,0,cascade_far), rctx->cam.dirty_proj).z;
-  //printf("%f %f\n", cascade_near, cascade_far);
-#endif
-
-  //static f32 n[CSM_MAX_CASCADES],f[CSM_MAX_CASCADES];
-
-  f64 step = ((f64)drange.y - (f64)drange.x) / (f64)CSM_MAX_CASCADES;
-  f32 cascade_near = drange.x + step * cascade_idx;
-  f32 cascade_far  = drange.x + step * (cascade_idx + 1);
-
-
-  // 0. update tex to have [-1,0] range for xy and drange for z
-#if 0
-  u32 near_as_u32 = *((u32*)&n[cascade_idx]);
-  u32 far_as_u32 = *((u32*)&f[cascade_idx]);
-#endif
+  // Compute near/far for the cascade in [0,1]
+  f32 vs_near = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, cascade_idx);
+  f32 vs_far  = csm_get_cascade_split_far (&rctx->cam, &rctx->opt, cascade_idx);
+  f32 cascade_near = project(v3m(0, 0, -vs_near), rctx->cam.dirty_proj).z* 0.5 + 0.5;
+  f32 cascade_far  = project(v3m(0, 0, -vs_far),  rctx->cam.dirty_proj).z* 0.5 + 0.5;
 
   u32 near_as_u32 = *((u32*)&cascade_near);
   u32 far_as_u32 = *((u32*)&cascade_far);
@@ -674,40 +652,13 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
   v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
   v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
 
-#if 0
-  printf("(viewport) bounds z: [%f:%f]\n", bounds_min_z, bounds_max_z);
-  n[cascade_idx] = -project(ndc_min, m4_inv(rctx->cam.dirty_proj)).z;
-  f[cascade_idx] = -project(ndc_max, m4_inv(rctx->cam.dirty_proj)).z;
-  printf("(view) bounds z: [%f:%f]\n", n, f);
-#endif
-
   // 3. Compute the tight frustum
-
   // Get the scene frustum in NDC
   frustum scene = frustum_from_ndc_points(ndc_min, ndc_max);
   // Go to world space????
   scene = frustum_transform_points(scene, m4_inv(rctx->cam.dirty_vp)); 
 
-  // Optional bullshit
-#if 0
-  // Compute world-space bbox for debug drawing
-  bbox bbox_bounds = bbox_from_frustum(scene);
-
-  rctx->opt.scene_bbox2 = bbox_normalize(bbox_bounds);
-  rctx->opt.scene_bbox2_frustum = scene;
-
-
-  /*
-  printf("coords: [%f][%f][%f][%f][%f][%f]\n",
-    bounds_min_x, bounds_max_x, bounds_min_y,
-    bounds_max_y, bounds_min_z, bounds_max_z
-  );
-  */
-#endif
-
   return scene;
-
-
 }
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {
@@ -796,29 +747,3 @@ void r3dc_imm_xy_face(R3D_Ctx *rctx, Ogl_Prim_Type prim, color c, m4 model) {
   };
   r3dc_imm_verts(rctx, cube_verts, ARRAY_COUNT(cube_verts), prim, model);
 }
-
-void r3dc_imm_frustum(R3D_Ctx *rctx, frustum f, color c, Ogl_Prim_Type prim) {
-  Uber_Vertex frustum[8] = {
-    (Uber_Vertex) {.pos = f.points[0], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[1], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[2], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[3], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-
-    (Uber_Vertex) {.pos = f.points[4], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[5], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[6], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-    (Uber_Vertex) {.pos = f.points[7], .col_0 = c, .joint_0 = iv4m(1,0,0,0), .weight_0 = v4m(1,0,0,0)},
-  };
-
-  Uber_Vertex verts[] = {
-    frustum[0], frustum[1], frustum[2], frustum[3], frustum[0],
-    frustum[1], frustum[5], frustum[6], frustum[2], frustum[1],
-    frustum[2], frustum[6], frustum[7], frustum[3], frustum[2],
-    frustum[3], frustum[7], frustum[4], frustum[0], frustum[3],
-    frustum[0], frustum[4], frustum[5], frustum[1], frustum[0],
-    frustum[4], frustum[7], frustum[6], frustum[5], frustum[4],
-  };
-
-  r3dc_imm_verts(rctx, verts, ARRAY_COUNT(verts), prim, m4_translate(v3m(0,0,0)));
-}
-
