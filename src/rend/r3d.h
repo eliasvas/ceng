@@ -103,5 +103,6 @@ v4 r3d_get_cascade_bounds(CSM_Opt *opt);
 // Trash
 v2 r3d_compute_depth_range(R3D_Ctx *rctx);
 frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspace, s32 cascade_idx);
+Ogl_RT* r3d_rt_from_render_mode(R3D_Render_Mode rmode);
 
 #endif

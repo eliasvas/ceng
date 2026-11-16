@@ -260,6 +260,9 @@ void game_render(struct Game_State *gs, float dt) {
   for (s32 cascade_idx = 0; cascade_idx < 4; cascade_idx+=1) {
     if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
     R3D_Ctx* shadow_pass = r3dc_begin_depth_i(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx, 0);
+
+    ogl_clear_depth(r3d_rt_from_render_mode(R3D_SHD));
+
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
       Entity_Render_Command *cmd = &gs->world->rcommands[i];
       m4 world = m4_from_transform(cmd->xform);
@@ -305,8 +308,6 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
-  // TEST TEST TEST TEST
-
   // 0. We get the depth from the shader (in viewport [0,1] space) and convert to viespace
   v2 drange = r3d_compute_depth_range(opaque_pass);
   v2 drange_viewspace = csm_convert_drange_to_viewspace(&opaque_pass->cam, drange);
@@ -320,6 +321,7 @@ void game_render(struct Game_State *gs, float dt) {
   ///////////////////////
   // TRANSPARENT PASS
   ///////////////////////
+
   R3D_Ctx *transparent_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, gs->rflags);
   if (gs->rflags & R3D_FLAG_RENDER_MESHES) {
     for (s32 i = 0; i < gs->world->rcommand_count; i+=1) {
@@ -339,7 +341,7 @@ void game_render(struct Game_State *gs, float dt) {
     }
   }
 
-#if 1
+#if 0
   if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
     for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
       if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
@@ -347,7 +349,7 @@ void game_render(struct Game_State *gs, float dt) {
       color cc =  csm_get_cascade_idx_color(cascade_idx);
       cc.a = 0.3;
       
-      m4 lsm = csm_calc_lsm_i(gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx);
+      m4 lsm = csm_calc_lsm_i_sdsm(gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx);
       m4 model = m4_mult(m4_inv(lsm), m4_scale(v3m(2,2,2)));
       r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, model);
 
@@ -388,7 +390,7 @@ void game_render(struct Game_State *gs, float dt) {
     }
     */
 
-#if 1
+#if 0
     for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
       color cc = CLR_ALPHA(csm_get_cascade_idx_color(cascade_idx), 0.2);
       r3dbg_frustum(opaque_pass->opt.cascade_frustum[cascade_idx], cc);
@@ -414,11 +416,7 @@ void game_render(struct Game_State *gs, float dt) {
       }
       r3dc_imm_verts(transparent_pass, verts, vcount, OGL_PRIM_TYPE_TRIANGLE, m4d(1.0));
     }
-
-
     r3dc_end(transparent_pass);
-
-
 
 
 

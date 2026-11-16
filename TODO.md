@@ -53,6 +53,7 @@
     - TODO TODO TODO NOT clearing each depth cascade is bad
     - TODO TODO TODO NOT clearing each depth cascade is bad
     - Red vis is broken now
+    - Make the calc of lsm happen ONE (1) time/!!!!
 
 ## ogl
     - We need to make the introspection system better, we NEED a way to default initialize textures AND texture arrays like t[0] t[1]
