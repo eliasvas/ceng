@@ -857,6 +857,28 @@ static bbox bbox_union(bbox a, bbox b) {
   };
 }
 
+static bbox bbox_intersect(bbox a, bbox b) {
+  a = bbox_normalize(a);
+  b = bbox_normalize(b);
+
+  v3 min = v3m(
+      MAX(a.min.x, b.min.x),
+      MAX(a.min.y, b.min.y),
+      MAX(a.min.z, b.min.z)
+  );
+
+  v3 max = v3m(
+      MIN(a.max.x, b.max.x),
+      MIN(a.max.y, b.max.y),
+      MIN(a.max.z, b.max.z)
+  );
+
+  return (bbox){
+    .min = min, 
+    .max = max
+  };
+}
+
 static v3 bbox_get_hdim(bbox box) {
   box = bbox_normalize(box);
   v3 hdim = v3_multf(v3_sub(box.max, box.min), 0.5);

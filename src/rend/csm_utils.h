@@ -36,7 +36,7 @@ typedef struct {
   v2 drange;
 
   bbox scene_bbox;
-  b32 isect_bvh;
+  u32 isect_bvh;
 
 
   b32 vis_flags; // ????
@@ -51,7 +51,8 @@ typedef struct {
 // TODO: Make this configurable
 static CSM_Opt csm_opt_default() {
   CSM_Opt default_options = (CSM_Opt) {
-    .zadd = 0,
+    .zadd = 100,
+    .isect_bvh = true,
     //.split_policy = CSM_SPLIT_MANUAL,
     //.split_policy = CSM_SPLIT_LOGARITHMIC,
     //.split_policy = CSM_SPLIT_UNIFORM,
@@ -124,7 +125,9 @@ static color csm_get_cascade_idx_color(s32 cascade_idx) {
   return c;
 }
 
-static m4 lsm_from_frustum(bbox scene, v3 ld, f32 zadd, frustum fw) {
+// BBOX union between scene and final view space box
+
+static m4 lsm_from_frustum(frustum fw, v3 ld, f32 zadd, bbox scene) {
   // 0. Calculate the view matrix for the LSM by finding the world frustum center
   v3 f_center = frustum_calc_center(&fw);
   m4 lsm_view = m4_look_at(v3_add(f_center, ld), f_center, v3m(0,1,0));
@@ -139,14 +142,9 @@ static m4 lsm_from_frustum(bbox scene, v3 ld, f32 zadd, frustum fw) {
   bounds.min.z -= zadd;
   bounds.max.z += zadd;
 
-#if 0
   // 3. fit with scene aabb (from bvh) 
   bbox s = bbox_transform(scene, lsm_view);
-  bounds.min.x = MAX(bounds.min.x, s.min.x);
-  bounds.max.x = MIN(bounds.max.x, s.max.x);
-  bounds.min.y = MAX(bounds.min.y, s.min.y);
-  bounds.max.y = MIN(bounds.max.y, s.max.y);
-#endif
+  bounds = bbox_intersect(bounds, s);
 
   // 4. Calculate the actual ortho matrix
   m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
@@ -178,9 +176,10 @@ static m4 csm_calc_lsm_i(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 in
 
   // 1. We calculate the LSM with all the options passed
   m4 lsm = lsm_from_frustum(
-    (csm_opt->isect_bvh) ? csm_opt->scene_bbox : bbox_inf(), 
+    f,
     csm_opt->light_dir, 
-    csm_opt->zadd, f
+    csm_opt->zadd,
+    (csm_opt->isect_bvh) ? csm_opt->scene_bbox : bbox_inf() 
   );
 
   return lsm;

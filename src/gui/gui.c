@@ -272,7 +272,7 @@ void gui_begin(rect viewport, f32 dt) {
   gui_set_next_fixed_x(5);
   gui_set_next_fixed_y(10);
   gui_set_next_fixed_width(250);
-  gui_set_next_fixed_height(150);
+  gui_set_next_fixed_height(180);
   //ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
   ctx.root = gui_box_make(STR8L("ROOTBOX"), GUI_BOX_FLAG_DRAW_BOX);
 
