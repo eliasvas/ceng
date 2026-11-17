@@ -2,10 +2,10 @@
 
 #ifndef GUI_STACKS_IMPLEMENTATION
 
-Gui_Box *gui_push_parent(Gui_Box *box);
-Gui_Box *gui_set_next_parent(Gui_Box *box);
-Gui_Box *gui_pop_parent(void);
-Gui_Box *gui_top_parent(void);
+Gui_Box* gui_push_parent(Gui_Box *box);
+Gui_Box* gui_set_next_parent(Gui_Box *box);
+Gui_Box* gui_pop_parent(void);
+Gui_Box* gui_top_parent(void);
 
 f32 gui_push_fixed_x(f32 v);
 f32 gui_set_next_fixed_x(f32 v);

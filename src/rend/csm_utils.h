@@ -15,29 +15,31 @@ typedef enum {
   CSM_SPLIT_PRACTICAL,
   CSM_SPLIT_MANUAL,
   CSM_SPLIT_SDSM,
-} CSM_Split_Policy;
+} CSM_Split_Mode;
 
 typedef enum {
-  CSM_FIT_FLAG_ZMULT = 0x1,
-  CSM_FIT_FLAG_ISECT_BVH = 0x2,
-} CSM_Fit_Flags;
+  CSM_FIT_VIEW, // Fits tightly to the view frustum's sub-frusta
+  CSM_FIT_SDSM, // Fits tightly to the depth sampled sub-frusta
+} CSM_Fit_Mode;
 
 typedef struct {
 
-  // Fitting strategy
-  f32 zmult;
-  CSM_Fit_Flags fit_flags;
+  f32 zadd;
+  CSM_Fit_Mode fit_mode;
+  CSM_Split_Mode split_mode;
 
-  // Split strategy (lambda can be used for practical, bounds idk where..)
-  CSM_Split_Policy split_policy;
+
   union {
     f32 lambda;
     v4 bounds;
   };
   v2 drange;
 
-  // :| :| :| :| | :|
   bbox scene_bbox;
+  b32 isect_bvh;
+
+
+  b32 vis_flags; // ????
 
   f32 splits[CSM_MAX_CASCADES];
   frustum cascade_frustum[CSM_MAX_CASCADES];
@@ -49,13 +51,14 @@ typedef struct {
 // TODO: Make this configurable
 static CSM_Opt csm_opt_default() {
   CSM_Opt default_options = (CSM_Opt) {
-    .zmult = 2.0,
+    .zadd = 0,
     //.split_policy = CSM_SPLIT_MANUAL,
     //.split_policy = CSM_SPLIT_LOGARITHMIC,
     //.split_policy = CSM_SPLIT_UNIFORM,
     //.split_policy = CSM_SPLIT_PRACTICAL,
-    .split_policy = CSM_SPLIT_SDSM,
     .lambda = 0.5,
+    .split_mode = CSM_SPLIT_SDSM,
+    .fit_mode = CSM_FIT_SDSM,
     //.fit_flags = CSM_FIT_FLAG_ZMULT,
     .cascade_count = CSM_MAX_CASCADES,
     .light_dir = v3_norm(v3m(0.2,1,1)),
@@ -75,7 +78,7 @@ static f32 csm_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) 
   f32 logarithmic_split_sdsm = opt->drange.x * pow_f32(opt->drange.y / opt->drange.x, t);
   //f32 linear_split_sdsm = opt->drange.x + (opt->drange.y - opt->drange.x)*t;
 
-  switch(opt->split_policy) {
+  switch(opt->split_mode) {
     case CSM_SPLIT_UNIFORM:
       return uniform_split;
     case CSM_SPLIT_LOGARITHMIC:
@@ -121,8 +124,7 @@ static color csm_get_cascade_idx_color(s32 cascade_idx) {
   return c;
 }
 
-static m4 lsm_from_frustum(bbox scene, v3 ld, f32 zmult, frustum fw) {
-
+static m4 lsm_from_frustum(bbox scene, v3 ld, f32 zadd, frustum fw) {
   // 0. Calculate the view matrix for the LSM by finding the world frustum center
   v3 f_center = frustum_calc_center(&fw);
   m4 lsm_view = m4_look_at(v3_add(f_center, ld), f_center, v3m(0,1,0));
@@ -133,22 +135,20 @@ static m4 lsm_from_frustum(bbox scene, v3 ld, f32 zmult, frustum fw) {
   frustum fv = frustum_transform_points(fw, lsm_view);
   bbox bounds = bbox_from_frustum(fv);
 
-  // 2. Calculate the actual ortho matrix (+zMult)
+  // 2. Apply zadd
+  bounds.min.z -= zadd;
+  bounds.max.z += zadd;
 
-  // FIXME: zmult should be called zadd or something, and only go against light
-  if (zmult > 1.0) {
-    f32 z_padding = 10.0f;
-    bounds.min.z -= z_padding;
-    bounds.max.z += z_padding;
-  }
-
+#if 0
+  // 3. fit with scene aabb (from bvh) 
   bbox s = bbox_transform(scene, lsm_view);
   bounds.min.x = MAX(bounds.min.x, s.min.x);
   bounds.max.x = MIN(bounds.max.x, s.max.x);
-
   bounds.min.y = MAX(bounds.min.y, s.min.y);
   bounds.max.y = MIN(bounds.max.y, s.max.y);
+#endif
 
+  // 4. Calculate the actual ortho matrix
   m4 lsm_proj = m4_ortho(bounds.min.x, bounds.max.x, bounds.min.y, bounds.max.y, -bounds.max.z, -bounds.min.z);
   m4 lsm = m4_mult(lsm_proj, lsm_view);
 
@@ -158,30 +158,30 @@ static m4 lsm_from_frustum(bbox scene, v3 ld, f32 zmult, frustum fw) {
 }
 
 static m4 csm_calc_lsm_i(rect viewport, Camera *camera, CSM_Opt *csm_opt, s32 index) {
-  f32 near_bound = csm_get_cascade_split_near(camera, csm_opt, index);
-  f32 far_bound = csm_get_cascade_split_far(camera, csm_opt, index);
+  frustum f = (frustum){};
 
-  f32 aspect = viewport.w/(f32)viewport.h;
-  m4 persp_mat = m4_persp(camera->fovx, aspect, near_bound, far_bound);
-  m4 view = camera->dirty_view;
-
-  frustum f;
-  if (csm_opt->split_policy == CSM_SPLIT_SDSM) {
+  // 0. For SDSM, frustum is the depth buffer per-cascade tight frustum
+  if (csm_opt->fit_mode == CSM_FIT_SDSM) {
     f = csm_opt->cascade_frustum[index];
   } else {
+    // 0. In general we calculate with view-frustum's per-cascade tight frustum
+    f32 near_bound = csm_get_cascade_split_near(camera, csm_opt, index);
+    f32 far_bound = csm_get_cascade_split_far(camera, csm_opt, index);
+
+    f32 aspect = viewport.w/(f32)viewport.h;
+    m4 persp_mat = m4_persp(camera->fovx, aspect, near_bound, far_bound);
+    m4 view = camera->dirty_view;
+
     m4 vp = m4_mult(persp_mat, view);
     f = frustum_transform_points(frustum_make_ndc(), m4_inv(vp));
   }
 
+  // 1. We calculate the LSM with all the options passed
   m4 lsm = lsm_from_frustum(
-    (csm_opt->fit_flags & CSM_FIT_FLAG_ISECT_BVH) ? csm_opt->scene_bbox : bbox_inf(), 
+    (csm_opt->isect_bvh) ? csm_opt->scene_bbox : bbox_inf(), 
     csm_opt->light_dir, 
-    (csm_opt->fit_flags == CSM_FIT_FLAG_ZMULT) ? csm_opt->zmult : 1.0
-    ,f
-    
+    csm_opt->zadd, f
   );
-
-
 
   return lsm;
 }

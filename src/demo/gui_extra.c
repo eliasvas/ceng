@@ -117,3 +117,16 @@ Gui_Signal gui_single_selection(str8 label, f32 button_px, u32 *value, s32 count
 
   return (Gui_Signal){};
 }
+
+Gui_Signal gui_slider(str8 label, f32 *value, f32 min, f32 max) {
+  //gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
+  gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_LEFT);
+  u32 flags = (GUI_BOX_FLAG_CLICKABLE | GUI_BOX_FLAG_DRAW_BOX | GUI_BOX_FLAG_DRAW_TEXT);
+  Gui_Box *box = gui_box_make(label, flags);
+  Gui_Signal sig = gui_signal_from_box(box);
+  if (gui_id_eq(sig.box->id, ctx.active_id)) {
+    *value += input_get_mouse_delta(ctx.input).x * ctx.dt;
+    *value = CLAMP(*value, min, max);
+  }
+  return sig;
+}

@@ -341,92 +341,28 @@ void game_render(struct Game_State *gs, float dt) {
     }
   }
 
-#if 0
-  if (gs->rflags & R3D_FLAG_CASCADE_TEST) {
+
+  ///////////////////////
+  // CASCADE FRUSTA VISUALIZATION
+  ///////////////////////
+
+  if (gs->rflags & R3D_FLAG_CASCADE_VIS) {
     for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
       if (!(gs->enabled_cascades & (0x1 << cascade_idx))) continue;
 
-      color cc =  csm_get_cascade_idx_color(cascade_idx);
-      cc.a = 0.3;
-      
-      m4 lsm = csm_calc_lsm_i_sdsm(gs->game_viewport, &gs->cam, &gs->csm_opt, cascade_idx);
-      m4 model = m4_mult(m4_inv(lsm), m4_scale(v3m(2,2,2)));
-      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, cc, model);
-
-      // FIXME: Make an actual frustum here from NDC ok?
-      //r3dc_imm_frustum(transparent_pass, m4d(1.0), lsm, cc, OGL_PRIM_TYPE_LINE_STRIP);
-
-    }
-  }
-#endif
-
-
-    /////////////////////////////////////
-    // Render the scene bounding box.. from.. world-space bbox..
-    /////////////////////////////////////
-    // TEST TEST TEST TEST
-    // TEST TEST TEST TEST
-    // TEST TEST TEST TEST
-    // TEST TEST TEST TEST
-    // Why is the scene_box2 calculated only inside rctx of opaque, FUCK htis
-#if 0
-    {
-      bbox sb = opaque_pass->opt.scene_bbox;
-      v3 hdim = bbox_get_hdim(sb);
-      hdim = v3_multf(hdim, 2.0); // this is because the default cube is [-0.5, 0.5]
-      v3 trans = bbox_get_center(sb);
-      m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
-      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.6,0.6,0.6,0.2), worldmat);
-    }
-#endif
-    /*
-    {
-      bbox sb = opaque_pass->opt.scene_bbox2;
-      v3 hdim = bbox_get_hdim(sb);
-      hdim = v3_multf(hdim, 2.0); // this is because the default cube is [-0.5, 0.5]
-      v3 trans = bbox_get_center(sb);
-      m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
-      r3dc_imm_cube(transparent_pass, OGL_PRIM_TYPE_TRIANGLE, v4m(0.7,0.3,0.2,0.4), worldmat);
-    }
-    */
-
-#if 0
-    for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
       color cc = CLR_ALPHA(csm_get_cascade_idx_color(cascade_idx), 0.2);
       r3dbg_frustum(opaque_pass->opt.cascade_frustum[cascade_idx], cc);
     }
-#endif
-
-
-    // FINALLY, render the debug stuff.....
-    R3DBG_Ctx* dbg_ctx = r3dbg_end();
-    assert(dbg_ctx);
-    Uber_Vertex *verts = arena_push_array_nz(gs->frame_arena, Uber_Vertex, dbg_ctx->tri_list.vertex_count);
-    s64 vcount = 0;
-    for (Vertex_Chunk_Node *node = dbg_ctx->tri_list.first; node != nullptr; node=node->next) {
-      for (s32 vidx = 0; vidx < node->count; vidx+=1) {
-        D_Vertex v = node->verts[vidx];
-        Uber_Vertex newvert = (Uber_Vertex) {
-          .pos = v.p,
-          .col_0 = v.c,
-          .joint_0 = iv4m(1,0,0,0),
-          .weight_0 = v4m(1,0,0,0)
-        };
-        verts[vcount++] = newvert;
-      }
-      r3dc_imm_verts(transparent_pass, verts, vcount, OGL_PRIM_TYPE_TRIANGLE, m4d(1.0));
-    }
-    r3dc_end(transparent_pass);
-
+  }
 
 
   ///////////////////////
-  // BVH PASS 
+  // BVH  VISUALIZATION
   ///////////////////////
+
 
   if (gs->rflags & R3D_FLAG_BVH_TEST) {
-    R3D_Ctx *bvh_pass = r3dc_begin_transparent(gs->frame_arena, gs->game_viewport, &gs->cam, &gs->csm_opt, 0);
-    // BVH vis
+
     BVH_Render_Config bvh_rc = {
       .colors = {
         [0] = v4_multf(CLR_GREEN_EVA, 0.5),
@@ -448,23 +384,30 @@ void game_render(struct Game_State *gs, float dt) {
       .kind = BVH_RENDER_LEVEL_BY_LEVEL,
 #endif
     };
-    BVH_Node *root = gs->world->bvh_root;
-    assert(root);
-    world_render_bvh(bvh_pass, gs->world, gs->world->bvh_root, gs->cam.dirty_vp, gs->game_viewport, bvh_rc);
-
-
-#if 0
-    // Render the total cascade SDSM is seeing
-    color c = CLR_WHITE;
-    c.a = 0.8;
-    f32 aspect = bvh_pass->viewport.w/(f32)bvh_pass->viewport.h;
-    m4 persp_mat = m4_persp(45, aspect, csm_opt.drange.x, csm_opt.drange.y);
-    //r3dc_imm_frustum(bvh_pass, gs->cam.dirty_view, persp_mat, c, OGL_PRIM_TYPE_LINE);
-    r3dc_imm_frustum(bvh_pass, m4d(1.0), persp_mat, c, OGL_PRIM_TYPE_LINE);
-#endif
-
-    r3dc_end(bvh_pass);
+    world_render_bvh(gs->world, gs->world->bvh_root, gs->cam.dirty_vp, gs->game_viewport, bvh_rc);
   }
+
+  // FINALLY, render all the debug stuff.....
+  R3DBG_Ctx* dbg_ctx = r3dbg_end();
+  assert(dbg_ctx);
+  Uber_Vertex *verts = arena_push_array_nz(gs->frame_arena, Uber_Vertex, dbg_ctx->tri_list.vertex_count);
+  s64 vcount = 0;
+  for (Vertex_Chunk_Node *node = dbg_ctx->tri_list.first; node != nullptr; node=node->next) {
+    for (s32 vidx = 0; vidx < node->count; vidx+=1) {
+      D_Vertex v = node->verts[vidx];
+      Uber_Vertex newvert = (Uber_Vertex) {
+        .pos = v.p,
+        .col_0 = v.c,
+        .joint_0 = iv4m(1,0,0,0),
+        .weight_0 = v4m(1,0,0,0)
+      };
+      verts[vcount++] = newvert;
+    }
+    r3dc_imm_verts(transparent_pass, verts, vcount, OGL_PRIM_TYPE_TRIANGLE, m4d(1.0));
+  }
+  r3dc_end(transparent_pass);
+
+
 
 
   ///////////////////////
@@ -490,7 +433,7 @@ void game_render(struct Game_State *gs, float dt) {
 
   static Gui_Scroll_Data sdata = {
     .item_px = 30, // FIXME change this to 60 to see some weird stuff..
-    .item_count = 11,
+    .item_count = 12,
     .scroll_bar_px = 15,
     .scroll_button_px = 15,
     .scroll_button_color = clr(0.5,1,0.4,1),
@@ -507,8 +450,9 @@ void game_render(struct Game_State *gs, float dt) {
     // TODO: ON/OFF the cascade visualization!!
     gui_flag_selection(STR8L("rflags:"), 30, &gs->rflags, 5);
     gui_flag_selection(STR8L("cascade:"), 30, &gs->enabled_cascades, 4);
-    gui_flag_selection(STR8L("fit:"), 30, &gs->csm_opt.fit_flags, 2);
-    gui_single_selection(STR8L("split algo:"), 30, &gs->csm_opt.split_policy, 5);
+    gui_single_selection(STR8L("fit:"), 30, &gs->csm_opt.fit_mode, 2);
+    gui_single_selection(STR8L("split algo:"), 30, &gs->csm_opt.split_mode, 5);
+    gui_slider(STR8L("zadd (slider)"), &gs->csm_opt.zadd, 0, 100);
 
     // Animation blending factor (for testing currently)
     gui_slider01(STR8L("blendFactor"), &_blend_factor, sdata.item_px, GUI_AXIS_X);

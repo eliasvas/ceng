@@ -317,7 +317,7 @@ void world_bvh_calc(World *world, BVH_Node *node, Entity *entities, s32 count, B
   }
 }
 
-void world_render_bvh(R3D_Ctx *rctx, World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Render_Config rc) {
+void world_render_bvh(World *world, BVH_Node *node, m4 vp, rect viewport, BVH_Render_Config rc) {
   rc.clr_idx += 1;
 
   if (node) {
@@ -327,11 +327,11 @@ void world_render_bvh(R3D_Ctx *rctx, World *world, BVH_Node *node, m4 vp, rect v
     m4 worldmat = m4_mult(m4_translate(trans), m4_scale(hdim));
 
     for (BVH_Node *child = node->first; child != nullptr; child=child->next) {
-      world_render_bvh(rctx, world, child, vp, viewport, rc);
+      world_render_bvh(world, child, vp, viewport, rc);
     }
 
     if (rc.kind == BVH_RENDER_EVERYTHING) {
-      r3dc_imm_cube(rctx, OGL_PRIM_TYPE_TRIANGLE, rc.colors[rc.clr_idx % ARRAY_COUNT(rc.colors)], worldmat);
+      r3dbg_cube(worldmat, rc.colors[rc.clr_idx % ARRAY_COUNT(rc.colors)]);
     } else if (rc.kind == BVH_RENDER_LEVEL_BY_LEVEL) {
       // TODO: level_count is calculated for every node, VERY wasteful, optimize this!!!
       s32 level_count = bvh_count_levels(world->bvh_root, 0);
@@ -339,7 +339,7 @@ void world_render_bvh(R3D_Ctx *rctx, World *world, BVH_Node *node, m4 vp, rect v
       s32 depth = bvh_get_node_depth(node);
       s32 wanted_depth = (s32)(rc.running_time_sec / rc.seconds_per_level) % (level_count+1); 
       if (depth == wanted_depth || (node->is_leaf && depth < wanted_depth)) {
-        r3dc_imm_cube(rctx, OGL_PRIM_TYPE_TRIANGLE, rc.colors[rc.clr_idx % ARRAY_COUNT(rc.colors)], worldmat);
+        r3dbg_cube(worldmat, rc.colors[rc.clr_idx % ARRAY_COUNT(rc.colors)]);
       }
     }
     //world_render_bvh(world, node->next, vp, viewport, rc);
