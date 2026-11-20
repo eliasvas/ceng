@@ -13,11 +13,10 @@ static Ogl_RT shadow_rt;
 
 static Ogl_Render_Bundle uber_transparent_bundle = {};
 static Ogl_RT transparent_rt;
-
-static Ogl_Compute_Bundle depth_range_compute_bundle;
-static Ogl_Compute_Bundle bounds_compute_bundle;
+static Ogl_Compute_Bundle calc_cascade_frusta_bundle;
 
 typedef struct {
+  // updated per cascade by GPU
   uint zmin[CSM_MAX_CASCADES];
   uint zmax[CSM_MAX_CASCADES];
   uint xmin[CSM_MAX_CASCADES];
@@ -25,6 +24,11 @@ typedef struct {
   uint ymin[CSM_MAX_CASCADES];
   uint ymax[CSM_MAX_CASCADES];
 
+  // upated by CPU (splits)
+  uint split_min_z[CSM_MAX_CASCADES];
+  uint split_max_z[CSM_MAX_CASCADES];
+
+  // updated by GPU (min/max)
   uint minmax[2];
 } Depth_Range_SSBO;
 
@@ -48,23 +52,9 @@ Ogl_RT* r3d_rt_from_render_mode(R3D_Render_Mode rmode) {
   }
 }
 
-
-
-  static const u8 DEPTH_RANGE_CS[] = {
+  static const u8 CALC_CASCADE_FRUSTA_CS[] = {
 #embed "shaders/common.glsl" suffix(, '\n',)
-#embed "shaders/depth_range.comp.glsl"
-  };
-
-#if 0
-  static const u8 CASCADE_BOUNDS_CS[] = {
-#embed "shaders/common.glsl" suffix(, '\n',)
-#embed "shaders/cascade_bounds.comp.glsl"
-  };
-#endif
-
-  static const u8 CASCADE_BOUNDS_ALL_CS[] = {
-#embed "shaders/common.glsl" suffix(, '\n',)
-#embed "shaders/cascade_bounds_all.comp.glsl"
+#embed "shaders/calc_cascade_frusta.comp.glsl"
   };
 
   static const u8 TRANSPARENT_FS[] = {
@@ -133,21 +123,18 @@ typedef struct {
 } Material_UBO;
 
 void r3d_try_load_shaders(rect viewport) {
-  if (depth_range_compute_bundle.sp.impl_state == 0) {
-    depth_range_compute_bundle = (Ogl_Compute_Bundle) {
-      .sp = ogl_shader_make((char*)DEPTH_RANGE_CS, nullptr),
-      .images = {
-        [0] = { .name = "drange", .img = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
-      },
+  if (calc_cascade_frusta_bundle.sp.impl_state == 0) {
+    Depth_Range_SSBO sdata = (Depth_Range_SSBO){
+      .minmax[0] = 0,
+      .minmax[1] = 100,
     };
-  }
-  if (bounds_compute_bundle.sp.impl_state == 0) {
-    bounds_compute_bundle = (Ogl_Compute_Bundle) {
-      .sp = ogl_shader_make((char*)CASCADE_BOUNDS_ALL_CS, nullptr),
+
+    calc_cascade_frusta_bundle = (Ogl_Compute_Bundle) {
+      .sp = ogl_shader_make((char*)CALC_CASCADE_FRUSTA_CS, nullptr),
       .ssbos =  {
         [0] = (Ogl_SSBO_Slot){
           .name = "buf",
-          .buffer = ogl_buf_make(OGL_BUF_KIND_SSBO, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Depth_Range_SSBO)),
+          .buffer = ogl_buf_make(OGL_BUF_KIND_SSBO, OGL_BUF_HINT_DYNAMIC, &sdata, 1, sizeof(Depth_Range_SSBO)),
           .start_offset = 0,
           .size = sizeof(Depth_Range_SSBO),
         }
@@ -624,73 +611,60 @@ v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
 }
 
 // For each of the cascades we compute a tight frustum for all the fragments 
-frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, s32 cascade_idx) {
-  // Compute near/far for the cascade in [0,1]
-  f32 vs_near = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, cascade_idx);
-  f32 vs_far  = csm_get_cascade_split_far (&rctx->cam, &rctx->opt, cascade_idx);
-  f32 cascade_near = project(v3m(0, 0, -vs_near), rctx->cam.dirty_proj).z* 0.5 + 0.5;
-  f32 cascade_far  = project(v3m(0, 0, -vs_far),  rctx->cam.dirty_proj).z* 0.5 + 0.5;
-
-  u32 near_as_u32 = *((u32*)&cascade_near);
-  u32 far_as_u32 = *((u32*)&cascade_far);
-
-  uint initial_data[8] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, near_as_u32, far_as_u32};
-  ogl_tex_update(&bounds_compute_bundle.images[0].img, (u8*)initial_data, 8, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
-
-  uint initial_data2[8] = { 0xFFFFFFFFu, 0u};
-  ogl_tex_update(&bounds_compute_bundle.images[1].img, (u8*)initial_data2, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
-
-  // 1. execute the compute shader to find actual drange(min,max)
-  bounds_compute_bundle.textures[0] = 
+void r3d_compute_cascade_frusta(R3D_Ctx *rctx, frustum *dest) {
+  // 0. compute the frusta for each cascade idx via a compute shader invocation
+  calc_cascade_frusta_bundle.textures[0] = 
     (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
-  ogl_compute_bundle_dispatch(&bounds_compute_bundle, 
-      offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
+  ogl_compute_bundle_dispatch(&calc_cascade_frusta_bundle, 
+      offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, CSM_MAX_CASCADES);
 
-  // 2. read back the texture and produce NDC frustum
-  u32 bounds[8];
-  ogl_tex_read(&bounds_compute_bundle.images[0].img, (u8*)bounds);
-  f32 bounds_min_x = *(f32*)&(bounds[0]);
-  f32 bounds_max_x = *(f32*)&(bounds[1]);
+  // 1. Get the min/max z values and update drange_01
+  Depth_Range_SSBO sdata = (Depth_Range_SSBO){};
+  ogl_buf_get(&calc_cascade_frusta_bundle.ssbos[0].buffer, (char*)&sdata, sizeof(Depth_Range_SSBO));
 
-  f32 bounds_min_y = *(f32*)&(bounds[2]);
-  f32 bounds_max_y = *(f32*)&(bounds[3]);
+  f32 gmin_z = *(f32*)&(sdata.minmax[0]);
+  f32 gmax_z = *(f32*)&(sdata.minmax[1]);
+  rctx->opt.drange_01.x = gmin_z;
+  rctx->opt.drange_01.y = gmax_z;
 
-  f32 local_bounds_min_z = *(f32*)&(bounds[4]);
-  f32 local_bounds_max_z = *(f32*)&(bounds[5]);
+  // 2. For each cascade find the xyz bounds and construct each frustum
+  for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
+    f32 bounds_min_x = *(f32*)&(sdata.xmin[cascade_idx]);
+    f32 bounds_min_y = *(f32*)&(sdata.ymin[cascade_idx]);
+    f32 bounds_min_z = *(f32*)&(sdata.zmin[cascade_idx]);
+    f32 bounds_max_x = *(f32*)&(sdata.xmax[cascade_idx]);
+    f32 bounds_max_y = *(f32*)&(sdata.ymax[cascade_idx]);
+    f32 bounds_max_z = *(f32*)&(sdata.zmax[cascade_idx]);
 
-  f32 bounds_min_z = *(f32*)&(bounds[6]);
-  f32 bounds_max_z = *(f32*)&(bounds[7]);
+    v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
+    v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
 
-  rctx->opt.drange_01.x = MIN(rctx->opt.drange_01.x, local_bounds_min_z);
-  rctx->opt.drange_01.y = MAX(rctx->opt.drange_01.y, local_bounds_max_z);
+    frustum f = frustum_from_ndc_points(ndc_min, ndc_max);
+    f = frustum_transform_points(f, m4_inv(rctx->cam.dirty_vp)); 
+    dest[cascade_idx] = f;
+  }
 
-  u32 gbounds[2];
-  ogl_tex_read(&bounds_compute_bundle.images[1].img, (u8*)gbounds);
-  f32 gmin_z = *(f32*)&(gbounds[0]);
-  f32 gmax_z = *(f32*)&(gbounds[1]);
+  // 3. Update running SSBO with latest split data + clear minmax values for next frame!
+  // TODO: glBufferSubData is enough here!
+  for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
+    f32 vs_near = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, cascade_idx);
+    f32 vs_far  = csm_get_cascade_split_far (&rctx->cam, &rctx->opt, cascade_idx);
+    f32 cascade_near = project(v3m(0, 0, -vs_near), rctx->cam.dirty_proj).z* 0.5 + 0.5;
+    f32 cascade_far  = project(v3m(0, 0, -vs_far),  rctx->cam.dirty_proj).z* 0.5 + 0.5;
 
-  rctx->opt.drange_01.x = MIN(rctx->opt.drange_01.x, gmin_z);
-  rctx->opt.drange_01.y = MAX(rctx->opt.drange_01.y, gmax_z);
+    u32 near_as_u32 = *((u32*)&cascade_near);
+    u32 far_as_u32 = *((u32*)&cascade_far);
 
+    sdata.split_min_z[cascade_idx] = near_as_u32;
+    sdata.split_max_z[cascade_idx] = far_as_u32;
 
-  v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
-  v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
+    sdata.xmin[cascade_idx] = sdata.ymin[cascade_idx] = sdata.zmin[cascade_idx] = 0xFFFFFFFFu;
+    sdata.xmax[cascade_idx] = sdata.ymax[cascade_idx] = sdata.zmax[cascade_idx] = 0u;
+  }
 
-  // 3. Compute the tight frustum
-  // Get the scene frustum in NDC
-  frustum scene = frustum_from_ndc_points(ndc_min, ndc_max);
-  // Go to world space????
-  scene = frustum_transform_points(scene, m4_inv(rctx->cam.dirty_vp)); 
-
-
-  Depth_Range_SSBO data = (Depth_Range_SSBO){};
-  ogl_buf_get(&bounds_compute_bundle.ssbos[0].buffer, (char*)&data, sizeof(Depth_Range_SSBO));
-
-  f32 drmin_z = *(f32*)&(data.minmax[0]);
-  f32 drmax_z = *(f32*)&(data.minmax[1]);
-  printf("ssbo range= %f %f\n", drmin_z, drmax_z);
-
-  return scene;
+  sdata.minmax[0] = 0xFFFFFFFFu;
+  sdata.minmax[1] = 0u;
+  ogl_buf_update(&calc_cascade_frusta_bundle.ssbos[0].buffer, 0, &sdata, 1, sizeof(Depth_Range_SSBO));
 }
 
 void r3dc_imm_verts(R3D_Ctx *rctx, Uber_Vertex *verts, s32 vert_count, Ogl_Prim_Type prim, m4 model) {

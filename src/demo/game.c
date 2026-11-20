@@ -188,8 +188,8 @@ void game_update(struct Game_State *gs, float dt) {
 
 }
 
+// FIXME: Make it debug call, its DEBUG ok?
 void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
-
   s32 line_count_per_axis = cell_count + 1; 
   Uber_Vertex *points = arena_push_array(gs->frame_arena, Uber_Vertex, line_count_per_axis*4);
   color c1 = v4m(0.9,0.9,0.9,1);
@@ -224,7 +224,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 }
 
 void game_render(struct Game_State *gs, float dt) {
-  printf("gs drange01 %f %f\n", gs->csm_opt.drange_01.x, gs->csm_opt.drange_01.y);
+  //printf("gs drange01 %f %f\n", gs->csm_opt.drange_01.x, gs->csm_opt.drange_01.y);
   r3d_clear();
   cam_update(&gs->cam, &gs->input, dt);
 
@@ -254,6 +254,10 @@ void game_render(struct Game_State *gs, float dt) {
   // Rest of the frame
   world_update_render(gs, dt);
 
+
+  // Get the current frame's depth range (will be used for calculating the light frusta)
+  v2 drange_viewspace = csm_convert_drange_to_viewspace(&gs->cam, gs->csm_opt.drange_01);
+  gs->csm_opt.drange_vs = drange_viewspace;
 
   ///////////////////////
   // SHADOW PASS
@@ -309,18 +313,7 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
-
-  // 0. We get the depth from the shader (in viewport [0,1] space) and convert to viespace
-  v2 drange = r3d_compute_depth_range(opaque_pass);
-  v2 drange_viewspace = csm_convert_drange_to_viewspace(&opaque_pass->cam, drange);
-  gs->csm_opt.drange_vs = drange_viewspace;
-
-  opaque_pass->opt.drange_vs = drange_viewspace;
-  opaque_pass->opt.drange_01 = v2m(F32_MAX, -F32_MAX);
-  for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
-    // FIXME: pass instead of drange / viewspace pass the actual range now whole
-    gs->csm_opt.cascade_frustum[cascade_idx] = r3d_compute_cascade_frustum(opaque_pass, drange, cascade_idx);
-  }
+  r3d_compute_cascade_frusta(opaque_pass, gs->csm_opt.cascade_frustum);
   gs->csm_opt.drange_01 = opaque_pass->opt.drange_01;
 
   ///////////////////////
