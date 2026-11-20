@@ -141,11 +141,13 @@ typedef enum {
   OGL_BUF_KIND_VERTEX,
   OGL_BUF_KIND_INDEX,
   OGL_BUF_KIND_UNIFORM,
+  OGL_BUF_KIND_SSBO,
 }Ogl_Buf_Kind;
 
 #define OGL_MAX_VERTEX_BUFFERS 8
 #define OGL_MAX_ATTRIBS 20
 #define OGL_MAX_UNIFORM_BUFFERS 4
+#define OGL_MAX_SSBOS 4
 #define OGL_MAX_ACTIVE_TEXTURES 9
 #define OGL_MAX_RENDER_TARGET_ATTACHMENTS 4
 
@@ -296,6 +298,13 @@ typedef struct {
 }Ogl_Uniform_Buffer_Slot;
 
 typedef struct {
+  const char *name;
+  Ogl_Buf buffer;
+  uint64_t start_offset;
+  uint64_t size;
+}Ogl_SSBO_Slot;
+
+typedef struct {
   Ogl_Buf buffer;
   Ogl_Vert_Attrib vattribs[OGL_MAX_ATTRIBS];
 } Ogl_Vertex_Buffer_Slot;
@@ -345,8 +354,10 @@ typedef struct {
 
   Ogl_Buf index_buffer;
 
+  // TODO: maybe SSBO_Slot and UBO_Slot should become Buffer_Slot and Tex/Img become just Tex_Slot
   Ogl_Vertex_Buffer_Slot  vbos[OGL_MAX_VERTEX_BUFFERS];
   Ogl_Uniform_Buffer_Slot ubos[OGL_MAX_UNIFORM_BUFFERS];
+  Ogl_SSBO_Slot           ssbos[OGL_MAX_UNIFORM_BUFFERS];
   Ogl_Tex_Slot            textures[OGL_MAX_ACTIVE_TEXTURES];
   Ogl_Img_Slot            images[OGL_MAX_ACTIVE_TEXTURES];
 
@@ -361,6 +372,7 @@ typedef struct {
 typedef struct {
   Ogl_Shader sp;
   Ogl_Uniform_Buffer_Slot ubos[OGL_MAX_UNIFORM_BUFFERS];
+  Ogl_SSBO_Slot ssbos[OGL_MAX_UNIFORM_BUFFERS];
   Ogl_Tex_Slot            textures[OGL_MAX_ACTIVE_TEXTURES];
   Ogl_Img_Slot            images[OGL_MAX_ACTIVE_TEXTURES];
 } Ogl_Compute_Bundle;
@@ -375,6 +387,7 @@ typedef struct {
   void ogl_copy_depth_buffer(Ogl_RT *opaque, Ogl_RT *transparent, rect viewport);
 
   bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
+  void ogl_buf_get(Ogl_Buf *buf, char *dest, uint32_t count);
   bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
   Ogl_Buf ogl_buf_make(Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
   void ogl_buf_deinit(Ogl_Buf *buf);
@@ -449,6 +462,7 @@ static GLuint ogl_to_gl_buf_kind(Ogl_Buf_Kind kind) {
     case OGL_BUF_KIND_VERTEX:  return GL_ARRAY_BUFFER;
     case OGL_BUF_KIND_INDEX:   return GL_ELEMENT_ARRAY_BUFFER;
     case OGL_BUF_KIND_UNIFORM: return GL_UNIFORM_BUFFER;
+    case OGL_BUF_KIND_SSBO:    return GL_SHADER_STORAGE_BUFFER;
     default: break;
   }
   return 0; // I dont like this
@@ -464,6 +478,15 @@ bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, u
     glBindBuffer(gl_buf_kind, 0);
   }
   return (buf != NULL);
+}
+
+void ogl_buf_get(Ogl_Buf *buf, char *dest, uint32_t count) {
+  if (buf) {
+    GLuint gl_buf_kind = ogl_to_gl_buf_kind(buf->kind);
+    glBindBuffer(gl_buf_kind, buf->impl_state);
+    glGetBufferSubData( gl_buf_kind, 0, count, dest);
+    glBindBuffer(gl_buf_kind, 0);
+  }
 }
 
 bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem) {
@@ -840,13 +863,13 @@ void ogl_rt_deinit(Ogl_RT *rt) {
 void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle) {
   ogl_shader_deinit(&bundle->sp);
   ogl_buf_deinit(&bundle->index_buffer);
-  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_VERTEX_BUFFERS; ++slot_idx) {
+  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_VERTEX_BUFFERS; slot_idx+=1) {
     Ogl_Vertex_Buffer_Slot *vbo = &bundle->vbos[slot_idx];
     if (ogl_buf_count_bytes(&vbo->buffer) > 0) {
       ogl_buf_deinit(&vbo->buffer);
     }
   }
-  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; slot_idx+=1) {
     Ogl_Uniform_Buffer_Slot *ubo = &bundle->ubos[slot_idx];
     if (ogl_buf_count_bytes(&ubo->buffer) > 0) {
       ogl_buf_deinit(&ubo->buffer);
@@ -860,7 +883,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
   // Bind the index buffer
   glBindBuffer(ogl_to_gl_buf_kind(bundle->index_buffer.kind), bundle->index_buffer.impl_state);
   // Bind the vertex buffer(s) + set attributes
-  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_VERTEX_BUFFERS; ++slot_idx) {
+  for (uint64_t slot_idx = 0; slot_idx < OGL_MAX_VERTEX_BUFFERS; slot_idx+=1) {
     Ogl_Vertex_Buffer_Slot *vbo = &bundle->vbos[slot_idx];
     if (ogl_buf_count_bytes(&vbo->buffer) > 0) {
       glBindBuffer(ogl_to_gl_buf_kind(vbo->buffer.kind), vbo->buffer.impl_state);
@@ -882,7 +905,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the uniform buffer(s)
-  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_UNIFORM_BUFFERS; slot_idx+=1) {
     Ogl_Uniform_Buffer_Slot *ubo = &bundle->ubos[slot_idx];
     if (ogl_buf_count_bytes(&ubo->buffer) > 0) {
       GLuint ubo_block_idx = glGetUniformBlockIndex(bundle->sp.impl_state, ubo->name);
@@ -890,8 +913,17 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
       glBindBufferRange(GL_UNIFORM_BUFFER, slot_idx, ubo->buffer.impl_state, ubo->start_offset, ubo->size);
     }
   }
+  // Bind the ssbo(s)
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_SSBOS; slot_idx+=1) {
+    Ogl_SSBO_Slot *ssbo = &bundle->ssbos[slot_idx];
+    if (ogl_buf_count_bytes(&ssbo->buffer) > 0) {
+      GLuint ssbo_block_idx = glGetProgramResourceIndex(bundle->sp.impl_state, GL_SHADER_STORAGE_BLOCK, ssbo->name);
+      glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssbo_block_idx, slot_idx);
+      glBindBufferRange(GL_SHADER_STORAGE_BUFFER, slot_idx, ssbo->buffer.impl_state, ssbo->start_offset, ssbo->size);
+    }
+  }
   // Bind the texture(s)
-  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; slot_idx+=1) {
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
     if (tex->tex.impl_state) {
       glActiveTexture(GL_TEXTURE0+slot_idx);
@@ -903,7 +935,7 @@ static void ogl_render_bundle_bind(Ogl_Render_Bundle *bundle) {
     }
   }
   // Bind the image(s)
-  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; slot_idx+=1) {
     Ogl_Img_Slot *img = &bundle->images[slot_idx];
     if (img->img.impl_state) {
       glBindImageTexture(slot_idx, img->img.impl_state, 0, 
@@ -1021,7 +1053,7 @@ void ogl_clear(Ogl_RT *rt) {
 void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int wz) { glUseProgram(bundle->sp.impl_state);
   // FIXME: duplication with pipeline bind
   // Bind the texture(s)
-  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; slot_idx+=1) {
     Ogl_Tex_Slot *tex = &bundle->textures[slot_idx];
     if (tex->tex.impl_state) {
       glActiveTexture(GL_TEXTURE0+slot_idx);
@@ -1033,7 +1065,7 @@ void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int
     }
   }
   // Bind the image(s)
-  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; ++slot_idx) {
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_ACTIVE_TEXTURES; slot_idx+=1) {
     Ogl_Img_Slot *img = &bundle->images[slot_idx];
     if (img->img.impl_state) {
       glBindImageTexture(slot_idx, img->img.impl_state, 0, 
@@ -1042,9 +1074,21 @@ void ogl_compute_bundle_dispatch(Ogl_Compute_Bundle *bundle, int wx, int wy, int
       );
     }
   }
+  // Bind the ssbo(s)
+  for (int64_t slot_idx = 0; slot_idx < OGL_MAX_SSBOS; slot_idx+=1) {
+    Ogl_SSBO_Slot *ssbo = &bundle->ssbos[slot_idx];
+    if (ogl_buf_count_bytes(&ssbo->buffer) > 0) {
+      GLuint ssbo_block_idx = glGetProgramResourceIndex(bundle->sp.impl_state, GL_SHADER_STORAGE_BLOCK, ssbo->name);
+      glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssbo_block_idx, slot_idx);
+      glBindBufferRange(GL_SHADER_STORAGE_BUFFER, slot_idx, ssbo->buffer.impl_state, ssbo->start_offset, ssbo->size);
+    }
+  }
   glDispatchCompute((GLuint)wx, (GLuint)wy, (GLuint)wz);
   glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
   glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
+
+  // For SSBO
+  glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 }
  
 

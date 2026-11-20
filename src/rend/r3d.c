@@ -17,6 +17,17 @@ static Ogl_RT transparent_rt;
 static Ogl_Compute_Bundle depth_range_compute_bundle;
 static Ogl_Compute_Bundle bounds_compute_bundle;
 
+typedef struct {
+  uint zmin[CSM_MAX_CASCADES];
+  uint zmax[CSM_MAX_CASCADES];
+  uint xmin[CSM_MAX_CASCADES];
+  uint xmax[CSM_MAX_CASCADES];
+  uint ymin[CSM_MAX_CASCADES];
+  uint ymax[CSM_MAX_CASCADES];
+
+  uint minmax[2];
+} Depth_Range_SSBO;
+
 Ogl_Render_Bundle* r3d_bundle_from_render_mode(R3D_Render_Mode rmode) {
   switch (rmode) {
     case R3D_FWD: return &uber_bundle;
@@ -133,6 +144,14 @@ void r3d_try_load_shaders(rect viewport) {
   if (bounds_compute_bundle.sp.impl_state == 0) {
     bounds_compute_bundle = (Ogl_Compute_Bundle) {
       .sp = ogl_shader_make((char*)CASCADE_BOUNDS_ALL_CS, nullptr),
+      .ssbos =  {
+        [0] = (Ogl_SSBO_Slot){
+          .name = "buf",
+          .buffer = ogl_buf_make(OGL_BUF_KIND_SSBO, OGL_BUF_HINT_DYNAMIC, nullptr, 1, sizeof(Depth_Range_SSBO)),
+          .start_offset = 0,
+          .size = sizeof(Depth_Range_SSBO),
+        }
+      },
       .images = {
         [0] = { .name = "bounds", .img = ogl_tex_make(nullptr, 8, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
         [1] = { .name = "global_bounds", .img = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
@@ -662,6 +681,14 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, s32 cascade_idx) {
   frustum scene = frustum_from_ndc_points(ndc_min, ndc_max);
   // Go to world space????
   scene = frustum_transform_points(scene, m4_inv(rctx->cam.dirty_vp)); 
+
+
+  Depth_Range_SSBO data = (Depth_Range_SSBO){};
+  ogl_buf_get(&bounds_compute_bundle.ssbos[0].buffer, (char*)&data, sizeof(Depth_Range_SSBO));
+
+  f32 drmin_z = *(f32*)&(data.minmax[0]);
+  f32 drmax_z = *(f32*)&(data.minmax[1]);
+  printf("ssbo range= %f %f\n", drmin_z, drmax_z);
 
   return scene;
 }

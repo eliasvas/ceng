@@ -3,6 +3,18 @@ layout (binding = 0, r32ui) uniform uimage2D bounds;
 layout (binding = 1, r32ui) uniform uimage2D global_bounds;
 layout (binding = 0) uniform sampler2D depth_buffer;
 
+layout(std430, binding = 0) buffer buf {
+  uint zmin[MAX_CASCADES];
+  uint zmax[MAX_CASCADES];
+  uint xmin[MAX_CASCADES];
+  uint xmax[MAX_CASCADES];
+  uint ymin[MAX_CASCADES];
+  uint ymax[MAX_CASCADES];
+
+  uint minmax[2];
+};
+ 
+
 // Are these really correct, I guess because in screen space the tc's are in [0,1]?
 
 const ivec2 bounds_min_x_tc = ivec2(0,0);
@@ -43,4 +55,8 @@ void main() {
 
   imageAtomicMin(global_bounds, ivec2(0,0), d);
   imageAtomicMax(global_bounds, ivec2(1,0), d);
+
+  minmax[0] = floatBitsToUint(6.0);
+  minmax[1] = floatBitsToUint(7.0);
+
 }

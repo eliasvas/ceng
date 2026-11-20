@@ -122,6 +122,7 @@ typedef void (*glAttachShaderPROC) (GLuint program, GLuint shader);
 typedef void (*glBindAttribLocationPROC) (GLuint program, GLuint index, const GLchar *name);
 typedef void (*glLinkProgramPROC) (GLuint program);
 typedef void (*glBindBufferPROC) (GLenum target, GLuint buffer);
+typedef void (*glBindBufferBasePROC) (GLenum target, GLuint index, GLuint buffer);
 typedef void (*glBufferDataPROC) (GLenum target, GLsizeiptr size, const void *data, GLenum usage);
 typedef void (*glEnableVertexAttribArrayPROC) (GLuint index);
 typedef void (*glVertexAttribPointerPROC) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
@@ -134,6 +135,7 @@ typedef void (*glDetachShaderPROC) (GLuint program, GLuint shader);
 typedef void (*glDeleteShaderPROC) (GLuint shader);
 typedef void (*glDeleteProgramPROC) (GLuint program);
 typedef void (*glBufferSubDataPROC) (GLenum target, GLintptr offset, GLsizeiptr size, const void *data);
+typedef void (*glGetBufferSubDataPROC) (GLenum target, GLintptr offset, GLsizeiptr size, const void *data);
 typedef void (*glGetShaderivPROC)(GLuint shader, GLenum pname, GLint *params);
 typedef void (*glGetShaderInfoLogPROC)(GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
 typedef void (*glGetProgramivPROC)(GLuint program, GLenum pname, GLint *params);
@@ -166,6 +168,7 @@ typedef void (*glDeleteFramebuffersPROC)(GLsizei n, const GLuint *framebuffers);
 typedef void (*glBlitFramebufferPROC)(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
 typedef void (*glVertexAttribDivisorPROC)(GLuint index, GLuint divisor);
 typedef GLuint (*glGetUniformBlockIndexPROC)(GLuint program, const GLchar *uniformBlockName);
+typedef GLuint (*glGetProgramResourceIndexPROC)(GLuint program, GLenum programInterface, const GLchar *uniformBlockName);
 typedef void (*glUniformBlockBindingPROC)(GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding);
 typedef void (*glBindBufferRangePROC)(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
 typedef void (*glUniform1ivPROC)(GLint location, GLsizei count, const GLint *value);
@@ -183,6 +186,7 @@ glAttachShaderPROC glAttachShaderSRC = NULL;
 glBindAttribLocationPROC glBindAttribLocationSRC = NULL;
 glLinkProgramPROC glLinkProgramSRC = NULL;
 glBindBufferPROC glBindBufferSRC = NULL;
+glBindBufferBasePROC glBindBufferBaseSRC = NULL;
 glBufferDataPROC glBufferDataSRC = NULL;
 glEnableVertexAttribArrayPROC glEnableVertexAttribArraySRC = NULL;
 glVertexAttribPointerPROC glVertexAttribPointerSRC = NULL;
@@ -195,6 +199,7 @@ glDetachShaderPROC glDetachShaderSRC = NULL;
 glDeleteShaderPROC glDeleteShaderSRC = NULL;
 glDeleteProgramPROC glDeleteProgramSRC = NULL;
 glBufferSubDataPROC glBufferSubDataSRC = NULL;
+glGetBufferSubDataPROC glGetBufferSubDataSRC = NULL;
 glGetShaderivPROC glGetShaderivSRC = NULL;
 glGetShaderInfoLogPROC glGetShaderInfoLogSRC = NULL;
 glGetProgramivPROC glGetProgramivSRC = NULL;
@@ -226,6 +231,7 @@ glDeleteFramebuffersPROC glDeleteFramebuffersSRC = NULL;
 glBlitFramebufferPROC glBlitFramebufferSRC = NULL;
 glVertexAttribDivisorPROC glVertexAttribDivisorSRC = NULL;
 glGetUniformBlockIndexPROC glGetUniformBlockIndexSRC = NULL;
+glGetProgramResourceIndexPROC glGetProgramResourceIndexSRC = NULL;
 glUniformBlockBindingPROC glUniformBlockBindingSRC = NULL;
 glBindBufferRangePROC glBindBufferRangeSRC = NULL;
 glUniform1ivPROC glUniform1ivSRC = NULL;
@@ -243,6 +249,7 @@ glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 #define glBindAttribLocation glBindAttribLocationSRC
 #define glLinkProgram glLinkProgramSRC
 #define glBindBuffer glBindBufferSRC
+#define glBindBufferBase glBindBufferBaseSRC
 #define glBufferData glBufferDataSRC
 #define glEnableVertexAttribArray glEnableVertexAttribArraySRC
 #define glVertexAttribPointer glVertexAttribPointerSRC
@@ -255,6 +262,7 @@ glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 #define glDeleteShader glDeleteShaderSRC
 #define glDeleteProgram glDeleteProgramSRC
 #define glBufferSubData glBufferSubDataSRC
+#define glGetBufferSubData glGetBufferSubDataSRC
 #define glGetShaderiv glGetShaderivSRC
 #define glGetShaderInfoLog glGetShaderInfoLogSRC
 #define glGetProgramiv glGetProgramivSRC
@@ -285,6 +293,7 @@ glDrawArraysInstancedPROC glDrawArraysInstancedSRC = NULL;
 #define glBlitFramebuffer glBlitFramebufferSRC
 #define glVertexAttribDivisor glVertexAttribDivisorSRC
 #define glGetUniformBlockIndex glGetUniformBlockIndexSRC
+#define glGetProgramResourceIndex glGetProgramResourceIndexSRC
 #define glUniformBlockBinding glUniformBlockBindingSRC
 #define glBindBufferRange glBindBufferRangeSRC
 #define glBlendFuncSeparate glBlendFuncSeparateSRC
@@ -310,6 +319,7 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glBindAttribLocation);
     GL_PROC_DEF(proc, glLinkProgram);
     GL_PROC_DEF(proc, glBindBuffer);
+    GL_PROC_DEF(proc, glBindBufferBase);
     GL_PROC_DEF(proc, glBufferData);
     GL_PROC_DEF(proc, glEnableVertexAttribArray);
     GL_PROC_DEF(proc, glVertexAttribPointer);
@@ -322,6 +332,7 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glDeleteShader);
     GL_PROC_DEF(proc, glDeleteProgram);
     GL_PROC_DEF(proc, glBufferSubData);
+    GL_PROC_DEF(proc, glGetBufferSubData);
     GL_PROC_DEF(proc, glGetShaderiv);
     GL_PROC_DEF(proc, glGetShaderInfoLog);
     GL_PROC_DEF(proc, glGetProgramiv);
@@ -355,6 +366,7 @@ int GL_loadGL(GLloadfunc proc) {
     GL_PROC_DEF(proc, glVertexAttribDivisor);
 
     GL_PROC_DEF(proc, glGetUniformBlockIndex);
+    GL_PROC_DEF(proc, glGetProgramResourceIndex);
     GL_PROC_DEF(proc, glUniformBlockBinding);
     GL_PROC_DEF(proc, glBindBufferRange);
 
@@ -373,6 +385,7 @@ int GL_loadGL(GLloadfunc proc) {
         glBindAttribLocationSRC == NULL ||
         glLinkProgramSRC == NULL ||
         glBindBufferSRC == NULL ||
+        glBindBufferBaseSRC == NULL ||
         glBufferDataSRC == NULL ||
         glEnableVertexAttribArraySRC == NULL ||
         glVertexAttribPointerSRC == NULL ||
@@ -385,6 +398,7 @@ int GL_loadGL(GLloadfunc proc) {
         glDeleteShaderSRC == NULL ||
         glDeleteProgramSRC == NULL ||
         glBufferSubDataSRC == NULL ||
+        glGetBufferSubDataSRC == NULL ||
         glGetShaderivSRC == NULL ||
         glGetShaderInfoLogSRC == NULL ||
         glGetProgramivSRC == NULL ||
