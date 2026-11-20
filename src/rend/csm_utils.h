@@ -33,7 +33,8 @@ typedef struct {
     f32 lambda;
     v4 bounds;
   };
-  v2 drange;
+  v2 drange_01;
+  v2 drange_vs;
 
   bbox scene_bbox;
   u32 isect_bvh;
@@ -41,7 +42,7 @@ typedef struct {
 
   b32 vis_flags; // ????
 
-  f32 splits[CSM_MAX_CASCADES];
+  f32 splits[CSM_MAX_CASCADES+1];
   frustum cascade_frustum[CSM_MAX_CASCADES];
   
   s32 cascade_count;
@@ -64,6 +65,8 @@ static CSM_Opt csm_opt_default() {
     .cascade_count = CSM_MAX_CASCADES,
     .light_dir = v3_norm(v3m(0.2,1,1)),
     .scene_bbox = (bbox){},
+    .drange_vs = v2m(0,1),
+    .drange_01 = v2m(0,1),
   };
 
   return default_options;
@@ -76,8 +79,8 @@ static f32 csm_get_cascade_split_near(Camera *c, CSM_Opt *opt, s32 cascade_idx) 
   f32 t = (f32)cascade_idx / opt->cascade_count;
   f32 uniform_split = c->near + (c->far - c->near)*t;
   f32 logarithmic_split = c->near * pow_f32(c->far / c->near, t);
-  f32 logarithmic_split_sdsm = opt->drange.x * pow_f32(opt->drange.y / opt->drange.x, t);
-  //f32 linear_split_sdsm = opt->drange.x + (opt->drange.y - opt->drange.x)*t;
+  f32 logarithmic_split_sdsm = opt->drange_vs.x * pow_f32(opt->drange_vs.y / opt->drange_vs.x, t);
+  //f32 linear_split_sdsm = opt->drange_vs.x + (opt->drange_vs.y - opt->drange_vs.x)*t;
 
   switch(opt->split_mode) {
     case CSM_SPLIT_UNIFORM:

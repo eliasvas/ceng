@@ -224,6 +224,7 @@ void game_draw_origin_grid(struct Game_State *gs, s32 cell_count) {
 }
 
 void game_render(struct Game_State *gs, float dt) {
+  printf("gs drange01 %f %f\n", gs->csm_opt.drange_01.x, gs->csm_opt.drange_01.y);
   r3d_clear();
   cam_update(&gs->cam, &gs->input, dt);
 
@@ -308,15 +309,19 @@ void game_render(struct Game_State *gs, float dt) {
   }
   r3dc_end(opaque_pass);
 
+
   // 0. We get the depth from the shader (in viewport [0,1] space) and convert to viespace
   v2 drange = r3d_compute_depth_range(opaque_pass);
   v2 drange_viewspace = csm_convert_drange_to_viewspace(&opaque_pass->cam, drange);
-  gs->csm_opt.drange = drange_viewspace;
+  gs->csm_opt.drange_vs = drange_viewspace;
 
+  opaque_pass->opt.drange_vs = drange_viewspace;
+  opaque_pass->opt.drange_01 = v2m(F32_MAX, -F32_MAX);
   for (s32 cascade_idx = 0; cascade_idx < CSM_MAX_CASCADES; cascade_idx+=1) {
     // FIXME: pass instead of drange / viewspace pass the actual range now whole
-    gs->csm_opt.cascade_frustum[cascade_idx] = r3d_compute_cascade_frustum(opaque_pass, drange, drange_viewspace, cascade_idx);
+    gs->csm_opt.cascade_frustum[cascade_idx] = r3d_compute_cascade_frustum(opaque_pass, drange, cascade_idx);
   }
+  gs->csm_opt.drange_01 = opaque_pass->opt.drange_01;
 
   ///////////////////////
   // TRANSPARENT PASS

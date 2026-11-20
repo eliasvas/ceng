@@ -44,9 +44,16 @@ Ogl_RT* r3d_rt_from_render_mode(R3D_Render_Mode rmode) {
 #embed "shaders/depth_range.comp.glsl"
   };
 
+#if 0
   static const u8 CASCADE_BOUNDS_CS[] = {
 #embed "shaders/common.glsl" suffix(, '\n',)
 #embed "shaders/cascade_bounds.comp.glsl"
+  };
+#endif
+
+  static const u8 CASCADE_BOUNDS_ALL_CS[] = {
+#embed "shaders/common.glsl" suffix(, '\n',)
+#embed "shaders/cascade_bounds_all.comp.glsl"
   };
 
   static const u8 TRANSPARENT_FS[] = {
@@ -125,9 +132,10 @@ void r3d_try_load_shaders(rect viewport) {
   }
   if (bounds_compute_bundle.sp.impl_state == 0) {
     bounds_compute_bundle = (Ogl_Compute_Bundle) {
-      .sp = ogl_shader_make((char*)CASCADE_BOUNDS_CS, nullptr),
+      .sp = ogl_shader_make((char*)CASCADE_BOUNDS_ALL_CS, nullptr),
       .images = {
-        [0] = { .name = "bounds", .img = ogl_tex_make(nullptr, 6, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+        [0] = { .name = "bounds", .img = ogl_tex_make(nullptr, 8, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
+        [1] = { .name = "global_bounds", .img = ogl_tex_make(nullptr, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT}),},
       },
     };
   }
@@ -592,32 +600,12 @@ void r3d_do_postproc(rect viewport) {
   r3d_do_fullscreen(r, &shadow_rt.depth_attachment);
 }
 
-// TODO: Shouldn't this be inside csm_utils or no?
-// Maybe we just refactor
 v2 r3d_compute_depth_range(R3D_Ctx *rctx) {
-  // 0. update drange tex to have [-1,0] range
-  uint initial_data[2] = { 0xFFFFFFFFu, 0u };
-  ogl_tex_update(&depth_range_compute_bundle.images[0].img, (u8*)initial_data, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
-
-  // 1. execute the compute shader to find actual drange(min,max)
-  depth_range_compute_bundle.textures[0] = 
-    (Ogl_Tex_Slot){ .name = "depth_buffer", .tex = offscreen_rt.depth_attachment };
-  ogl_compute_bundle_dispatch(&depth_range_compute_bundle, 
-      offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
-
-
-  // 2. read back the texture and unproject min/max from ndc to view space
-  u32 drange[2];
-  ogl_tex_read(&depth_range_compute_bundle.images[0].img, (u8*)drange);
-  // Converting to view space??
-  f32 min_z = *(f32*)&(drange[0]);
-  f32 max_z = *(f32*)&(drange[1]);
-
-  return v2m(min_z, max_z);
+  return rctx->opt.drange_01;
 }
 
 // For each of the cascades we compute a tight frustum for all the fragments 
-frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspace, s32 cascade_idx) {
+frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, s32 cascade_idx) {
   // Compute near/far for the cascade in [0,1]
   f32 vs_near = csm_get_cascade_split_near(&rctx->cam, &rctx->opt, cascade_idx);
   f32 vs_far  = csm_get_cascade_split_far (&rctx->cam, &rctx->opt, cascade_idx);
@@ -627,9 +615,11 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
   u32 near_as_u32 = *((u32*)&cascade_near);
   u32 far_as_u32 = *((u32*)&cascade_far);
 
-  uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, near_as_u32, far_as_u32};
-  //uint initial_data[6] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u};
-  ogl_tex_update(&bounds_compute_bundle.images[0].img, (u8*)initial_data, 6, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
+  uint initial_data[8] = { 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, 0xFFFFFFFFu, 0u, near_as_u32, far_as_u32};
+  ogl_tex_update(&bounds_compute_bundle.images[0].img, (u8*)initial_data, 8, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
+
+  uint initial_data2[8] = { 0xFFFFFFFFu, 0u};
+  ogl_tex_update(&bounds_compute_bundle.images[1].img, (u8*)initial_data2, 2, 1, OGL_TEX_FORMAT_R32UI, (Ogl_Tex_Params){});
 
   // 1. execute the compute shader to find actual drange(min,max)
   bounds_compute_bundle.textures[0] = 
@@ -638,7 +628,7 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
       offscreen_rt.depth_attachment.width, offscreen_rt.depth_attachment.height, 1);
 
   // 2. read back the texture and produce NDC frustum
-  u32 bounds[6];
+  u32 bounds[8];
   ogl_tex_read(&bounds_compute_bundle.images[0].img, (u8*)bounds);
   f32 bounds_min_x = *(f32*)&(bounds[0]);
   f32 bounds_max_x = *(f32*)&(bounds[1]);
@@ -646,8 +636,23 @@ frustum r3d_compute_cascade_frustum(R3D_Ctx *rctx, v2 drange, v2 drange_viewspac
   f32 bounds_min_y = *(f32*)&(bounds[2]);
   f32 bounds_max_y = *(f32*)&(bounds[3]);
 
-  f32 bounds_min_z = *(f32*)&(bounds[4]);
-  f32 bounds_max_z = *(f32*)&(bounds[5]);
+  f32 local_bounds_min_z = *(f32*)&(bounds[4]);
+  f32 local_bounds_max_z = *(f32*)&(bounds[5]);
+
+  f32 bounds_min_z = *(f32*)&(bounds[6]);
+  f32 bounds_max_z = *(f32*)&(bounds[7]);
+
+  rctx->opt.drange_01.x = MIN(rctx->opt.drange_01.x, local_bounds_min_z);
+  rctx->opt.drange_01.y = MAX(rctx->opt.drange_01.y, local_bounds_max_z);
+
+  u32 gbounds[2];
+  ogl_tex_read(&bounds_compute_bundle.images[1].img, (u8*)gbounds);
+  f32 gmin_z = *(f32*)&(gbounds[0]);
+  f32 gmax_z = *(f32*)&(gbounds[1]);
+
+  rctx->opt.drange_01.x = MIN(rctx->opt.drange_01.x, gmin_z);
+  rctx->opt.drange_01.y = MAX(rctx->opt.drange_01.y, gmax_z);
+
 
   v3 ndc_min = v3m(bounds_min_x*2.0-1.0, bounds_min_y*2.0-1.0, bounds_min_z*2.0-1.0);
   v3 ndc_max = v3m(bounds_max_x*2.0-1.0, bounds_max_y*2.0-1.0, bounds_max_z*2.0-1.0);
